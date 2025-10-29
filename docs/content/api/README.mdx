@@ -1,0 +1,106 @@
+# API Reference
+
+Complete TypeScript API reference for both packages in this monorepo.
+
+## Base Package
+
+**Package**: `@rachelallyson/planning-center-base-ts`
+
+Shared infrastructure for building PCO API clients.
+
+### Classes
+
+- [`PcoHttpClient`](./classes/PcoHttpClient.md) - HTTP client with authentication, rate limiting, and error handling
+- [`PcoRateLimiter`](./classes/PcoRateLimiter.md) - Rate limiting enforcement (100 requests per 20 seconds)
+- [`PaginationHelper`](./classes/PaginationHelper.md) - Utilities for paginated API responses
+- [`BaseModule`](./classes/BaseModule.md) - Abstract base class for API modules
+- [`PcoEventEmitter`](./classes/PcoEventEmitter.md) - Event emitter for monitoring and debugging
+- [`BatchExecutor`](./classes/BatchExecutor.md) - Execute multiple operations with dependency resolution
+- [`PcoApiError`](./classes/PcoApiError.md) - Base API error class
+- [`PcoError`](./classes/PcoError.md) - Enhanced error with category, severity, and context
+
+### Functions
+
+- [`retryWithBackoff()`](./functions/retryWithBackoff.md) - Retry with exponential backoff
+- [`withErrorBoundary()`](./functions/withErrorBoundary.md) - Wrap operations with error handling
+- [`shouldNotRetry()`](./functions/shouldNotRetry.md) - Check if error should not be retried
+- [`handleNetworkError()`](./functions/handleNetworkError.md) - Handle network errors
+- [`handleTimeoutError()`](./functions/handleTimeoutError.md) - Handle timeout errors
+- [`handleValidationError()`](./functions/handleValidationError.md) - Handle validation errors
+
+### Types
+
+See [Types](./type-aliases/) for complete type definitions:
+- JSON:API types (`ResourceObject`, `JsonApiDocument`, `Paginated`, etc.)
+- Configuration types (`PcoClientConfig`, `PcoAuthConfig`, etc.)
+- Event types (`PcoEvent`, `EventType`, etc.)
+- Batch types (`BatchOperation`, `BatchResult`, etc.)
+
+## People Package
+
+**Package**: `@rachelallyson/planning-center-people-ts`
+
+TypeScript client for Planning Center People API.
+
+### Classes
+
+- [`PcoClient`](./classes/PcoClient.md) - Main client class with 11 specialized modules
+- [`PcoClientManager`](./classes/PcoClientManager.md) - Client manager for caching and lifecycle management
+
+### Modules
+
+The `PcoClient` has the following modules:
+
+- `people` - Person CRUD, matching, relationships
+- `fields` - Custom field definitions and data
+- `workflows` - Workflow cards and state management
+- `contacts` - Emails, phones, addresses, social profiles
+- `households` - Household management
+- `notes` - Person notes and categories
+- `lists` - People lists and categories
+- `campus` - Campus management
+- `serviceTime` - Service time tracking
+- `forms` - Forms and submissions
+- `reports` - Report management
+
+### Types
+
+See [Types](./type-aliases/) for complete type definitions:
+- People types (`PersonResource`, `PersonAttributes`, etc.)
+- Contact types (`EmailResource`, `PhoneNumberResource`, etc.)
+- Field types (`FieldDefinitionResource`, `FieldDatumResource`, etc.)
+- Workflow types (`WorkflowResource`, `WorkflowCardResource`, etc.)
+
+## Generating API Docs
+
+API documentation is generated using TypeDoc:
+
+```bash
+# Generate docs for both packages
+npx typedoc
+
+# Output goes to docs/content/api/
+```
+
+The root `typedoc.json` configures TypeDoc to generate Markdown files from both package entry points into `docs/content/api/`.
+
+## Viewing API Docs
+
+- **Local**: Run `npm run dev:docs` and navigate to `/api/`
+- **Online**: See [GitHub Pages deployment](https://rachelallyson.github.io/planning-center-monorepo/api/)
+
+## Documentation Structure
+
+This API reference is organized by:
+- **Classes** - Main class definitions
+- **Interfaces** - TypeScript interface definitions
+- **Types** - Type aliases and type definitions
+- **Enums** - Enumeration types
+- **Functions** - Standalone function definitions
+
+Each symbol includes:
+- Description
+- Parameters
+- Return types
+- Examples
+- Related symbols

@@ -1,0 +1,308 @@
+# Configuration Reference
+
+Complete reference for all configuration options, environment variables, and defaults.
+
+## PcoClientConfig
+
+Main configuration interface for `PcoClient`:
+
+```typescript
+interface PcoClientConfig {
+  auth: PcoAuthConfig;           // REQUIRED
+  caching?: CachingConfig;
+  retry?: RetryConfig;
+  events?: EventsConfig;
+  baseURL?: string;
+  timeout?: number;
+  headers?: Record<string, string>;
+}
+```
+
+## Authentication
+
+### Personal Access Token
+
+```typescript
+{
+  type: 'personal_access_token';
+  personalAccessToken: string;  // REQUIRED
+}
+```
+
+**Use case**: Single-user applications, scripts, server-to-server
+
+**Stability**: Token never expires (unless revoked)
+
+### OAuth 2.0
+
+```typescript
+{
+  type: 'oauth';
+  accessToken: string;           // REQUIRED
+  refreshToken: string;          // REQUIRED
+  onRefresh: (tokens: {          // REQUIRED
+    accessToken: string;
+    refreshToken: string;
+  }) => void | Promise<void>;
+  onRefreshFailure: (error: Error) => void | Promise<void>;  // REQUIRED
+  clientId?: string;             // Optional (can use PCO_APP_ID env var)
+  clientSecret?: string;          // Optional (can use PCO_APP_SECRET env var)
+}
+```
+
+**Use case**: Multi-user applications, web apps
+
+**Lifecycle**: Access tokens expire (typically 1 hour), must handle refresh
+
+**Invariant**: `onRefresh` and `onRefreshFailure` are **required** callbacks
+
+### Basic Auth
+
+```typescript
+{
+  type: 'basic';
+  appId: string;                 // REQUIRED
+  appSecret: string;             // REQUIRED
+}
+```
+
+**Use case**: Server-to-server integrations
+
+## Caching
+
+```typescript
+{
+  caching?: {
+    fieldDefinitions?: boolean;  // Default: false
+    ttl?: number;                // Default: 300000 (5 minutes, milliseconds)
+    maxSize?: number;            // Default: 1000 entries
+  }
+}
+```
+
+**Options**:
+
+- `fieldDefinitions`: Cache field definition lookups (recommended)
+- `ttl`: Cache time-to-live in milliseconds
+- `maxSize`: Maximum number of cached entries
+
+**Example**:
+
+```typescript
+{
+  caching: {
+    fieldDefinitions: true,
+    ttl: 600000,        // 10 minutes
+    maxSize: 2000
+  }
+}
+```
+
+## Retry
+
+```typescript
+{
+  retry?: {
+    enabled?: boolean;           // Default: true
+    maxRetries?: number;         // Default: 3
+    baseDelay?: number;          // Default: 1000 (1 second, milliseconds)
+    maxDelay?: number;           // Default: 10000 (10 seconds, milliseconds)
+    backoff?: 'linear' | 'exponential';  // Default: 'exponential'
+  }
+}
+```
+
+**Options**:
+
+- `enabled`: Enable automatic retries for retryable errors
+- `maxRetries`: Maximum number of retry attempts
+- `baseDelay`: Initial delay before first retry
+- `maxDelay`: Maximum delay cap for backoff
+- `backoff`: Backoff strategy (linear or exponential)
+
+**Retry Logic**:
+
+- Only retries errors where `error.retryable === true`
+- Uses exponential backoff: `delay = baseDelay * 2^retryCount`
+- Caps delay at `maxDelay`
+- Skips retries for validation errors (400, 422)
+
+**Example**:
+
+```typescript
+{
+  retry: {
+    enabled: true,
+    maxRetries: 5,
+    baseDelay: 2000,     // Start with 2 seconds
+    maxDelay: 30000,      // Cap at 30 seconds
+    backoff: 'exponential'
+  }
+}
+```
+
+## Events
+
+```typescript
+{
+  events?: {
+    onError?: (event: ErrorEvent) => void | Promise<void>;
+    onAuthFailure?: (event: AuthFailureEvent) => void | Promise<void>;
+    onRequestStart?: (event: RequestStartEvent) => void | Promise<void>;
+    onRequestComplete?: (event: RequestCompleteEvent) => void | Promise<void>;
+    onRateLimit?: (event: RateLimitEvent) => void | Promise<void>;
+  }
+}
+```
+
+**Event Types**:
+
+- `onError`: Fired on any error
+- `onAuthFailure`: Fired on authentication failures
+- `onRequestStart`: Fired when request starts
+- `onRequestComplete`: Fired when request completes successfully
+- `onRateLimit`: Fired when approaching rate limit
+
+**Example**:
+
+```typescript
+{
+  events: {
+    onError: (event) => {
+      console.error('Error:', event.error);
+      errorTracker.captureError(event.error);
+    },
+    onRateLimit: (event) => {
+      console.warn(`Rate limit: ${event.remaining}/${event.limit}`);
+    }
+  }
+}
+```
+
+## Base URL
+
+```typescript
+{
+  baseURL?: string;  // Default: 'https://api.planningcenteronline.com/people/v2'
+}
+```
+
+Override the base URL for the API (useful for testing or proxies).
+
+## Timeout
+
+```typescript
+{
+  timeout?: number;  // Default: 30000 (30 seconds, milliseconds)
+}
+```
+
+Request timeout in milliseconds.
+
+## Headers
+
+```typescript
+{
+  headers?: Record<string, string>;
+}
+```
+
+Custom headers to include with every request.
+
+**Example**:
+
+```typescript
+{
+  headers: {
+    'X-Custom-Header': 'value',
+    'User-Agent': 'MyApp/1.0'
+  }
+}
+```
+
+## Environment Variables
+
+The library respects these environment variables:
+
+- `PCO_APP_ID`: OAuth client ID (used if not provided in config)
+- `PCO_APP_SECRET`: OAuth client secret (used if not provided in config)
+
+**Usage**:
+
+```typescript
+// Can omit from config if env vars are set
+{
+  type: 'oauth',
+  accessToken: 'token',
+  refreshToken: 'refresh',
+  onRefresh: async (tokens) => { /* ... */ },
+  onRefreshFailure: async (error) => { /* ... */ }
+  // clientId and clientSecret will use PCO_APP_ID and PCO_APP_SECRET
+}
+```
+
+## Configuration Precedence
+
+1. **Config object** - Highest precedence
+2. **Environment variables** - Falls back if not in config
+3. **Defaults** - Used if neither config nor env vars provided
+
+## Complete Example
+
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  },
+  caching: {
+    fieldDefinitions: true,
+    ttl: 300000,        // 5 minutes
+    maxSize: 1000
+  },
+  retry: {
+    enabled: true,
+    maxRetries: 3,
+    baseDelay: 1000,
+    maxDelay: 10000,
+    backoff: 'exponential'
+  },
+  events: {
+    onError: (event) => {
+      console.error('Error:', event.error);
+    },
+    onRateLimit: (event) => {
+      console.warn(`Rate limit: ${event.remaining}/${event.limit}`);
+    }
+  },
+  timeout: 30000,
+  headers: {
+    'User-Agent': 'MyApp/1.0'
+  }
+});
+```
+
+## Type Reference
+
+See [API Documentation](/docs/api) for complete type definitions:
+
+- `PcoClientConfig`
+- `PcoAuthConfig`
+- `PersonalAccessTokenAuth`
+- `OAuthAuth`
+- `BasicAuth`
+- `CachingConfig`
+- `RetryConfig`
+- `EventsConfig`
+
+## Validation
+
+Configuration is validated on client instantiation:
+
+- **Auth**: Required, must be one of the three auth types
+- **OAuth**: `onRefresh` and `onRefreshFailure` are required
+- **Retry**: Validates retry config (maxRetries > 0, delays > 0)
+- **Timeout**: Must be positive number
+
+Invalid configuration throws an error during client creation.
+

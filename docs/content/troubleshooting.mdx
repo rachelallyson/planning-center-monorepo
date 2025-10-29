@@ -1,0 +1,361 @@
+# Troubleshooting
+
+Common errors, their causes, and exact fixes.
+
+## Monorepo Setup Issues
+
+### Cannot find module '@rachelallyson/planning-center-base-ts'
+
+**Symptom**: TypeScript errors about missing base package module
+
+**Cause**: Base package not built or workspace dependency not linked
+
+**Fix**:
+
+```bash
+# From monorepo root
+npm install                    # Link workspaces
+npm run build:base            # Build base package
+npm run build:people          # Build people package
+```
+
+**Verify**: Check that `packages/planning-center-base-ts/dist/index.d.ts` exists
+
+---
+
+### Unsupported URL Type "workspace:"
+
+**Symptom**: `npm error code EUNSUPPORTEDPROTOCOL npm error Unsupported URL Type "workspace:"`
+
+**Cause**: Running `npm install` from a package directory instead of monorepo root
+
+**Fix**:
+
+```bash
+# Always run from monorepo root
+cd /path/to/planning-center-monorepo
+npm install
+```
+
+**Prevention**: Never run `npm install` from `packages/*/` directories
+
+---
+
+### TypeError: Cannot find name 'Buffer' or 'process'
+
+**Symptom**: TypeScript errors about Node.js globals
+
+**Cause**: Missing `@types/node` or TypeScript not configured for Node.js
+
+**Fix**:
+
+```bash
+# Install @types/node
+npm install --save-dev @types/node
+
+# Verify tsconfig.json has:
+# "types": ["node"]
+```
+
+**Check**: `packages/planning-center-base-ts/tsconfig.json` should have `"types": ["node"]`
+
+---
+
+## Authentication Issues
+
+### OAuth: onRefresh is required
+
+**Symptom**: Error at client instantiation: "onRefresh callback is required for OAuth"
+
+**Cause**: OAuth config missing required refresh handlers
+
+**Fix**:
+
+```typescript
+// ❌ Wrong
+const client = new PcoClient({
+  auth: {
+    type: 'oauth',
+    accessToken: 'token',
+    refreshToken: 'refresh'
+  }
+});
+
+// ✅ Correct
+const client = new PcoClient({
+  auth: {
+    type: 'oauth',
+    accessToken: 'token',
+    refreshToken: 'refresh',
+    onRefresh: async (tokens) => {
+      await saveTokens(tokens);  // REQUIRED
+    },
+    onRefreshFailure: async (error) => {
+      await handleAuthFailure(error);  // REQUIRED
+    }
+  }
+});
+```
+
+---
+
+### Authentication failed: Invalid token
+
+**Symptom**: `401 Unauthorized` errors
+
+**Cause**: Token expired or invalid
+
+**Fix**:
+
+1. **For PAT**: Generate new token in Planning Center
+2. **For OAuth**: Check if `onRefresh` is working correctly
+3. **For Basic**: Verify `appId` and `appSecret` are correct
+
+```typescript
+// Check token validity
+try {
+  await client.people.getAll({ perPage: 1 });
+} catch (error) {
+  if (error instanceof PcoError && 
+      error.category === ErrorCategory.AUTHENTICATION) {
+    // Token invalid - regenerate or refresh
+  }
+}
+```
+
+---
+
+## Rate Limiting Issues
+
+### Rate limit exceeded (429)
+
+**Symptom**: `429 Too Many Requests` errors
+
+**Cause**: Exceeded 100 requests per 20 seconds
+
+**Fix**:
+
+The library handles this automatically, but you can:
+
+```typescript
+// Check rate limit status
+const info = client.getRateLimitInfo();
+if (info.remaining < 10) {
+  // Slow down requests
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+// Listen to rate limit events
+client.on('rate:limit', (event) => {
+  if (event.remaining < 10) {
+    console.warn('Approaching rate limit - slowing down');
+  }
+});
+```
+
+**Prevention**: Use batch operations to reduce request count
+
+---
+
+## TypeScript Issues
+
+### Property does not exist on type '...Module'
+
+**Symptom**: TypeScript errors about missing properties on modules
+
+**Cause**: Type definitions not found or outdated
+
+**Fix**:
+
+```bash
+# Rebuild packages
+npm run build
+
+# Restart TypeScript server in IDE
+# VS Code: Cmd+Shift+P -> "TypeScript: Restart TS Server"
+```
+
+---
+
+### Cannot find name 'Buffer' or 'process'
+
+**Symptom**: TypeScript errors about Node.js types
+
+**Cause**: Missing `@types/node`
+
+**Fix**:
+
+```bash
+npm install --save-dev @types/node
+```
+
+**Verify**: `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}
+```
+
+---
+
+## Module Resolution Issues
+
+### Module resolution errors in IDE (but build works)
+
+**Symptom**: IDE shows errors but `npm run build` succeeds
+
+**Cause**: IDE TypeScript server not recognizing workspace paths
+
+**Fix**:
+
+1. Restart TypeScript server (VS Code: Cmd+Shift+P → "TypeScript: Restart TS Server")
+2. Reload window (VS Code: Cmd+Shift+P → "Developer: Reload Window")
+3. Verify path mapping in `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@rachelallyson/planning-center-base-ts": [
+        "../planning-center-base-ts/src"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Build Issues
+
+### Build fails with import errors
+
+**Symptom**: Base package imports show errors during build
+
+**Cause**: Base package hasn't been built yet, or dependency order wrong
+
+**Fix**:
+
+```bash
+# Build in correct order
+npm run build:base      # Build base first
+npm run build:people    # Then build people
+
+# Or build both
+npm run build
+```
+
+**Note**: The `prepare` hook in root `package.json` should build base automatically on `npm install`
+
+---
+
+### File is not under 'rootDir' Build Error
+
+**Symptom**: TypeScript build fails with rootDir errors
+
+**Cause**: TypeScript `rootDir` setting conflicts with workspace dependencies
+
+**Fix**: Remove `rootDir` from `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    // Remove this line:
+    // "rootDir": "./src",
+    
+    "outDir": "./dist"
+  }
+}
+```
+
+---
+
+## Runtime Issues
+
+### Network timeout errors
+
+**Symptom**: Requests timing out
+
+**Cause**: Network issues or timeout too low
+
+**Fix**:
+
+```typescript
+const client = new PcoClient({
+  auth: { /* ... */ },
+  timeout: 60000  // Increase to 60 seconds
+});
+```
+
+---
+
+### JSON:API parsing errors
+
+**Symptom**: "Unexpected token" or parsing errors
+
+**Cause**: API returned non-JSON response or invalid JSON:API structure
+
+**Fix**:
+
+```typescript
+// Enable error logging
+client.on('error', (event) => {
+  console.error('Error:', event.error);
+  if (event.error instanceof PcoApiError) {
+    console.error('Response:', event.error.errors);
+  }
+});
+```
+
+**Check**: Verify API response format matches JSON:API 1.0 spec
+
+---
+
+## Documentation Site Issues
+
+### Nextra build fails
+
+**Symptom**: `npm run docs:build` fails
+
+**Cause**: Missing dependencies or config issues
+
+**Fix**:
+
+```bash
+# Install dependencies
+npm install
+
+# Sync People docs
+npm run docs:sync
+
+# Build
+npm run docs:build
+```
+
+---
+
+### GitHub Pages deployment fails
+
+**Symptom**: GitHub Actions workflow fails
+
+**Cause**: Path issues or build errors
+
+**Fix**:
+
+1. Check workflow logs in GitHub Actions
+2. Verify `basePath` matches repository name in `next.config.mjs`
+3. Ensure all dependencies are installed in workflow
+
+---
+
+## Still Having Issues?
+
+1. Check [Contributing Guide](../CONTRIBUTING.md) for setup instructions
+2. Review [Error Handling Guide](./guides/error-handling.mdx) for error patterns
+3. See [People Package Troubleshooting](/people/troubleshooting) for People API specific issues
+4. Check GitHub Issues: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo/issues)
+

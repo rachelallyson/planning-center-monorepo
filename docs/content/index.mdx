@@ -1,0 +1,93 @@
+# Planning Center API Clients
+
+TypeScript client libraries for Planning Center Online APIs.
+
+## Packages
+
+This monorepo contains two packages:
+
+### [People API Client](/people) (External Documentation)
+**Package**: `@rachelallyson/planning-center-people-ts`  
+**Version**: v2.8.0
+
+Complete TypeScript client for Planning Center People API with 11 specialized modules (people, fields, workflows, contacts, households, notes, lists, campus, serviceTime, forms, reports).
+
+**Note**: See package-specific documentation at `/people` for People API guides and reference.
+
+### [Base Package](./concepts#base-package)
+**Package**: `@rachelallyson/planning-center-base-ts`  
+**Version**: v1.0.0
+
+Shared infrastructure for building PCO API clients - HTTP client, authentication, rate limiting, pagination, error handling, JSON:API types.
+
+## Quick Start
+
+### Installation
+
+```bash
+# People API Client
+npm install @rachelallyson/planning-center-people-ts
+
+# Base Package (for building custom clients)
+npm install @rachelallyson/planning-center-base-ts
+```
+
+### Basic Usage
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: 'your-token-here'
+  }
+});
+
+// Find or create a person
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com'
+});
+
+console.log(`Person ID: ${person.id}`);
+```
+
+## Documentation
+
+### Guides
+
+- **[Quick Start](./guides/quickstart)** - Get up and running in 5 minutes
+- **[Pagination](./guides/pagination)** - Handling paginated responses
+- **[Error Handling](./guides/error-handling)** - Typed errors, retries, recovery
+
+### Reference
+
+- **[Configuration](./reference/config)** - All config options and environment variables
+- **[API Reference](./api/)** - Complete API documentation
+
+### Concepts
+
+- **[Core Concepts](./concepts)** - Architecture, mental models, invariants
+
+### Examples
+
+- **[Recipes](./recipes/examples)** - Copy-paste code snippets
+
+### Troubleshooting
+
+- **[Monorepo Issues](./troubleshooting)** - Common setup and build issues
+
+## Requirements
+
+- **Node.js**: >= 16.0.0
+- **TypeScript**: >= 4.0 (recommended)
+
+## Links
+
+- **GitHub**: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo)
+- **People Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts)
+- **Base Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts)
+- **Contributing**: [CONTRIBUTING.md](../../CONTRIBUTING.md)
+

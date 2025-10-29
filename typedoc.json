@@ -1,0 +1,28 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/planning-center-base-ts/src/index.ts",
+    "packages/planning-center-people-ts/src/index.ts"
+  ],
+  "out": "docs/content/api",
+  "plugin": [
+    "typedoc-plugin-markdown"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "readme": "none",
+  "entryPointStrategy": "resolve",
+  "sort": [
+    "source-order"
+  ],
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Classes",
+    "Interfaces",
+    "Types",
+    "Enums",
+    "Functions",
+    "*"
+  ]
+}

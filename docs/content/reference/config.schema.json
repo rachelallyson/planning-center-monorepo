@@ -1,0 +1,178 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "PcoClientConfig",
+    "type": "object",
+    "required": [
+        "auth"
+    ],
+    "properties": {
+        "auth": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "required": [
+                        "type",
+                        "personalAccessToken"
+                    ],
+                    "properties": {
+                        "type": {
+                            "const": "personal_access_token"
+                        },
+                        "personalAccessToken": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "type",
+                        "accessToken",
+                        "refreshToken",
+                        "onRefresh",
+                        "onRefreshFailure"
+                    ],
+                    "properties": {
+                        "type": {
+                            "const": "oauth"
+                        },
+                        "accessToken": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "refreshToken": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "onRefresh": {
+                            "type": "function"
+                        },
+                        "onRefreshFailure": {
+                            "type": "function"
+                        },
+                        "clientId": {
+                            "type": "string"
+                        },
+                        "clientSecret": {
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "type",
+                        "appId",
+                        "appSecret"
+                    ],
+                    "properties": {
+                        "type": {
+                            "const": "basic"
+                        },
+                        "appId": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "appSecret": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "caching": {
+            "type": "object",
+            "properties": {
+                "fieldDefinitions": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "ttl": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 300000
+                },
+                "maxSize": {
+                    "type": "number",
+                    "minimum": 1,
+                    "default": 1000
+                }
+            },
+            "additionalProperties": false
+        },
+        "retry": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "maxRetries": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 3
+                },
+                "baseDelay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 1000
+                },
+                "maxDelay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 10000
+                },
+                "backoff": {
+                    "enum": [
+                        "linear",
+                        "exponential"
+                    ],
+                    "default": "exponential"
+                }
+            },
+            "additionalProperties": false
+        },
+        "events": {
+            "type": "object",
+            "properties": {
+                "onError": {
+                    "type": "function"
+                },
+                "onAuthFailure": {
+                    "type": "function"
+                },
+                "onRequestStart": {
+                    "type": "function"
+                },
+                "onRequestComplete": {
+                    "type": "function"
+                },
+                "onRateLimit": {
+                    "type": "function"
+                }
+            },
+            "additionalProperties": false
+        },
+        "baseURL": {
+            "type": "string",
+            "format": "uri"
+        },
+        "timeout": {
+            "type": "number",
+            "minimum": 0,
+            "default": 30000
+        },
+        "headers": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            }
+        }
+    },
+    "additionalProperties": false
+}

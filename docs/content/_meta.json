@@ -1,0 +1,31 @@
+{
+  "index": "Overview",
+  "concepts": "Core Concepts",
+  "guides": {
+    "title": "Guides",
+    "type": "page",
+    "pages": [
+      "guides/quickstart",
+      "guides/pagination",
+      "guides/error-handling"
+    ]
+  },
+  "reference": {
+    "title": "Reference",
+    "type": "page",
+    "pages": [
+      "reference/config"
+    ]
+  },
+  "recipes": {
+    "title": "Examples",
+    "type": "page",
+    "pages": [
+      "recipes/examples"
+    ]
+  },
+  "troubleshooting": "Troubleshooting",
+  "llm-context": "LLM Context",
+  "api": "API Reference"
+}
+

@@ -1,0 +1,534 @@
+# Recipes & Examples
+
+Copy-paste code snippets for common tasks with this monorepo's packages.
+
+## Basic Operations
+
+### Create a Person
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_TOKEN!
+  }
+});
+
+const person = await client.people.create({
+  first_name: 'John',
+  last_name: 'Doe'
+});
+
+console.log(`Created person: ${person.id}`);
+```
+
+**Result**: `PersonResource` with new person data
+
+---
+
+### Find or Create Person
+
+```typescript
+const person = await client.people.findOrCreate({
+  firstName: 'Jane',
+  lastName: 'Smith',
+  email: 'jane@example.com',
+  phone: '555-1234',
+  matchStrategy: 'fuzzy' // or 'exact'
+});
+
+if (person.match?.found) {
+  console.log(`Found existing person: ${person.id}`);
+} else {
+  console.log(`Created new person: ${person.id}`);
+}
+```
+
+**Result**: `PersonResource` with optional `match` property indicating if person was found
+
+---
+
+### Get Person with Relationships
+
+```typescript
+const person = await client.people.getById('person-id', [
+  'emails',
+  'phone_numbers',
+  'addresses',
+  'household'
+]);
+
+console.log('Person:', person.attributes.first_name);
+console.log('Emails:', person.included?.filter(r => r.type === 'Email'));
+```
+
+**Result**: `PersonResource` with related resources in `included` array
+
+---
+
+## Contact Information
+
+### Add Email to Person
+
+```typescript
+const email = await client.contacts.createEmail('person-id', {
+  address: 'john@example.com',
+  location: 'Home',
+  primary: true
+});
+
+console.log(`Added email: ${email.id}`);
+```
+
+**Result**: `EmailResource`
+
+---
+
+### Add Phone to Person
+
+```typescript
+const phone = await client.contacts.createPhone('person-id', {
+  number: '555-1234',
+  location: 'Mobile',
+  primary: true
+});
+
+console.log(`Added phone: ${phone.id}`);
+```
+
+**Result**: `PhoneNumberResource`
+
+---
+
+### Add Address to Person
+
+```typescript
+const address = await client.contacts.createAddress('person-id', {
+  street: '123 Main St',
+  city: 'Springfield',
+  state: 'IL',
+  zip: '62701',
+  location: 'Home',
+  primary: true
+});
+
+console.log(`Added address: ${address.id}`);
+```
+
+**Result**: `AddressResource`
+
+---
+
+## Custom Fields
+
+### Set Field by Slug
+
+```typescript
+await client.fields.setPersonFieldBySlug(
+  'person-id',
+  'BIRTHDATE',
+  '1990-01-01'
+);
+```
+
+**Input**: Person ID, field slug (uppercase), value  
+**Output**: Success (no return value)
+
+---
+
+### Set Field by Name
+
+```typescript
+await client.fields.setPersonFieldByName(
+  'person-id',
+  'Membership Status',
+  'Member'
+);
+```
+
+**Input**: Person ID, field name, value  
+**Output**: Success (no return value)
+
+---
+
+### Set Field with File Upload
+
+```typescript
+await client.fields.setPersonField('person-id', {
+  fieldSlug: 'CUSTOM_FIELD',
+  value: 'https://example.com/file.pdf',
+  handleFileUploads: true  // Automatically uploads file to PCO
+});
+```
+
+**Result**: File uploaded and field value set to uploaded file URL
+
+---
+
+## Workflows
+
+### Add Person to Workflow
+
+```typescript
+const card = await client.workflows.addPersonToWorkflow(
+  'person-id',
+  'workflow-id',
+  {
+    note: 'Added via integration',
+    skipIfExists: true
+  }
+);
+
+console.log(`Workflow card: ${card.id}`);
+```
+
+**Result**: `WorkflowCardResource`
+
+---
+
+### Get Person's Workflow Cards
+
+```typescript
+const cards = await client.workflows.getPersonWorkflowCards('person-id', {
+  perPage: 25
+});
+
+cards.data.forEach(card => {
+  console.log(`Card: ${card.id} in workflow ${card.relationships.workflow.data.id}`);
+});
+```
+
+**Result**: `Paginated<WorkflowCardResource>`
+
+---
+
+## Batch Operations
+
+### Create Person with Contact Info
+
+```typescript
+const results = await client.batch.execute([
+  {
+    type: 'people.create',
+    data: {
+      firstName: 'John',
+      lastName: 'Doe'
+    }
+  },
+  {
+    type: 'people.addEmail',
+    personId: '$0.id',  // Reference person from step 0
+    data: {
+      address: 'john@example.com',
+      primary: true
+    }
+  },
+  {
+    type: 'people.addPhone',
+    personId: '$0.id',
+    data: {
+      number: '555-1234',
+      primary: true
+    }
+  }
+]);
+
+console.log(`Successful: ${results.successful.length}`);
+console.log(`Failed: ${results.failed.length}`);
+```
+
+**Result**: `BatchResult` with `successful`, `failed`, and `summary` properties
+
+---
+
+### Batch Create Multiple People
+
+```typescript
+const people = [
+  { firstName: 'John', lastName: 'Doe', email: 'john@example.com' },
+  { firstName: 'Jane', lastName: 'Smith', email: 'jane@example.com' },
+  { firstName: 'Bob', lastName: 'Jones', email: 'bob@example.com' }
+];
+
+const operations = people.map((person, index) => [
+  {
+    type: 'people.create',
+    data: { firstName: person.firstName, lastName: person.lastName }
+  },
+  {
+    type: 'people.addEmail',
+    personId: `$${index * 2}.id`,
+    data: { address: person.email, primary: true }
+  }
+]).flat();
+
+const results = await client.batch.execute(operations);
+```
+
+**Result**: All people created with emails in a single batch
+
+---
+
+## Pagination
+
+### Get All People (Automatic)
+
+```typescript
+const allPeople = await client.people.getAllPages({
+  perPage: 100,
+  include: ['emails', 'phone_numbers']
+});
+
+console.log(`Total people: ${allPeople.data.length}`);
+```
+
+**Result**: `Paginated<PersonResource>` with all pages fetched
+
+---
+
+### Get People with Manual Pagination
+
+```typescript
+let page = 1;
+let hasMore = true;
+const allPeople = [];
+
+while (hasMore) {
+  const response = await client.people.getAll({
+    perPage: 50,
+    page: page,
+    include: ['emails']
+  });
+
+  allPeople.push(...response.data);
+  hasMore = response.links?.next !== undefined;
+  page++;
+}
+
+console.log(`Total people: ${allPeople.length}`);
+```
+
+**Result**: All people fetched page by page
+
+---
+
+## Error Handling
+
+### Try-Catch with Error Categories
+
+```typescript
+import { PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.create({ first_name: 'John' });
+} catch (error) {
+  if (error instanceof PcoError) {
+    switch (error.category) {
+      case ErrorCategory.AUTHENTICATION:
+        console.error('Auth failed - check token');
+        break;
+      case ErrorCategory.RATE_LIMIT:
+        const delay = error.getRetryDelay();
+        await new Promise(resolve => setTimeout(resolve, delay));
+        // Retry...
+        break;
+      case ErrorCategory.VALIDATION:
+        error.errors.forEach(err => {
+          console.error(`${err.source?.pointer}: ${err.detail}`);
+        });
+        break;
+    }
+  }
+}
+```
+
+**Result**: Handled errors based on category
+
+---
+
+### Retry with Backoff
+
+```typescript
+import { retryWithBackoff } from '@rachelallyson/planning-center-people-ts';
+
+const person = await retryWithBackoff(
+  () => client.people.getById('person-id'),
+  {
+    maxRetries: 3,
+    baseDelay: 1000
+  }
+);
+```
+
+**Result**: Retries on failure with exponential backoff
+
+---
+
+## Event Monitoring
+
+### Track All Requests
+
+```typescript
+client.on('request:start', (event) => {
+  console.log(`[${event.requestId}] ${event.method} ${event.endpoint}`);
+});
+
+client.on('request:complete', (event) => {
+  console.log(`[${event.requestId}] ${event.status} in ${event.duration}ms`);
+});
+
+client.on('error', (event) => {
+  console.error(`[${event.operation}] Error:`, event.error);
+});
+```
+
+**Result**: Console logs for all request activity
+
+---
+
+### Monitor Rate Limits
+
+```typescript
+client.on('rate:limit', (event) => {
+  console.warn(`Rate limit: ${event.remaining}/${event.limit} remaining`);
+  
+  if (event.remaining < 10) {
+    console.warn('Approaching rate limit - slowing down');
+  }
+});
+```
+
+**Result**: Rate limit warnings
+
+---
+
+## Performance
+
+### Get Performance Metrics
+
+```typescript
+const metrics = client.getPerformanceMetrics();
+
+console.log('Average response time:', metrics.averageResponseTime, 'ms');
+console.log('Success rate:', metrics.successRate);
+console.log('Total requests:', metrics.totalRequests);
+```
+
+**Result**: `PerformanceMetrics` object
+
+---
+
+### Get Rate Limit Info
+
+```typescript
+const info = client.getRateLimitInfo();
+
+console.log(`Remaining: ${info.remaining}/${info.limit}`);
+console.log(`Resets in: ${info.windowResetsIn}ms`);
+```
+
+**Result**: `RateLimitInfo` object
+
+---
+
+## Complete Example: Import People from CSV
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+import { parse } from 'csv-parse/sync';
+import * as fs from 'fs';
+
+async function importPeopleFromCSV(filePath: string) {
+  const client = new PcoClient({
+    auth: {
+      type: 'personal_access_token',
+      personalAccessToken: process.env.PCO_TOKEN!
+    }
+  });
+
+  const csvData = parse(fs.readFileSync(filePath, 'utf-8'), {
+    columns: true,
+    skip_empty_lines: true
+  });
+
+  const results = {
+    created: 0,
+    found: 0,
+    errors: 0
+  };
+
+  for (const row of csvData) {
+    try {
+      const person = await client.people.findOrCreate({
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        matchStrategy: 'fuzzy'
+      });
+
+      if (person.match?.found) {
+        results.found++;
+      } else {
+        results.created++;
+      }
+
+      // Add email if not present
+      if (row.email && !person.match?.found) {
+        await client.contacts.createEmail(person.id, {
+          address: row.email,
+          primary: true
+        });
+      }
+
+      // Set custom field
+      if (row.birthdate) {
+        await client.fields.setPersonFieldBySlug(
+          person.id,
+          'BIRTHDATE',
+          row.birthdate
+        );
+      }
+    } catch (error) {
+      console.error(`Error importing ${row.firstName} ${row.lastName}:`, error);
+      results.errors++;
+    }
+  }
+
+  return results;
+}
+```
+
+**Result**: CSV imported with summary of created/found/errors
+
+---
+
+## Building Custom Clients with Base Package
+
+### Extend BaseModule
+
+```typescript
+import { BaseModule, PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+
+class MyApiModule extends BaseModule {
+  async getResource(id: string) {
+    return this.getSingle(`/resources/${id}`);
+  }
+
+  async getAllResources() {
+    return this.getList('/resources');
+  }
+}
+
+// Usage
+const httpClient = new PcoHttpClient(config, eventEmitter);
+const paginationHelper = new PaginationHelper(httpClient);
+const myModule = new MyApiModule(httpClient, paginationHelper, eventEmitter);
+```
+
+**Result**: Custom module following the same patterns as People API modules
+
+---
+
+**More Examples**: See [People Package Recipes](/people/recipes/examples) for additional examples.

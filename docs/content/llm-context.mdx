@@ -1,0 +1,114 @@
+# LLM Context - Planning Center API Clients
+
+**Purpose**: Quick reference for AI code editors (Cursor, Copilot) to answer correctly about this monorepo.
+
+**Start Here**: [docs/content/index.mdx](./index.mdx) | [docs/content/concepts.mdx](./concepts.mdx) | [docs/content/reference/config.mdx](./reference/config.mdx) | [docs/content/api/](./api/) | [packages/*/src/index.ts](../../packages/planning-center-base-ts/src/index.ts)
+
+## Repository Structure
+
+**Monorepo** with npm workspaces containing two packages:
+
+1. **Base** (`packages/planning-center-base-ts`): Infrastructure (HTTP, auth, rate limiting, errors, JSON:API types, batch operations)
+2. **People** (`packages/planning-center-people-ts`): People API client using base package
+
+**Source of Truth**: Public API surface = `packages/*/src/index.ts`. Always check exports there.
+
+## Invariants (Must-Always-Be-True)
+
+- **Rate Limits**: 100 requests per 20 seconds (enforced automatically via `PcoRateLimiter`)
+- **JSON:API**: All responses follow JSON:API 1.0 specification
+- **Authentication**: Three methods: Personal Access Token, OAuth 2.0 (with required refresh handlers), Basic Auth
+- **Timestamps**: ISO 8601 UTC format (`YYYY-MM-DDTHH:mm:ss.sssZ`)
+- **TypeScript**: Strict mode enabled, no `any` types
+- **Monorepo**: Always run `npm install` from root, not package directories
+- **Workspace Dependency**: People package uses `"@rachelallyson/planning-center-base-ts": "*"` in monorepo (changes to `^1.0.0` when published)
+- **OAuth Refresh**: `onRefresh` and `onRefreshFailure` are REQUIRED for OAuth auth type
+
+## Public Surface
+
+### Base Package (`@rachelallyson/planning-center-base-ts`)
+
+**Classes**: `PcoHttpClient`, `PcoRateLimiter`, `PaginationHelper`, `BaseModule`, `PcoEventEmitter`, `BatchExecutor`, `PcoApiError`, `PcoError`
+
+**Functions**: `retryWithBackoff()`, `withErrorBoundary()`, `shouldNotRetry()`, `handleNetworkError()`, `handleTimeoutError()`, `handleValidationError()`
+
+**Types**: See `packages/planning-center-base-ts/src/index.ts` for full list (includes JSON:API types, config types, event types, batch types)
+
+### People Package (`@rachelallyson/planning-center-people-ts`)
+
+**Main Export**: `PcoClient` - Main client class with 11 modules
+
+**Modules** (properties of `PcoClient`): `people`, `fields`, `workflows`, `contacts`, `households`, `notes`, `lists`, `campus`, `serviceTime`, `forms`, `reports`
+
+**Types**: See `packages/planning-center-people-ts/src/index.ts` for full list (includes v1.x compatibility exports)
+
+## Common Tasks
+
+1. **Creating a client**: Use `new PcoClient(config)` with `PcoClientConfig`
+2. **Authentication**: See [config reference](./reference/config.mdx#authentication) - three methods supported
+3. **Finding/creating people**: `client.people.findOrCreate()` with matching strategies
+4. **Pagination**: Use `getAllPages()` or manual pagination - see [pagination guide](./guides/pagination.mdx)
+5. **Error handling**: Catch `PcoApiError` or `PcoError`, use retry utilities - see [error handling guide](./guides/error-handling.mdx)
+6. **Batch operations**: Use `client.batch.execute()` for multiple operations with dependency resolution
+
+## Don'ts (Guardrails)
+
+- ❌ **Don't invent config keys** - Only use those in [config reference](./reference/config.mdx) or `docs/content/reference/config.schema.json`
+- ❌ **Don't deep import** - Use public exports from package `src/index.ts` files
+- ❌ **Don't install from package dirs** - Always run `npm install` from monorepo root
+- ❌ **Don't use `any` types** - Everything is strictly typed
+- ❌ **Don't bypass rate limiting** - `PcoRateLimiter` handles it automatically
+- ❌ **Don't call API directly** - Use provided HTTP client which handles auth, errors, retries
+- ❌ **Don't mutate response objects** - They're typed and should be treated as immutable
+- ❌ **Don't create new `PcoHttpClient` instances** - Use the one from `PcoClient` or share instances
+- ❌ **Don't use OAuth without refresh handlers** - `onRefresh` and `onRefreshFailure` are required
+
+## Configuration Truth
+
+**Single source**: [docs/content/reference/config.mdx](./reference/config.mdx) and [docs/content/reference/config.schema.json](./reference/config.schema.json)
+
+**Auth types**:
+- `PersonalAccessTokenAuth` - `{ type: 'personal_access_token', personalAccessToken: string }`
+- `OAuthAuth` - `{ type: 'oauth', accessToken, refreshToken, onRefresh, onRefreshFailure, clientId?, clientSecret? }` (refresh handlers REQUIRED)
+- `BasicAuth` - `{ type: 'basic', appId, appSecret }`
+
+**Environment variables**: `PCO_APP_ID`, `PCO_APP_SECRET` (used if not provided in config)
+
+**Defaults**: See config reference for retry defaults (maxRetries: 3, baseDelay: 1000ms, maxDelay: 10000ms)
+
+## Error Handling
+
+**Error hierarchy**:
+- `PcoApiError` - Base API error (status, statusText, errors array)
+- `PcoError extends PcoApiError` - Enhanced with category, severity, context
+
+**Error categories**: `EXTERNAL_API`, `VALIDATION`, `NETWORK`, `AUTHENTICATION`, `AUTHORIZATION`
+
+**Retry strategy**: Exponential backoff (1000ms base, max 10000ms, 3 retries by default)
+
+## HTTP & API Surface
+
+**No HTTP server** - These are client libraries only. They call `https://api.planningcenteronline.com/people/v2`
+
+**Auth flow**: OAuth refresh handled automatically via `onRefresh` callback (REQUIRED)
+
+**Rate limiting**: Automatic (100 req/20s), returns `429` with `Retry-After` header
+
+**Response format**: JSON:API 1.0 - always `{ data: {...}, included?: [...] }`
+
+## Key Files
+
+- **Config types**: `packages/planning-center-base-ts/src/types/config.ts`
+- **HTTP client**: `packages/planning-center-base-ts/src/http-client.ts`
+- **Main client**: `packages/planning-center-people-ts/src/client.ts`
+- **People module**: `packages/planning-center-people-ts/src/modules/people.ts`
+- **Base module**: `packages/planning-center-base-ts/src/base-module.ts`
+
+## When Uncertain
+
+1. Read `src/index.ts` of relevant package for exports
+2. Check [config reference](./reference/config.mdx) for configuration
+3. Look at [recipes](./recipes/examples.mdx) for patterns
+4. Review [concepts](./concepts.mdx) for architecture understanding
+5. Check [People API docs](/people) for People API specifics
+

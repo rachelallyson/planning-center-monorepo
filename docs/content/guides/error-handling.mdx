@@ -1,0 +1,411 @@
+# Error Handling Guide
+
+Comprehensive guide on typed errors, retries, and edge cases.
+
+## Error Types
+
+The library provides two main error classes:
+
+### PcoApiError
+
+Base API error class with JSON:API error structure:
+
+```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getById('invalid-id');
+} catch (error) {
+  if (error instanceof PcoApiError) {
+    console.log(error.status);     // HTTP status code (e.g., 404)
+    console.log(error.statusText); // Status text (e.g., 'Not Found')
+    console.log(error.errors);     // Array of JSON:API error objects
+    console.log(error.message);    // Human-readable message
+  }
+}
+```
+
+### PcoError
+
+Enhanced error with category, severity, and context:
+
+```typescript
+import { PcoError, ErrorCategory, ErrorSeverity } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.create({ first_name: '' });
+} catch (error) {
+  if (error instanceof PcoError) {
+    console.log(error.category);    // ErrorCategory.VALIDATION
+    console.log(error.severity);    // ErrorSeverity.LOW
+    console.log(error.retryable);   // false
+    console.log(error.context);     // Error context object
+  }
+}
+```
+
+## Error Categories
+
+Errors are categorized for easier handling:
+
+```typescript
+enum ErrorCategory {
+  EXTERNAL_API = 'external_api',      // API returned an error
+  VALIDATION = 'validation',           // Request validation failed
+  NETWORK = 'network',                 // Network/connection error
+  AUTHENTICATION = 'authentication',   // Auth token invalid/expired
+  AUTHORIZATION = 'authorization',      // Insufficient permissions
+  RATE_LIMIT = 'rate_limit',           // Rate limit exceeded
+  TIMEOUT = 'timeout',                 // Request timed out
+  UNKNOWN = 'unknown'                  // Unknown error
+}
+```
+
+## Error Severity
+
+Errors are classified by severity:
+
+```typescript
+enum ErrorSeverity {
+  LOW = 'low',         // Minor issues, non-critical
+  MEDIUM = 'medium',   // Moderate issues, should be addressed
+  HIGH = 'high',       // Serious issues, immediate attention needed
+  CRITICAL = 'critical' // System-breaking errors
+}
+```
+
+## Handling Specific Errors
+
+### Authentication Errors
+
+```typescript
+import { PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoError && error.category === ErrorCategory.AUTHENTICATION) {
+    // Token expired or invalid
+    console.error('Authentication failed');
+    
+    // For OAuth, the library handles refresh automatically
+    // but you should check if refresh failed
+    if (error.severity === ErrorSeverity.CRITICAL) {
+      // Refresh failed - redirect to login
+      redirectToLogin();
+    }
+  }
+}
+```
+
+### Rate Limit Errors
+
+```typescript
+import { PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoError && error.category === ErrorCategory.RATE_LIMIT) {
+    const retryAfter = error.getRetryDelay(); // Get delay in milliseconds
+    
+    console.warn(`Rate limited. Retry after ${retryAfter}ms`);
+    
+    // Wait and retry
+    await new Promise(resolve => setTimeout(resolve, retryAfter));
+    
+    // Retry the request
+    return await client.people.getAll();
+  }
+}
+```
+
+### Validation Errors
+
+```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.create({ first_name: '' });
+} catch (error) {
+  if (error instanceof PcoApiError && error.status === 422) {
+    // Parse JSON:API error details
+    error.errors.forEach(err => {
+      console.error(`Field: ${err.source?.pointer}`);
+      console.error(`Title: ${err.title}`);
+      console.error(`Detail: ${err.detail}`);
+    });
+  }
+}
+```
+
+### Network Errors
+
+```typescript
+import { PcoError, ErrorCategory, retryWithBackoff } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoError && error.category === ErrorCategory.NETWORK) {
+    // Network errors are retryable
+    if (error.retryable) {
+      // Retry with exponential backoff
+      return await retryWithBackoff(
+        () => client.people.getAll(),
+        { maxRetries: 3, baseDelay: 1000 }
+      );
+    }
+  }
+}
+```
+
+## Retry Strategy
+
+### Automatic Retry (via Config)
+
+```typescript
+const client = new PcoClient({
+  auth: { /* ... */ },
+  retry: {
+    enabled: true,
+    maxRetries: 3,
+    baseDelay: 1000,    // 1 second
+    maxDelay: 10000,    // 10 seconds max
+    backoff: 'exponential'
+  }
+});
+
+// Automatic retries on retryable errors
+await client.people.getAll();
+```
+
+### Manual Retry with Backoff
+
+```typescript
+import { retryWithBackoff, shouldNotRetry } from '@rachelallyson/planning-center-people-ts';
+
+async function fetchPeopleWithRetry(client: PcoClient) {
+  return await retryWithBackoff(
+    async () => {
+      return await client.people.getAll();
+    },
+    {
+      maxRetries: 3,
+      baseDelay: 1000,
+      maxDelay: 10000,
+      shouldRetry: (error) => {
+        // Custom retry logic
+        if (shouldNotRetry(error)) return false;
+        return error instanceof PcoError && error.retryable;
+      }
+    }
+  );
+}
+```
+
+## Error Context
+
+Errors include context for debugging:
+
+```typescript
+import { PcoError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.create({
+    first_name: 'John',
+    last_name: 'Doe'
+  });
+} catch (error) {
+  if (error instanceof PcoError) {
+    console.log('Error context:', error.context);
+    // {
+    //   category: ErrorCategory.VALIDATION,
+    //   severity: ErrorSeverity.LOW,
+    //   timestamp: '2025-01-11T12:00:00.000Z',
+    //   endpoint: '/people',
+    //   method: 'POST',
+    //   retryCount: 0,
+    //   metadata: { /* custom metadata */ }
+    // }
+  }
+}
+```
+
+## Error Handlers
+
+Use utility functions for common error scenarios:
+
+```typescript
+import {
+  handleNetworkError,
+  handleTimeoutError,
+  handleValidationError
+} from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoError) {
+    switch (error.category) {
+      case ErrorCategory.NETWORK:
+        handleNetworkError(error, { maxRetries: 3 });
+        break;
+      case ErrorCategory.TIMEOUT:
+        handleTimeoutError(error, { timeout: 30000 });
+        break;
+      case ErrorCategory.VALIDATION:
+        handleValidationError(error);
+        break;
+    }
+  }
+}
+```
+
+## Event-Based Error Monitoring
+
+Listen to error events for monitoring:
+
+```typescript
+client.on('error', (event) => {
+  console.error('Error occurred:', {
+    operation: event.operation,
+    error: event.error,
+    timestamp: event.timestamp,
+    context: event.context
+  });
+  
+  // Send to error tracking service
+  errorTracker.captureError(event.error, event.context);
+});
+
+client.on('auth:failure', (event) => {
+  console.error('Auth failure:', event.error);
+  // Handle auth failure (e.g., redirect to login)
+});
+```
+
+## Error Wrapping
+
+Wrap operations with error boundary:
+
+```typescript
+import { withErrorBoundary } from '@rachelallyson/planning-center-people-ts';
+
+const safeOperation = withErrorBoundary(
+  async () => {
+    return await client.people.getAll();
+  },
+  {
+    onError: (error, context) => {
+      console.error('Operation failed:', error, context);
+    },
+    fallback: () => ({ data: [], links: {}, meta: {} })
+  }
+);
+
+const result = await safeOperation();
+```
+
+## Best Practices
+
+1. **Always check error type** before handling:
+   ```typescript
+   if (error instanceof PcoError) {
+     // Handle PCO error
+   } else if (error instanceof PcoApiError) {
+     // Handle API error
+   }
+   ```
+
+2. **Use error categories** for routing:
+   ```typescript
+   switch (error.category) {
+     case ErrorCategory.AUTHENTICATION:
+       handleAuthError(error);
+       break;
+     case ErrorCategory.RATE_LIMIT:
+       handleRateLimit(error);
+       break;
+     // ...
+   }
+   ```
+
+3. **Check retryable flag** before retrying:
+   ```typescript
+   if (error.retryable) {
+     await retryWithBackoff(() => operation());
+   }
+   ```
+
+4. **Log error context** for debugging:
+   ```typescript
+   console.error('Error:', {
+     message: error.message,
+     category: error.category,
+     context: error.context
+   });
+   ```
+
+5. **Use event system** for centralized error monitoring:
+   ```typescript
+   client.on('error', (event) => {
+     errorTracker.log(event);
+   });
+   ```
+
+## Common Error Patterns
+
+### Pattern 1: Retry on Network Error
+
+```typescript
+async function fetchWithRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof PcoError && 
+          error.category === ErrorCategory.NETWORK &&
+          error.retryable &&
+          i < maxRetries - 1) {
+        await new Promise(resolve => 
+          setTimeout(resolve, 1000 * Math.pow(2, i))
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+### Pattern 2: Graceful Degradation
+
+```typescript
+async function getPeopleSafely(client: PcoClient) {
+  try {
+    return await client.people.getAll();
+  } catch (error) {
+    if (error instanceof PcoError) {
+      if (error.category === ErrorCategory.RATE_LIMIT) {
+        // Return empty result if rate limited
+        return { data: [], links: {}, meta: {} };
+      }
+      if (!error.retryable) {
+        // Return cached data if available
+        return getCachedPeople();
+      }
+    }
+    throw error;
+  }
+}
+```
+
+---
+
+**Next**: See [Configuration Reference](../reference/config.mdx) for all config options.
+
