@@ -1,0 +1,56 @@
+{
+    "name": "@rachelallyson/planning-center-base-ts",
+    "version": "1.0.0",
+    "description": "Base TypeScript client library for Planning Center Online APIs - shared infrastructure for building PCO API clients",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "prebuild": "npm run clean",
+        "prepublishOnly": "npm run build",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
+    },
+    "keywords": [
+        "planning-center",
+        "planning-center-online",
+        "pco",
+        "api",
+        "typescript",
+        "json-api",
+        "base",
+        "client",
+        "sdk"
+    ],
+    "author": "Rachel Allyson",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/jest": "^30.0.0",
+        "@types/node": "^20.0.0",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.4.4",
+        "typescript": "^5.9.3"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rachelallyson/planning-center-base-ts.git"
+    },
+    "bugs": {
+        "url": "https://github.com/rachelallyson/planning-center-base-ts/issues"
+    },
+    "homepage": "https://github.com/rachelallyson/planning-center-base-ts#readme",
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
