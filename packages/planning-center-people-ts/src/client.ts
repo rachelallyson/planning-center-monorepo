@@ -3,10 +3,13 @@
  */
 
 import type { PcoClientConfig } from './types/client';
-import type { EventEmitter } from './types/events';
-import { PcoEventEmitter } from './monitoring';
-import { PcoHttpClient } from './core/http';
-import { PaginationHelper } from './core/pagination';
+import type { EventEmitter, PcoEvent, EventHandler, EventType } from '@rachelallyson/planning-center-base-ts';
+import { 
+    PcoEventEmitter, 
+    PcoHttpClient, 
+    PaginationHelper, 
+    BatchExecutor 
+} from '@rachelallyson/planning-center-base-ts';
 import { PeopleModule } from './modules/people';
 import { FieldsModule } from './modules/fields';
 import { WorkflowsModule } from './modules/workflows';
@@ -18,7 +21,6 @@ import { CampusModule } from './modules/campus';
 import { ServiceTimeModule } from './modules/service-time';
 import { FormsModule } from './modules/forms';
 import { ReportsModule } from './modules/reports';
-import { BatchExecutor } from './batch';
 
 export class PcoClient implements EventEmitter {
     public people: PeopleModule;
@@ -64,15 +66,15 @@ export class PcoClient implements EventEmitter {
     }
 
     // EventEmitter implementation
-    on<T extends import('./types/events').PcoEvent>(eventType: T['type'], handler: import('./types/events').EventHandler<T>): void {
+    on<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
         this.eventEmitter.on(eventType, handler);
     }
 
-    off<T extends import('./types/events').PcoEvent>(eventType: T['type'], handler: import('./types/events').EventHandler<T>): void {
+    off<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
         this.eventEmitter.off(eventType, handler);
     }
 
-    emit<T extends import('./types/events').PcoEvent>(event: T): void {
+    emit<T extends PcoEvent>(event: T): void {
         this.eventEmitter.emit(event);
     }
 
@@ -113,21 +115,21 @@ export class PcoClient implements EventEmitter {
     /**
      * Clear all event listeners
      */
-    removeAllListeners(eventType?: import('./types/events').EventType): void {
+    removeAllListeners(eventType?: EventType): void {
         this.eventEmitter.removeAllListeners(eventType);
     }
 
     /**
      * Get the number of listeners for an event type
      */
-    listenerCount(eventType: import('./types/events').EventType): number {
+    listenerCount(eventType: EventType): number {
         return this.eventEmitter.listenerCount(eventType);
     }
 
     /**
      * Get all registered event types
      */
-    eventTypes(): import('./types/events').EventType[] {
+    eventTypes(): EventType[] {
         return this.eventEmitter.eventTypes();
     }
 

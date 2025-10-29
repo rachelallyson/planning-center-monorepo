@@ -3,10 +3,10 @@
  */
 
 import type { PcoClientConfig } from '../types/client';
-import type { PcoEvent } from '../types/events';
-import { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from '../monitoring';
-import { PcoRateLimiter } from '../rate-limiter';
-import { PcoApiError } from '../api-error';
+import type { PcoEvent } from '@rachelallyson/planning-center-base-ts';
+import { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from '@rachelallyson/planning-center-base-ts';
+import { PcoRateLimiter } from '@rachelallyson/planning-center-base-ts';
+import { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 import { attemptTokenRefresh, hasRefreshTokenCapability } from '../auth';
 
 export interface HttpRequestOptions {

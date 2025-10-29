@@ -1,5 +1,5 @@
 import { getList, getSingle, PcoClientState } from '../core';
-import type { ErrorContext } from '../error-handling';
+import type { ErrorContext } from '@rachelallyson/planning-center-base-ts';
 import { buildQueryParams } from '../helpers';
 import {
     NoteCategoriesList,

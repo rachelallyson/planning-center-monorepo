@@ -1,5 +1,5 @@
 import { del, getList, getSingle, patch, PcoClientState, post } from '../core';
-import type { ErrorContext } from '../error-handling';
+import type { ErrorContext } from '@rachelallyson/planning-center-base-ts';
 import { buildQueryParams } from '../helpers';
 import {
     PeopleIncluded,

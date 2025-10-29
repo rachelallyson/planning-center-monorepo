@@ -2,11 +2,8 @@
  * v2.0.0 Households Module
  */
 
-import { BaseModule } from './base';
-import type { PcoHttpClient } from '../core/http';
-import type { PaginationHelper } from '../core/pagination';
-import type { PcoEventEmitter } from '../monitoring';
-import type { PaginationOptions, PaginationResult } from '../core/pagination';
+import { BaseModule } from '@rachelallyson/planning-center-base-ts';
+import type { PaginationOptions, PaginationResult } from '@rachelallyson/planning-center-base-ts';
 import type {
     HouseholdResource,
     HouseholdAttributes

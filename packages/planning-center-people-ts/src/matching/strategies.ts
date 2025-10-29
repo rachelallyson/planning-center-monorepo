@@ -29,10 +29,25 @@ export class MatchStrategies {
 
     /**
      * Exact matching strategy - only return matches with very high confidence
+     * Requires verified email/phone matches unless multiple people share the same contact info
      */
     private selectExactMatch(candidates: MatchResult[]): MatchResult | null {
-        // Only return matches with score >= 0.8 (lowered from 0.9)
-        const exactMatches = candidates.filter(c => c.score >= 0.8);
+        // For exact match, require verified email/phone match
+        // Only allow name-only matches if multiple people share same email/phone (to distinguish)
+        const verifiedMatches = candidates.filter(c => c.isVerifiedContactMatch);
+        const verifiedCount = verifiedMatches.length;
+        
+        const exactMatches = candidates.filter(c => {
+            // Must have score >= 0.8
+            if (c.score < 0.8) return false;
+            
+            // Must be a verified contact match (email/phone), OR
+            // Must be a name-only match with multiple verified matches (to distinguish)
+            const isNameMatch = c.reason.includes('name match');
+            return c.isVerifiedContactMatch || 
+                   (isNameMatch && verifiedCount > 1);
+        });
+        
         return exactMatches.length > 0 ? exactMatches[0] : null;
     }
 

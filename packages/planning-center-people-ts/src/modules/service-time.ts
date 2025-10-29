@@ -1,8 +1,8 @@
-import { BaseModule } from './base';
-import type { PcoHttpClient } from '../core/http';
-import type { PaginationHelper } from '../core/pagination';
-import type { PcoEventEmitter } from '../monitoring';
-import type { PaginationOptions, PaginationResult } from '../core/pagination';
+import { BaseModule } from '@rachelallyson/planning-center-base-ts';
+import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
+import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
+import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import type { PaginationOptions, PaginationResult } from '@rachelallyson/planning-center-base-ts';
 import type {
     ServiceTimeResource,
     ServiceTimeAttributes,

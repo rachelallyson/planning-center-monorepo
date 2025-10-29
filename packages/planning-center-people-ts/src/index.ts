@@ -14,19 +14,19 @@ export type {
   OAuthAuth
 } from './types/client';
 
-// Event system
-export type { PcoEvent, EventHandler, EventType } from './types/events';
+// Event system (re-exported from base)
+export type { PcoEvent, EventHandler, EventType } from '@rachelallyson/planning-center-base-ts';
 
-// Batch operations
-export type { BatchOperation, BatchResult, BatchOptions, BatchSummary } from './types/batch';
+// Batch operations (re-exported from base)
+export type { BatchOperation, BatchResult, BatchOptions, BatchSummary } from '@rachelallyson/planning-center-base-ts';
 
-// Core types
+// Core types (re-exported from base)
 export type {
   Paginated,
   Relationship,
   ResourceIdentifier,
   ResourceObject,
-} from './types';
+} from '@rachelallyson/planning-center-base-ts';
 
 // People types
 export type {
@@ -127,15 +127,15 @@ export {
   updateClientTokens,
 } from './auth';
 
-// Export API error
-export { PcoApiError } from './api-error';
+// Export API error (re-exported from base)
+export { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 
-// Export rate limiter
-export type { RateLimitHeaders, RateLimitInfo } from './rate-limiter';
-export { PcoRateLimiter } from './rate-limiter';
+// Export rate limiter (re-exported from base)
+export type { RateLimitHeaders, RateLimitInfo } from '@rachelallyson/planning-center-base-ts';
+export { PcoRateLimiter } from '@rachelallyson/planning-center-base-ts';
 
-// Export enhanced error handling
-export type { ErrorContext } from './error-handling';
+// Export enhanced error handling (re-exported from base)
+export type { ErrorContext } from '@rachelallyson/planning-center-base-ts';
 export {
   ErrorCategory,
   ErrorSeverity,
@@ -146,7 +146,7 @@ export {
   retryWithBackoff,
   shouldNotRetry,
   withErrorBoundary,
-} from './error-handling';
+} from '@rachelallyson/planning-center-base-ts';
 
 // Export People-specific functions (deprecated)
 export {

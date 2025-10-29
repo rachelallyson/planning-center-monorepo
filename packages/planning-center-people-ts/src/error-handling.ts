@@ -1,4 +1,4 @@
-import { PcoApiError } from './api-error';
+import { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 import type { ErrorObject as JsonApiError } from './types';
 
 // Error categories for better monitoring

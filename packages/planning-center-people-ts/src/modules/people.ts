@@ -2,11 +2,14 @@
  * v2.0.0 People Module
  */
 
-import { BaseModule } from './base';
-import type { PcoHttpClient } from '../core/http';
-import type { PaginationHelper } from '../core/pagination';
-import type { PcoEventEmitter } from '../monitoring';
-import type { PaginationOptions, PaginationResult } from '../core/pagination';
+import { BaseModule } from '@rachelallyson/planning-center-base-ts';
+import type { 
+    PcoHttpClient, 
+    PaginationHelper, 
+    PcoEventEmitter,
+    PaginationOptions,
+    PaginationResult
+} from '@rachelallyson/planning-center-base-ts';
 import type {
     PersonResource,
     PersonAttributes,
@@ -60,17 +63,42 @@ export interface PersonCreateOptions {
     resourcePermissionFlags?: Record<string, boolean>;
 }
 
+/**
+ * Options for finding or creating a person with smart matching
+ */
 export interface PersonMatchOptions {
+    /** Person's first name */
     firstName?: string;
+    /** Person's last name */
     lastName?: string;
+    /** Person's email address */
     email?: string;
+    /** Person's phone number */
     phone?: string;
+    /** 
+     * Matching strategy to use:
+     * - 'exact': Only return matches with verified email/phone matches (high confidence)
+     * - 'fuzzy': Return best match above threshold (default)
+     * - 'aggressive': Return best match with lower threshold
+     */
     matchStrategy?: 'exact' | 'fuzzy' | 'aggressive';
+    /** Campus ID to associate with the person */
     campusId?: string;
+    /** If true, create a new person if no match is found (default: true) */
     createIfNotFound?: boolean;
+    /** 
+     * If true, automatically add missing email/phone contact information to a person's profile 
+     * when a match is found. Missing contacts are added as non-primary to avoid overriding 
+     * existing primary contacts. (default: false)
+     */
+    addMissingContactInfo?: boolean;
+    /** Age preference filter: 'adults' (18+), 'children' (<18), or 'any' */
     agePreference?: 'adults' | 'children' | 'any';
+    /** Minimum age filter */
     minAge?: number;
+    /** Maximum age filter */
     maxAge?: number;
+    /** Birth year filter (exact match) */
     birthYear?: number;
 }
 
@@ -427,6 +455,36 @@ export class PeopleModule extends BaseModule {
 
     /**
      * Find or create a person with smart matching
+     * 
+     * This method uses intelligent matching logic to find existing people or create new ones.
+     * It verifies email/phone matches and only uses name matching when appropriate.
+     * 
+     * @param options - Matching options including name, contact info, and matching preferences
+     * @param options.addMissingContactInfo - If true, automatically adds missing email/phone 
+     *   to a person's profile when a match is found. The contacts are added as non-primary 
+     *   to preserve existing primary contacts.
+     * 
+     * @example
+     * ```typescript
+     * // Basic find or create
+     * const person = await client.people.findOrCreate({
+     *   firstName: 'John',
+     *   lastName: 'Doe',
+     *   email: 'john@example.com',
+     *   phone: '+1234567890'
+     * });
+     * 
+     * // Find and add missing contact info if match found
+     * const person = await client.people.findOrCreate({
+     *   firstName: 'Jane',
+     *   lastName: 'Smith',
+     *   email: 'jane@example.com',
+     *   phone: '+1987654321',
+     *   addMissingContactInfo: true  // Will add phone if person only has email
+     * });
+     * ```
+     * 
+     * @returns The found or newly created person
      */
     async findOrCreate(options: PersonMatchOptions): Promise<PersonResource> {
         return this.personMatcher.findOrCreate(options);

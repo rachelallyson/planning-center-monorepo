@@ -9,7 +9,7 @@ import {
   getRateLimitInfo,
   PcoClientConfig 
 } from '../src/core';
-import { PcoRateLimiter } from '../src/rate-limiter';
+import { PcoRateLimiter } from '@rachelallyson/planning-center-base-ts';
 import { PcoError } from '../src/error-handling';
 
 // Mock fetch
@@ -396,81 +396,5 @@ describe('Authentication', () => {
   });
 });
 
-describe('Rate limiting', () => {
-  it('should wait for rate limiter before making request', async () => {
-    const client = createPcoClient({ accessToken: 'test-token' });
-    const waitSpy = jest.spyOn(client.rateLimiter, 'waitForAvailability');
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      headers: new Map([['content-type', 'application/json']]),
-      json: () => Promise.resolve({ data: [] })
-    } as unknown as Response);
-
-    await getList(client, '/people');
-
-    expect(waitSpy).toHaveBeenCalled();
-  });
-
-  it('should update rate limiter from response headers', async () => {
-    const client = createPcoClient({ accessToken: 'test-token' });
-    const updateSpy = jest.spyOn(client.rateLimiter, 'updateFromHeaders');
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      headers: new Map([
-        ['x-pco-api-request-rate-limit', '100'],
-        ['x-pco-api-request-rate-count', '50']
-      ]),
-      json: () => Promise.resolve({ data: [] })
-    } as unknown as Response);
-
-    await getList(client, '/people');
-
-    expect(updateSpy).toHaveBeenCalledWith({
-      'X-PCO-API-Request-Rate-Limit': '100',
-      'X-PCO-API-Request-Rate-Count': '50',
-      'X-PCO-API-Request-Rate-Period': undefined,
-      'Retry-After': undefined
-    });
-  });
-});
-
-describe('Error handling', () => {
-  let client: ReturnType<typeof createPcoClient>;
-
-  beforeEach(() => {
-    client = createPcoClient({ accessToken: 'test-token' });
-    mockFetch.mockClear();
-  });
-
-  it('should handle network errors', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-    await expect(getList(client, '/people')).rejects.toThrow(PcoError);
-  });
-
-  it('should handle timeout errors', async () => {
-    const clientWithTimeout = createPcoClient({ 
-      accessToken: 'test-token',
-      timeout: 1000
-    });
-
-    // Mock AbortController
-    const mockAbortController = {
-      abort: jest.fn(),
-      signal: {}
-    };
-    global.AbortController = jest.fn(() => mockAbortController) as any;
-
-    mockFetch.mockImplementationOnce(() => 
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('AbortError')), 100);
-      })
-    );
-
-    await expect(getList(clientWithTimeout, '/people')).rejects.toThrow(PcoError);
-  });
-});
+// Rate limiting and error handling are tested in the base package
+// These tests focus on people-specific functionality

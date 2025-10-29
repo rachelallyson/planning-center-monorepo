@@ -6,7 +6,7 @@ import {
   retryWithBackoff,
   withErrorBoundary,
 } from './error-handling';
-import { PcoRateLimiter, RateLimitHeaders } from './rate-limiter';
+import { PcoRateLimiter, RateLimitHeaders } from '@rachelallyson/planning-center-base-ts';
 import {
   Paginated,
   ResourceObject,
@@ -51,7 +51,7 @@ export interface PcoClientConfig {
 }
 
 // Re-export PcoApiError for convenience
-export { PcoApiError } from './api-error';
+export { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 
 // ===== PCO Client State =====
 export interface PcoClientState {

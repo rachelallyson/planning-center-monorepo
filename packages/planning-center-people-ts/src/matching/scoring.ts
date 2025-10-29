@@ -3,27 +3,29 @@
  */
 
 import type { PersonResource } from '../types';
-import type { PersonMatchOptions } from '../modules/people';
+import type { PersonMatchOptions, PeopleModule } from '../modules/people';
 import { matchesAgeCriteria, calculateAgeSafe } from '../helpers';
 
 export class MatchScorer {
+    constructor(private peopleModule: PeopleModule) {}
+
     /**
      * Score a person match based on various criteria
      */
-    scoreMatch(person: PersonResource, options: PersonMatchOptions): number {
+    async scoreMatch(person: PersonResource, options: PersonMatchOptions): Promise<number> {
         let totalScore = 0;
         let maxScore = 0;
 
         // Email matching (highest weight)
         if (options.email) {
-            const emailScore = this.scoreEmailMatch(person, options.email);
+            const emailScore = await this.scoreEmailMatch(person, options.email);
             totalScore += emailScore * 0.35;
             maxScore += 0.35;
         }
 
         // Phone matching (high weight)
         if (options.phone) {
-            const phoneScore = this.scorePhoneMatch(person, options.phone);
+            const phoneScore = await this.scorePhoneMatch(person, options.phone);
             totalScore += phoneScore * 0.25;
             maxScore += 0.25;
         }
@@ -53,15 +55,21 @@ export class MatchScorer {
     /**
      * Get a human-readable reason for the match
      */
-    getMatchReason(person: PersonResource, options: PersonMatchOptions): string {
+    async getMatchReason(person: PersonResource, options: PersonMatchOptions): Promise<string> {
         const reasons: string[] = [];
 
-        if (options.email && this.scoreEmailMatch(person, options.email) > 0.8) {
+        if (options.email) {
+            const emailScore = await this.scoreEmailMatch(person, options.email);
+            if (emailScore > 0.8) {
             reasons.push('exact email match');
+            }
         }
 
-        if (options.phone && this.scorePhoneMatch(person, options.phone) > 0.8) {
+        if (options.phone) {
+            const phoneScore = await this.scorePhoneMatch(person, options.phone);
+            if (phoneScore > 0.8) {
             reasons.push('exact phone match');
+            }
         }
 
         if (options.firstName || options.lastName) {
@@ -96,23 +104,50 @@ export class MatchScorer {
     }
 
     /**
-     * Score email matching
+     * Score email matching - verifies actual email matches
      */
-    private scoreEmailMatch(person: PersonResource, email: string): number {
-        // Check if the person has the email in their relationships or attributes
-        // For now, we'll assume if the search found this person by email, it's a match
-        // In a more sophisticated implementation, we'd fetch and compare actual emails
-        return 1.0; // Perfect match since search found this person by email
+    async scoreEmailMatch(person: PersonResource, email: string): Promise<number> {
+        try {
+            const personEmails = await this.peopleModule.getEmails(person.id);
+            const normalizedSearchEmail = email.toLowerCase().trim();
+            
+            // Check if any of the person's emails match
+            const emails = personEmails.data?.map(e => 
+                e.attributes?.address?.toLowerCase().trim()
+            ).filter(Boolean) || [];
+            
+            return emails.includes(normalizedSearchEmail) ? 1.0 : 0.0;
+        } catch (error) {
+            console.warn(`Failed to verify email match for person ${person.id}:`, error);
+            return 0.0;
+        }
     }
 
     /**
-     * Score phone matching
+     * Score phone matching - verifies actual phone matches
      */
-    private scorePhoneMatch(person: PersonResource, phone: string): number {
-        // Check if the person has the phone in their relationships or attributes
-        // For now, we'll assume if the search found this person by phone, it's a match
-        // In a more sophisticated implementation, we'd fetch and compare actual phones
-        return 1.0; // Perfect match since search found this person by phone
+    async scorePhoneMatch(person: PersonResource, phone: string): Promise<number> {
+        try {
+            const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
+            
+            // Normalize phone numbers for comparison
+            const normalizePhone = (num: string): string => {
+                const digits = num.replace(/\D/g, '');
+                return digits.length === 10 ? `+1${digits}` : 
+                       digits.length === 11 && digits.startsWith('1') ? `+${digits}` : 
+                       `+${digits}`;
+            };
+            
+            const normalizedSearchPhone = normalizePhone(phone);
+            const phones = personPhones.data?.map(p => 
+                normalizePhone(p.attributes?.number || '')
+            ).filter(Boolean) || [];
+            
+            return phones.includes(normalizedSearchPhone) ? 1.0 : 0.0;
+        } catch (error) {
+            console.warn(`Failed to verify phone match for person ${person.id}:`, error);
+            return 0.0;
+        }
     }
 
     /**

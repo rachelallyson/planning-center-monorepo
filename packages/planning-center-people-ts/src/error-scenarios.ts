@@ -5,7 +5,7 @@
  * and failure scenarios that can occur when working with the PCO People API.
  */
 
-import { PcoApiError } from './api-error';
+import { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 import type { PcoClientState } from './core';
 
 // ===== Error Recovery Strategies =====

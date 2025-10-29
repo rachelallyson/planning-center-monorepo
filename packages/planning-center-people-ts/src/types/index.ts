@@ -1,16 +1,33 @@
-// Export all JSON:API types
-export * from './json-api';
+// Export all JSON:API types (re-exported from base)
+export type {
+  JsonValue,
+  Meta,
+  LinkObject,
+  Link,
+  Links,
+  PaginationLinks,
+  TopLevelLinks,
+  TopLevelJsonApi,
+  ResourceIdentifier,
+  Relationship,
+  ToOne,
+  ToMany,
+  Attributes,
+  ResourceObject,
+  JsonApiBase,
+  ErrorObject,
+  ErrorDocument,
+  DataDocumentSingle,
+  DataDocumentMany,
+  JsonApiDocument,
+  Paginated,
+  Response,
+} from '@rachelallyson/planning-center-base-ts';
 
 // Export all People-specific types
 export * from './people';
 
 // Re-export commonly used types for convenience
-export type {
-  Paginated,
-  Relationship,
-  ResourceIdentifier,
-  ResourceObject,
-} from './json-api';
 export type {
   AddressAttributes,
   AddressesList,

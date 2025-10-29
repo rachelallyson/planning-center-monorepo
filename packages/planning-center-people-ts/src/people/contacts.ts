@@ -1,5 +1,5 @@
 import { del, getList, patch, PcoClientState, post } from '../core';
-import type { ErrorContext } from '../error-handling';
+import type { ErrorContext } from '@rachelallyson/planning-center-base-ts';
 import {
     AddressAttributes,
     AddressesList,
