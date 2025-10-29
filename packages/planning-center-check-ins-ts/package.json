@@ -1,0 +1,75 @@
+{
+    "name": "@rachelallyson/planning-center-check-ins-ts",
+    "version": "1.0.0",
+    "description": "A strictly typed TypeScript client for Planning Center Online Check-Ins API with batch operations and enhanced developer experience",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "prebuild": "npm run clean",
+        "test": "jest --testPathIgnorePatterns=integration.test.ts",
+        "test:watch": "jest --watch --testPathIgnorePatterns=integration.test.ts",
+        "test:coverage": "jest --coverage --testPathIgnorePatterns=integration.test.ts",
+        "test:ci": "jest --ci --coverage --watchAll=false --testPathIgnorePatterns=integration.test.ts",
+        "test:integration": "dotenv -e .env.test -- jest --testPathPatterns=integration/.*.integration.test.ts --setupFilesAfterEnv='<rootDir>/tests/integration-setup.ts' --testTimeout=60000",
+        "docs": "typedoc",
+        "docs:watch": "typedoc --watch",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "planning-center",
+        "planning-center-online",
+        "pco",
+        "api",
+        "typescript",
+        "json-api",
+        "check-ins",
+        "checkins",
+        "church",
+        "attendance",
+        "client",
+        "sdk",
+        "rate-limiting",
+        "error-handling",
+        "batch-operations",
+        "fluent-api",
+        "event-system"
+    ],
+    "author": "Rachel Allyson",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/jest": "^30.0.0",
+        "dotenv": "^16.6.1",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.4.4",
+        "tslib": "^2.8.1",
+        "typedoc": "^0.28.14",
+        "typedoc-plugin-markdown": "^4.9.0",
+        "typescript": "^5.9.3"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
+    },
+    "bugs": {
+        "url": "https://github.com/rachelallyson/planning-center-monorepo/issues"
+    },
+    "homepage": "https://github.com/rachelallyson/planning-center-monorepo#readme",
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@rachelallyson/planning-center-base-ts": "*"
+    }
+}
