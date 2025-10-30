@@ -26,7 +26,7 @@ describe('PaginationHelper', () => {
     };
     httpClient = new PcoHttpClient(config, eventEmitter);
     paginationHelper = new PaginationHelper(httpClient);
-    mockFetch.mockClear();
+    jest.clearAllMocks();
   });
 
   describe('getAllPages', () => {

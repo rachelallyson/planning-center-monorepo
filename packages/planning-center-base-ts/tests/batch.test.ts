@@ -90,7 +90,7 @@ describe('BatchExecutor', () => {
 
       expect(result.total).toBe(2);
       expect(result.successful).toBe(2);
-      expect(result.results[1].operation.data.parent_id).toBe('parent-1');
+      expect(result.results[1].operation.resolvedData.parent_id).toBe('parent-1');
     });
 
     it('should handle partial failures with continueOnError', async () => {
@@ -259,7 +259,7 @@ describe('BatchExecutor', () => {
 
       const result = await batchExecutor.execute(operations);
 
-      expect(result.results[1].operation.data.resource_id).toBe('parent-123');
+      expect(result.results[1].operation.resolvedData.resource_id).toBe('parent-123');
       expect(mockClient.request).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

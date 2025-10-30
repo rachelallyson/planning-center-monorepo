@@ -27,7 +27,7 @@ export interface BatchOptions {
     /** Callback for each completed operation */
     onOperationComplete?: (result: BatchResult) => void;
     /** Callback for batch completion */
-    onBatchComplete?: (results: BatchResult[]) => void;
+    onBatchComplete?: (summary: BatchSummary) => void;
 }
 
 export interface BatchSummary {

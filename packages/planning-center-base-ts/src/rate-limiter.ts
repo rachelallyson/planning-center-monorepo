@@ -98,7 +98,11 @@ export class PcoRateLimiter {
     }
 
     if (headers['Retry-After']) {
-      // Retry-After is informational only, don't update window
+      // Update reset time based on retry-after header
+      const retryAfterSeconds = parseInt(headers['Retry-After'], 10);
+      if (!isNaN(retryAfterSeconds)) {
+        this.windowStart = Date.now() - (this.windowMs - retryAfterSeconds * 1000);
+      }
     }
   }
 
@@ -119,6 +123,39 @@ export class PcoRateLimiter {
     }
 
     this.updateWindow();
+  }
+
+  /**
+   * Get debug information about the rate limiter state
+   */
+  getDebugInfo() {
+    this.updateWindow();
+    
+    return {
+      canMakeRequest: this.canMakeRequest(),
+      limit: this.limit,
+      requestCount: this.requestCount,
+      timeUntilReset: this.getTimeUntilReset(),
+      windowMs: this.windowMs,
+      windowStart: this.windowStart,
+    };
+  }
+
+  /**
+   * Parse rate limit error details from error message
+   */
+  static parseRateLimitError(errorDetail: string): { current: number; limit: number; period: number } | null {
+    const match = errorDetail.match(/Rate limit exceeded: (\d+) of (\d+) requests per (\d+) seconds/);
+    
+    if (!match) {
+      return null;
+    }
+
+    return {
+      current: parseInt(match[1], 10),
+      limit: parseInt(match[2], 10),
+      period: parseInt(match[3], 10),
+    };
   }
 
   /**

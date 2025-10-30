@@ -25,7 +25,7 @@ describe('PcoHttpClient', () => {
       baseURL: 'https://api.planningcenteronline.com/test/v2',
     };
     httpClient = new PcoHttpClient(config, eventEmitter);
-    mockFetch.mockClear();
+    jest.clearAllMocks();
   });
 
   describe('request', () => {
@@ -307,10 +307,8 @@ describe('PcoHttpClient', () => {
     it('should use Basic auth for personal access token', async () => {
       const patConfig: PcoClientConfig = {
         auth: {
-          type: 'personalAccessToken',
-          token: 'pat-token',
-          appId: 'app-id',
-          appSecret: 'app-secret',
+          type: 'personal_access_token',
+          personalAccessToken: 'app-id:app-secret',
         },
         baseURL: 'https://api.planningcenteronline.com/test/v2',
       };
