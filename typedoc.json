@@ -26,5 +26,12 @@
     "Enums",
     "Functions",
     "*"
-  ]
+  ],
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  },
+  "logLevel": "Warn"
 }
