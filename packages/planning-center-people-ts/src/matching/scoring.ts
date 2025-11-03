@@ -4,7 +4,7 @@
 
 import type { PersonResource } from '../types';
 import type { PersonMatchOptions, PeopleModule } from '../modules/people';
-import { matchesAgeCriteria, calculateAgeSafe } from '../helpers';
+import { matchesAgeCriteria, calculateAgeSafe, normalizeEmail, normalizePhone } from '../helpers';
 
 export class MatchScorer {
     constructor(private peopleModule: PeopleModule) {}
@@ -109,11 +109,11 @@ export class MatchScorer {
     async scoreEmailMatch(person: PersonResource, email: string): Promise<number> {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
-            const normalizedSearchEmail = email.toLowerCase().trim();
+            const normalizedSearchEmail = normalizeEmail(email);
             
             // Check if any of the person's emails match
             const emails = personEmails.data?.map(e => 
-                e.attributes?.address?.toLowerCase().trim()
+                normalizeEmail(e.attributes?.address || '')
             ).filter(Boolean) || [];
             
             return emails.includes(normalizedSearchEmail) ? 1.0 : 0.0;
@@ -129,15 +129,6 @@ export class MatchScorer {
     async scorePhoneMatch(person: PersonResource, phone: string): Promise<number> {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
-            
-            // Normalize phone numbers for comparison
-            const normalizePhone = (num: string): string => {
-                const digits = num.replace(/\D/g, '');
-                return digits.length === 10 ? `+1${digits}` : 
-                       digits.length === 11 && digits.startsWith('1') ? `+${digits}` : 
-                       `+${digits}`;
-            };
-            
             const normalizedSearchPhone = normalizePhone(phone);
             const phones = personPhones.data?.map(p => 
                 normalizePhone(p.attributes?.number || '')

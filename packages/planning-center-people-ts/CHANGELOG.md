@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2025-01-15
+
+### ✨ **New Features**
+
+- **📧 Email Normalization & Validation**: Added email normalization and format validation to improve search accuracy
+  - New `normalizeEmail()` helper function (lowercase and trim)
+  - Email is now normalized before search to improve PCO API search results
+  - Email format validation prevents wasted API calls on invalid emails
+- **📱 Phone Normalization**: Added phone normalization to improve search accuracy
+  - New `normalizePhone()` helper function (normalizes to `+1XXXXXXXXXX` format)
+  - Phone numbers are now normalized before search to improve PCO API search results
+- **✅ First Name Validation**: Added firstName validation in person creation
+  - Validates firstName is required before attempting person creation
+  - Provides clearer error messages: "First name is required to create a person"
+  - Fails fast instead of waiting for API error response
+
+### 🔧 **Improvements**
+
+- **Normalization Consistency**: Refactored normalization logic into reusable helper functions
+  - All email/phone normalization now uses consistent helper functions
+  - Updated both `matcher.ts` and `scoring.ts` to use shared normalization functions
+  - Removed duplicate inline normalization code
+
+### 📦 **Exports**
+
+- Exported `normalizeEmail` and `normalizePhone` helper functions from main package index for library users
+
 ## [2.9.1] - 2025-01-14
 
 ### 🐛 **Bug Fixes**

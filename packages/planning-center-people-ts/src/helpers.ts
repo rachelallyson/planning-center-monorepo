@@ -177,11 +177,35 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
+ * Normalize email address (lowercase and trim)
+ */
+export function normalizeEmail(email: string): string {
+    return email.toLowerCase().trim();
+}
+
+/**
  * Validate phone number format (basic validation)
  */
 export function isValidPhone(phone: string): boolean {
     const phoneRegex = /^[\+]?[1-9][\d]{6,14}$/;
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+}
+
+/**
+ * Normalize phone number to +1XXXXXXXXXX format
+ * - 10 digits: adds +1 prefix
+ * - 11 digits starting with 1: adds + prefix
+ * - Other lengths: adds + prefix to all digits
+ */
+export function normalizePhone(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 10) {
+        return `+1${digits}`;
+    }
+    if (digits.length === 11 && digits.startsWith('1')) {
+        return `+${digits}`;
+    }
+    return `+${digits}`;
 }
 
 /**

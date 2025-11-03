@@ -7,7 +7,7 @@ import type { PersonResource } from '../types';
 import { PersonMatchOptions } from '../modules/people';
 import { MatchStrategies } from './strategies';
 import { MatchScorer } from './scoring';
-import { matchesAgeCriteria } from '../helpers';
+import { matchesAgeCriteria, normalizeEmail, normalizePhone, isValidEmail } from '../helpers';
 
 export interface MatchResult {
     person: PersonResource;
@@ -71,20 +71,29 @@ export class PersonMatcher {
         const emailPhoneMatches: PersonResource[] = [];
         const nameOnlyMatches: PersonResource[] = [];
 
-        // Search by email
+        // Search by email (with normalization and validation)
         if (email) {
-            try {
-                const emailResults = await this.peopleModule.search({ email });
-                emailPhoneMatches.push(...emailResults.data);
-            } catch (error) {
-                console.warn('Email search failed:', error);
+            // Validate email format to avoid wasted API calls
+            if (!isValidEmail(email)) {
+                console.warn('Invalid email format, skipping email search:', email);
+            } else {
+                try {
+                    // Normalize email before search to improve PCO search results
+                    const normalizedEmail = normalizeEmail(email);
+                    const emailResults = await this.peopleModule.search({ email: normalizedEmail });
+                    emailPhoneMatches.push(...emailResults.data);
+                } catch (error) {
+                    console.warn('Email search failed:', error);
+                }
             }
         }
 
-        // Search by phone
+        // Search by phone (with normalization)
         if (phone) {
             try {
-                const phoneResults = await this.peopleModule.search({ phone });
+                // Normalize phone before search to improve PCO search results
+                const normalizedPhone = normalizePhone(phone);
+                const phoneResults = await this.peopleModule.search({ phone: normalizedPhone });
                 emailPhoneMatches.push(...phoneResults.data);
             } catch (error) {
                 console.warn('Phone search failed:', error);
@@ -252,9 +261,9 @@ export class PersonMatcher {
     private async verifyEmailMatch(person: PersonResource, email: string): Promise<boolean> {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
-            const normalizedSearchEmail = email.toLowerCase().trim();
+            const normalizedSearchEmail = normalizeEmail(email);
             const emails = personEmails.data?.map(e => 
-                e.attributes?.address?.toLowerCase().trim()
+                normalizeEmail(e.attributes?.address || '')
             ).filter(Boolean) || [];
             return emails.includes(normalizedSearchEmail);
         } catch {
@@ -268,12 +277,6 @@ export class PersonMatcher {
     private async verifyPhoneMatch(person: PersonResource, phone: string): Promise<boolean> {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
-            const normalizePhone = (num: string): string => {
-                const digits = num.replace(/\D/g, '');
-                return digits.length === 10 ? `+1${digits}` : 
-                       digits.length === 11 && digits.startsWith('1') ? `+${digits}` : 
-                       `+${digits}`;
-            };
             const normalizedSearchPhone = normalizePhone(phone);
             const phones = personPhones.data?.map(p => 
                 normalizePhone(p.attributes?.number || '')
@@ -350,6 +353,11 @@ export class PersonMatcher {
      * Create a new person
      */
     private async createPerson(options: PersonMatchOptions): Promise<PersonResource> {
+        // Validate firstName is required for person creation
+        if (!options.firstName?.trim()) {
+            throw new Error('First name is required to create a person');
+        }
+
         // Create basic person data (only name fields)
         const personData: any = {};
 

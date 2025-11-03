@@ -226,6 +226,8 @@ export {
   isFileUrl,
   isValidEmail,
   isValidPhone,
+  normalizeEmail,
+  normalizePhone,
   processFileValue,
   searchPeople,
   validatePersonData,
