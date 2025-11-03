@@ -1,6 +1,6 @@
 # API Reference
 
-Complete TypeScript API reference for both packages in this monorepo.
+Complete TypeScript API reference for all three packages in this monorepo.
 
 ## Base Package
 
@@ -71,18 +71,55 @@ See [Types](./type-aliases/) for complete type definitions:
 - Field types (`FieldDefinitionResource`, `FieldDatumResource`, etc.)
 - Workflow types (`WorkflowResource`, `WorkflowCardResource`, etc.)
 
+## Check-Ins Package
+
+**Package**: `@rachelallyson/planning-center-check-ins-ts`
+
+TypeScript client for Planning Center Check-Ins API.
+
+### Classes
+
+- [`PcoCheckInsClient`](./classes/PcoCheckInsClient.md) - Main client class for Check-Ins API
+
+### Modules
+
+The `PcoCheckInsClient` has specialized modules for:
+
+- `events` - Event management (create, list, get, update, delete)
+- `locations` - Location management
+- `checkIns` - Check-in operations and tracking
+- `stations` - Station management
+- `labels` - Label operations for events and locations
+- `eventPeriods` - Event period management
+- `eventTimes` - Event time management
+- `checkInGroups` - Group check-in operations
+- `preChecks` - Pre-check operations
+- `passes` - Pass management
+- `headcounts` - Attendance headcount tracking
+- `attendanceTypes` - Attendance type management
+- `organizations` - Organization management
+- `themes` - Theme management
+
+### Types
+
+See [Types](./type-aliases/) for complete type definitions:
+- Check-Ins types (`CheckInResource`, `CheckInAttributes`, etc.)
+- Event types (`EventResource`, `EventAttributes`, etc.)
+- Location types (`LocationResource`, `LocationAttributes`, etc.)
+- Station types (`StationResource`, `StationAttributes`, etc.)
+
 ## Generating API Docs
 
 API documentation is generated using TypeDoc:
 
 ```bash
-# Generate docs for both packages
+# Generate docs for all packages
 npx typedoc
 
 # Output goes to docs/content/api/
 ```
 
-The root `typedoc.json` configures TypeDoc to generate Markdown files from both package entry points into `docs/content/api/`.
+The root `typedoc.json` configures TypeDoc to generate Markdown files from all three package entry points into `docs/content/api/`.
 
 ## Viewing API Docs
 

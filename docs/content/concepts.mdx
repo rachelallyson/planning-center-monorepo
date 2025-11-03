@@ -6,12 +6,13 @@ This document explains the core mental models, invariants, and architectural pat
 
 ### Monorepo Structure
 
-The monorepo uses **npm workspaces** with two packages:
+The monorepo uses **npm workspaces** with three packages:
 
 1. **Base Package** (`@rachelallyson/planning-center-base-ts`) - Shared infrastructure
 2. **People Package** (`@rachelallyson/planning-center-people-ts`) - People API client (depends on base)
+3. **Check-Ins Package** (`@rachelallyson/planning-center-check-ins-ts`) - Check-Ins API client (depends on base)
 
-Both packages follow TypeScript strict mode and share common dependencies at the root level.
+All packages follow TypeScript strict mode and share common dependencies at the root level.
 
 ### Base Package
 
@@ -42,6 +43,26 @@ The People package extends the base with:
 - **ServiceTime Module** - Service time tracking
 - **Forms Module** - Forms and submissions
 - **Reports Module** - Report management
+
+### Check-Ins Package
+
+The Check-Ins package extends the base with:
+
+- **PcoCheckInsClient** - Main client class for Check-Ins API
+- **Events Module** - Event management (create, list, get, update, delete)
+- **Locations Module** - Location management
+- **Check-Ins Module** - Check-in operations and tracking
+- **Stations Module** - Station management
+- **Labels Module** - Label operations for events and locations
+- **Event Periods Module** - Event period management
+- **Event Times Module** - Event time management
+- **Check-In Groups Module** - Group check-in operations
+- **Pre-Checks Module** - Pre-check operations
+- **Passes Module** - Pass management
+- **Headcounts Module** - Attendance headcount tracking
+- **Attendance Types Module** - Attendance type management
+- **Organizations Module** - Organization management
+- **Themes Module** - Theme management
 
 ## Mental Models
 

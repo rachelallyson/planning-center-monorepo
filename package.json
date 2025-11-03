@@ -1,0 +1,24 @@
+{
+    "name": "planning-center-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Monorepo for Planning Center Online TypeScript API client libraries",
+    "scripts": {
+        "docs:dev": "cd docs && next dev",
+        "docs:build": "cd docs && next build",
+        "docs:start": "cd docs && next start",
+        "docs:api": "typedoc"
+    },
+    "workspaces": [
+        "packages/*"
+    ],
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
+    },
+    "license": "MIT"
+}

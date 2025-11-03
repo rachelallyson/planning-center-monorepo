@@ -2,7 +2,8 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "packages/planning-center-base-ts/src/index.ts",
-    "packages/planning-center-people-ts/src/index.ts"
+    "packages/planning-center-people-ts/src/index.ts",
+    "packages/planning-center-check-ins-ts/src/index.ts"
   ],
   "out": "docs/content/api",
   "plugin": [
@@ -11,6 +12,7 @@
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,
+  "includeVersion": true,
   "readme": "none",
   "entryPointStrategy": "resolve",
   "sort": [

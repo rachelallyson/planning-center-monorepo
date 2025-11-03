@@ -6,10 +6,11 @@
 
 ## Repository Structure
 
-**Monorepo** with npm workspaces containing two packages:
+**Monorepo** with npm workspaces containing three packages:
 
 1. **Base** (`packages/planning-center-base-ts`): Infrastructure (HTTP, auth, rate limiting, errors, JSON:API types, batch operations)
 2. **People** (`packages/planning-center-people-ts`): People API client using base package
+3. **Check-Ins** (`packages/planning-center-check-ins-ts`): Check-Ins API client using base package
 
 **Source of Truth**: Public API surface = `packages/*/src/index.ts`. Always check exports there.
 
@@ -41,6 +42,14 @@
 **Modules** (properties of `PcoClient`): `people`, `fields`, `workflows`, `contacts`, `households`, `notes`, `lists`, `campus`, `serviceTime`, `forms`, `reports`
 
 **Types**: See `packages/planning-center-people-ts/src/index.ts` for full list (includes v1.x compatibility exports)
+
+### Check-Ins Package (`@rachelallyson/planning-center-check-ins-ts`)
+
+**Main Export**: `PcoCheckInsClient` - Main client class for Check-Ins API
+
+**Modules** (properties of `PcoCheckInsClient`): `events`, `locations`, `checkIns`, `stations`, `labels`, `eventPeriods`, `eventTimes`, `checkInGroups`, `preChecks`, `passes`, `headcounts`, `attendanceTypes`, `organizations`, `themes`
+
+**Types**: See `packages/planning-center-check-ins-ts/src/index.ts` for full list (includes Check-Ins resource types)
 
 ## Common Tasks
 

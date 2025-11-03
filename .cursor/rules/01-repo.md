@@ -6,9 +6,12 @@ Before generating any code, **always read** these files in order:
 
 1. `docs/content/llm-context.mdx` - Quick AI reference
 2. `docs/content/index.mdx` - Documentation entry point
-3. `docs/content/concepts.mdx` - Architecture and invariants
-4. `docs/content/reference/config.mdx` - Configuration options
-5. `packages/*/src/index.ts` - Public API surface (truth for exports)
+3. `packages/*/src/index.ts` - Public API surface (truth for exports)
+
+Additional reference files:
+
+- `docs/content/concepts.mdx` - Architecture and invariants
+- `docs/content/reference/config.mdx` - Configuration options
 
 ## Public API Surface
 
@@ -16,6 +19,7 @@ Before generating any code, **always read** these files in order:
 
 - **Base package**: `packages/planning-center-base-ts/src/index.ts`
 - **People package**: `packages/planning-center-people-ts/src/index.ts`
+- **Check-Ins package**: `packages/planning-center-check-ins-ts/src/index.ts`
 
 **Rule**: Always use public exports from `index.ts`. Never deep import from internal files (e.g., `./http-client` directly).
 
@@ -60,14 +64,15 @@ Before generating any code, **always read** these files in order:
 - **Root**: Monorepo configuration, shared docs
 - **packages/planning-center-base-ts**: Infrastructure package
 - **packages/planning-center-people-ts**: People API client (depends on base)
+- **packages/planning-center-check-ins-ts**: Check-Ins API client (depends on base)
 
-**Dependency**: People package depends on base package via workspace link (`"*"` locally, `"^1.0.0"` when published).
+**Dependencies**: Both People and Check-Ins packages depend on base package via workspace link (`"*"` locally, `"^1.0.0"` when published).
 
 ## Testing Strategy
 
 When touching code:
 
-1. **Propose tests first** in `packages/*/tests/` or `__tests__/`
+1. **When uncertain, propose tests first** - Use tests to clarify requirements and edge cases
 2. **Then implement** the feature
 3. **Run tests**: `npm test` (from appropriate package directory)
 

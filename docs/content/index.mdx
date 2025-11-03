@@ -4,7 +4,7 @@ TypeScript client libraries for Planning Center Online APIs.
 
 ## Packages
 
-This monorepo contains two packages:
+This monorepo contains three packages:
 
 ### [People API Client](/people) (External Documentation)
 **Package**: `@rachelallyson/planning-center-people-ts`  
@@ -13,6 +13,12 @@ This monorepo contains two packages:
 Complete TypeScript client for Planning Center People API with 11 specialized modules (people, fields, workflows, contacts, households, notes, lists, campus, serviceTime, forms, reports).
 
 **Note**: See package-specific documentation at `/people` for People API guides and reference.
+
+### [Check-Ins API Client](./concepts#check-ins-package)
+**Package**: `@rachelallyson/planning-center-check-ins-ts`  
+**Version**: v1.0.0
+
+Complete TypeScript client for Planning Center Check-Ins API with specialized modules for events, locations, check-ins, stations, labels, and more.
 
 ### [Base Package](./concepts#base-package)
 **Package**: `@rachelallyson/planning-center-base-ts`  
@@ -27,6 +33,9 @@ Shared infrastructure for building PCO API clients - HTTP client, authentication
 ```bash
 # People API Client
 npm install @rachelallyson/planning-center-people-ts
+
+# Check-Ins API Client
+npm install @rachelallyson/planning-center-check-ins-ts
 
 # Base Package (for building custom clients)
 npm install @rachelallyson/planning-center-base-ts
@@ -88,6 +97,7 @@ console.log(`Person ID: ${person.id}`);
 
 - **GitHub**: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo)
 - **People Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts)
+- **Check-Ins Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-check-ins-ts)
 - **Base Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts)
 - **Contributing**: [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
