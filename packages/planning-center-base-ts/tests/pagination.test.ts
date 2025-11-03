@@ -212,6 +212,255 @@ describe('PaginationHelper', () => {
       expect(pages[0]).toHaveLength(1);
       expect(pages[1]).toHaveLength(1);
     });
+
+    it('should handle empty response', async () => {
+      const emptyResponse = {
+        data: [],
+        links: {},
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(emptyResponse),
+      } as unknown as Response);
+
+      const pages: ResourceObject<string, any, any>[][] = [];
+      for await (const page of paginationHelper.streamPages<ResourceObject<string, any, any>>(
+        '/resources'
+      )) {
+        pages.push(page);
+      }
+
+      expect(pages).toHaveLength(1);
+      expect(pages[0]).toHaveLength(0);
+    });
+
+    it('should handle stream with maxPages limit', async () => {
+      const pageResponse = {
+        data: [{ id: '1', type: 'Resource' }],
+        links: {
+          next: 'https://api.planningcenteronline.com/test/v2/resources?page=2',
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(pageResponse),
+      } as unknown as Response);
+
+      const pages: ResourceObject<string, any, any>[][] = [];
+      for await (const page of paginationHelper.streamPages<ResourceObject<string, any, any>>(
+        '/resources',
+        {},
+        { maxPages: 2 }
+      )) {
+        pages.push(page);
+      }
+
+      expect(pages.length).toBeLessThanOrEqual(2);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle response with meta but no links', async () => {
+      const response = {
+        data: [{ id: '1', type: 'Resource' }],
+        meta: { total_count: 1 },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(response),
+      } as unknown as Response);
+
+      const result = await paginationHelper.getAllPages<ResourceObject<string, any, any>>('/resources');
+
+      expect(result.data).toHaveLength(1);
+      expect(result.pagesFetched).toBe(1);
+    });
+
+    it('should handle getPage with custom page number and per_page', async () => {
+      const response = {
+        data: [{ id: '1', type: 'Resource' }],
+        links: {},
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(response),
+      } as unknown as Response);
+
+      const result = await paginationHelper.getPage<ResourceObject<string, any, any>>(
+        '/resources',
+        3,
+        25,
+        { filter: 'active' }
+      );
+
+      expect(result.data).toHaveLength(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('page=3'),
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('per_page=25'),
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('filter=active'),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle pagination loop detection', async () => {
+      const response = {
+        data: [{ id: '1', type: 'Resource' }],
+        links: {
+          next: 'https://api.planningcenteronline.com/test/v2/resources?page=1', // Same page!
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(response),
+      } as unknown as Response);
+
+      const result = await paginationHelper.getAllPages<ResourceObject<string, any, any>>('/resources');
+
+      expect(result.pagesFetched).toBe(1);
+    });
+  });
+
+  describe('getAllPagesParallel', () => {
+    it('should fetch pages in parallel', async () => {
+      const page1Response = {
+        data: [{ id: '1', type: 'Resource' }],
+        meta: { total_count: 3 },
+        links: {},
+      };
+
+      const page2Response = {
+        data: [{ id: '2', type: 'Resource' }],
+        meta: { total_count: 3 },
+        links: {},
+      };
+
+      const page3Response = {
+        data: [{ id: '3', type: 'Resource' }],
+        meta: { total_count: 3 },
+        links: {},
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/json']]),
+          json: () => Promise.resolve(page1Response),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/json']]),
+          json: () => Promise.resolve(page2Response),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/json']]),
+          json: () => Promise.resolve(page3Response),
+        } as unknown as Response);
+
+      const result = await paginationHelper.getAllPagesParallel<ResourceObject<string, any, any>>(
+        '/resources',
+        {},
+        { perPage: 1 }
+      );
+
+      expect(result.data).toHaveLength(3);
+      expect(result.pagesFetched).toBe(3);
+    });
+
+    it('should respect maxConcurrency in parallel fetching', async () => {
+      const pageResponse = {
+        data: [{ id: '1', type: 'Resource' }],
+        meta: { total_count: 3 },
+        links: {},
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(pageResponse),
+      } as unknown as Response);
+
+      const result = await paginationHelper.getAllPagesParallel<ResourceObject<string, any, any>>(
+        '/resources',
+        {},
+        { perPage: 1, maxConcurrency: 2 }
+      );
+
+      expect(result.data).toHaveLength(3);
+    });
+
+    it('should handle single page in parallel mode', async () => {
+      const pageResponse = {
+        data: [{ id: '1', type: 'Resource' }],
+        meta: { total_count: 1 },
+        links: {},
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(pageResponse),
+      } as unknown as Response);
+
+      const result = await paginationHelper.getAllPagesParallel<ResourceObject<string, any, any>>(
+        '/resources',
+        {},
+        { perPage: 1 }
+      );
+
+      expect(result.data).toHaveLength(1);
+      expect(result.pagesFetched).toBe(1);
+    });
+
+    it('should call onProgress in parallel mode', async () => {
+      const onProgress = jest.fn();
+      const pageResponse = {
+        data: [{ id: '1', type: 'Resource' }],
+        meta: { total_count: 2 },
+        links: {},
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve(pageResponse),
+      } as unknown as Response);
+
+      await paginationHelper.getAllPagesParallel<ResourceObject<string, any, any>>(
+        '/resources',
+        {},
+        { perPage: 1, onProgress }
+      );
+
+      expect(onProgress).toHaveBeenCalled();
+    });
   });
 });
 

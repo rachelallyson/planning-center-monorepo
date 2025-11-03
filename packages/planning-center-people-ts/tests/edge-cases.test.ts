@@ -20,8 +20,8 @@ import {
   getNotes,
   getWorkflows,
   getOrganization,
-  type PcoClientState,
 } from '../src';
+import type { PcoClientState } from '../src';
 
 // Mock fetch for edge case testing
 const mockFetch = jest.fn();
@@ -121,12 +121,14 @@ describe('Edge Case Validation', () => {
     });
 
     it('should handle rate limit errors with retry-after headers', async () => {
-      mockFetch.mockResolvedValueOnce({
+      // Mock multiple 429 responses to exhaust retries quickly
+      // The retry logic will wait based on retry-after, but we'll mock a short retry-after for testing
+      const mock429Response = {
         ok: false,
         status: 429,
         statusText: 'Too Many Requests',
         headers: new Headers({
-          'retry-after': '60',
+          'retry-after': '0', // Set to 0 to avoid long waits in tests
           'x-pco-api-request-rate-count': '100',
           'x-pco-api-request-rate-limit': '100',
         }),
@@ -137,7 +139,12 @@ describe('Edge Case Validation', () => {
             detail: 'Too many requests',
           }],
         }),
-      });
+      };
+
+      // Mock enough 429 responses to exhaust retries (default is 5)
+      for (let i = 0; i < 6; i++) {
+        mockFetch.mockResolvedValueOnce(mock429Response);
+      }
 
       await expect(getPeople(client)).rejects.toThrow();
     });

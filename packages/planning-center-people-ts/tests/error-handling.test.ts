@@ -9,7 +9,7 @@ import {
   handleTimeoutError,
   handleValidationError
 } from '../src/error-handling';
-import { PcoApiError } from '../src/api-error';
+import { PcoApiError } from '@rachelallyson/planning-center-base-ts';
 
 describe('PcoError', () => {
   describe('constructor', () => {

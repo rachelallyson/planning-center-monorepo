@@ -2,10 +2,6 @@
 dist/
 *.tsbuildinfo
 
-# Compiled files should not be in src
-src/**/*.js
-src/**/*.d.ts
-
 # Dependencies
 node_modules/
 

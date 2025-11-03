@@ -240,6 +240,10 @@ export class PcoHttpClient {
             };
         } catch (error) {
             clearTimeout(timeoutId);
+            // Handle timeout/abort errors
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new Error(`Request timeout after ${timeout}ms`);
+            }
             throw error;
         }
     }
@@ -330,12 +334,12 @@ export class PcoHttpClient {
 
         // Update the config with new tokens
         this.config.auth.accessToken = tokens.access_token;
-        this.config.auth.refreshToken = tokens.refresh_token;
+        this.config.auth.refreshToken = tokens.refresh_token || this.config.auth.refreshToken;
 
-        // Call the onRefresh callback
+        // Call the onRefresh callback with the expected format
         await this.config.auth.onRefresh({
             accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
+            refreshToken: tokens.refresh_token || this.config.auth.refreshToken,
         });
     }
 

@@ -1,42 +1,75 @@
 {
-    "name": "@rachelallyson/planning-center-monorepo",
-    "version": "1.0.0",
-    "private": true,
-    "description": "Planning Center Online API client libraries - monorepo",
-    "workspaces": [
-        "packages/*"
-    ],
+    "name": "@rachelallyson/planning-center-people-ts",
+    "version": "2.9.1",
+    "description": "A strictly typed TypeScript client for Planning Center Online People API with comprehensive functionality and enhanced developer experience",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
-        "build": "npm run build --workspaces",
-        "build:base": "npm run build --workspace=@rachelallyson/planning-center-base-ts",
-        "build:people": "npm run build --workspace=@rachelallyson/planning-center-people-ts",
-        "clean": "npm run clean --workspaces",
-        "test": "npm run test --workspaces",
-        "test:base": "npm run test --workspace=@rachelallyson/planning-center-base-ts",
-        "test:people": "npm run test --workspace=@rachelallyson/planning-center-people-ts",
-        "lint": "echo 'Linting not configured'",
-        "prepare": "npm run build:base",
-        "dev:docs": "cd docs && next dev",
-        "build:docs": "cd docs && next build",
-        "start:docs": "cd docs && next start"
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "prebuild": "npm run clean",
+        "test": "jest --testPathIgnorePatterns=integration.test.ts",
+        "test:watch": "jest --watch --testPathIgnorePatterns=integration.test.ts",
+        "test:coverage": "jest --coverage --testPathIgnorePatterns=integration.test.ts",
+        "test:ci": "jest --ci --coverage --watchAll=false --testPathIgnorePatterns=integration.test.ts",
+        "test:integration": "dotenv -e .env.test -- jest --testPathPatterns=integration/.*.integration.test.ts --setupFilesAfterEnv='<rootDir>/tests/integration-setup.ts' --testTimeout=60000",
+        "docs": "typedoc",
+        "docs:watch": "typedoc --watch",
+        "prepublishOnly": "npm run build"
     },
+    "keywords": [
+        "planning-center",
+        "planning-center-online",
+        "pco",
+        "api",
+        "typescript",
+        "json-api",
+        "people",
+        "church",
+        "client",
+        "sdk",
+        "rate-limiting",
+        "error-handling",
+        "batch-operations",
+        "fluent-api",
+        "event-system"
+    ],
+    "author": "Rachel Allyson",
+    "license": "MIT",
     "devDependencies": {
+        "@types/jest": "^30.0.0",
         "@types/node": "^20.0.0",
-        "@types/react": "^19.0.0",
-        "next": "^15.1.3",
-        "nextra": "^4.6.0",
-        "nextra-theme-docs": "^4.6.0",
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
+        "dotenv": "^16.6.1",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.4.4",
+        "tslib": "^2.8.1",
+        "typedoc": "^0.28.14",
+        "typedoc-plugin-markdown": "^4.9.0",
         "typescript": "^5.9.3"
     },
-    "engines": {
-        "node": ">=20.0"
-    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md"
+    ],
     "repository": {
         "type": "git",
         "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
     },
-    "author": "Rachel Allyson",
-    "license": "MIT"
+    "bugs": {
+        "url": "https://github.com/rachelallyson/planning-center-monorepo/issues"
+    },
+    "homepage": "https://github.com/rachelallyson/planning-center-monorepo#readme",
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@rachelallyson/planning-center-base-ts": "^1.0.0",
+        "form-data": "^4.0.4"
+    }
 }

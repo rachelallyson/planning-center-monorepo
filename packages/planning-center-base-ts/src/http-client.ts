@@ -239,6 +239,10 @@ export class PcoHttpClient {
             };
         } catch (error) {
             clearTimeout(timeoutId);
+            // Handle timeout/abort errors
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new Error(`Request timeout after ${timeout}ms`);
+            }
             throw error;
         }
     }

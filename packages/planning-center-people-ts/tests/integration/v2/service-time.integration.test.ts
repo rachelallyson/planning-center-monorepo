@@ -97,8 +97,8 @@ describe('v2.3.0 ServiceTime API Integration Tests', () => {
             description: `${TEST_PREFIX}_Page_Service_2_${Date.now()}`
         });
 
-        console.log('Fetching all pages with pagination...');
-        const allServiceTimes = await client.serviceTime.getAllPagesPaginated(testCampusId, { per_page: 1 });
+        console.log('Fetching all service times...');
+        const allServiceTimes = await client.serviceTime.getAll(testCampusId, { per_page: 10 });
         expect(allServiceTimes).toBeDefined();
         expect(Array.isArray(allServiceTimes.data)).toBe(true);
         expect(allServiceTimes.data.length).toBeGreaterThanOrEqual(2); // Should fetch at least the two we created

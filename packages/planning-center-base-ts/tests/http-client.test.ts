@@ -405,5 +405,196 @@ describe('PcoHttpClient', () => {
       );
     });
   });
+
+  describe('additional error scenarios', () => {
+    it('should handle 500 server errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ errors: [{ title: 'Server Error' }] }),
+      } as unknown as Response);
+
+      await expect(
+        httpClient.request({
+          method: 'GET',
+          endpoint: '/resources',
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should handle 400 bad request errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ errors: [{ title: 'Bad Request' }] }),
+      } as unknown as Response);
+
+      await expect(
+        httpClient.request({
+          method: 'GET',
+          endpoint: '/resources',
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should handle network timeout', async () => {
+      // Mock fetch to simulate a timeout by rejecting with AbortError after the timeout period
+      mockFetch.mockImplementationOnce(() => {
+        // Simulate a fetch that takes longer than timeout
+        return new Promise((resolve, reject) => {
+          // After 150ms, reject with AbortError (simulating what AbortController does)
+          setTimeout(() => {
+            const abortError = new Error('The operation was aborted');
+            abortError.name = 'AbortError';
+            reject(abortError);
+          }, 150);
+        });
+      });
+
+      const configWithTimeout: PcoClientConfig = {
+        auth: {
+          type: 'oauth',
+          accessToken: 'test-token',
+        },
+        baseURL: 'https://api.planningcenteronline.com/test/v2',
+        timeout: 100,
+      };
+      const httpClientWithTimeout = new PcoHttpClient(configWithTimeout, eventEmitter);
+
+      // The timeout should trigger at 100ms, but we'll get the AbortError shortly after
+      await expect(
+        httpClientWithTimeout.request({
+          method: 'GET',
+          endpoint: '/resources',
+        })
+      ).rejects.toThrow('Request timeout after 100ms');
+    }, 5000);
+
+    it('should handle POST with complex data', async () => {
+      const complexData = {
+        name: 'Test',
+        nested: {
+          field: 'value',
+          array: [1, 2, 3],
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        statusText: 'Created',
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: { id: '1', type: 'Resource' } }),
+      } as unknown as Response);
+
+      const result = await httpClient.request({
+        method: 'POST',
+        endpoint: '/resources',
+        data: complexData,
+      });
+
+      expect(result.status).toBe(201);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('Test'),
+        })
+      );
+    });
+
+    it('should handle PATCH requests', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: { id: '1', type: 'Resource' } }),
+      } as unknown as Response);
+
+      const result = await httpClient.request({
+        method: 'PATCH',
+        endpoint: '/resources/1',
+        data: { name: 'Updated' },
+      });
+
+      expect(result.status).toBe(200);
+    });
+
+    it('should handle requests with custom headers', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: [] }),
+      } as unknown as Response);
+
+      await httpClient.request({
+        method: 'GET',
+        endpoint: '/resources',
+        headers: {
+          'X-Custom-Header': 'custom-value',
+          'X-Another-Header': 'another-value',
+        },
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Custom-Header': 'custom-value',
+            'X-Another-Header': 'another-value',
+          }),
+        })
+      );
+    });
+  });
+
+  describe('additional negative paths', () => {
+    it('should retry after 429 rate limit and eventually succeed', async () => {
+      // First call: 429
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: new Map([
+            ['retry-after', '0'],
+            ['x-pco-api-request-rate-limit', '100'],
+            ['x-pco-api-request-rate-count', '100'],
+            ['x-pco-api-request-rate-period', '60'],
+          ]),
+          json: () => Promise.resolve({ errors: [{ detail: 'Rate limit exceeded' }] }),
+        } as unknown as Response)
+        // Second call: success
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'application/json']]),
+          json: () => Promise.resolve({ data: [] }),
+        } as unknown as Response);
+
+      const res = await httpClient.request({ method: 'GET', endpoint: '/resources' });
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle non-JSON error responses gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: new Map([['content-type', 'text/plain']]),
+        json: () => Promise.resolve({}),
+      } as unknown as Response);
+
+      await expect(
+        httpClient.request({ method: 'GET', endpoint: '/resources' })
+      ).rejects.toMatchObject({ status: 502, statusText: 'Bad Gateway' });
+    });
+  });
 });
 

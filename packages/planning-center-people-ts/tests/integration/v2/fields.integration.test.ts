@@ -351,7 +351,7 @@ describe('v2.0.0 Fields API Integration Tests', () => {
                 const result = await client.fields.setPersonFieldById(
                     testPersonId,
                     numberField.id,
-                    '123'
+                    '5'
                 );
                 expect(result.attributes?.value).toBe('123');
             }

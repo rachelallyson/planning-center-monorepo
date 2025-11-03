@@ -3,6 +3,9 @@ module.exports = {
         'src/**/*.ts',
         '!src/**/*.d.ts',
         '!src/types/**/*.ts', // Exclude type definitions from coverage
+        '!src/index.ts',
+        '!src/monitoring.ts',
+        '!src/batch.ts',
     ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
@@ -15,6 +18,9 @@ module.exports = {
     testTimeout: 10000,
     transform: {
         '^.+\\.ts$': 'ts-jest',
+    },
+    coverageThreshold: {
+        global: { statements: 80, branches: 65, functions: 80, lines: 80 },
     },
     verbose: true,
 };

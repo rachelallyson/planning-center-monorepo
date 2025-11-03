@@ -70,6 +70,6 @@
         "access": "public"
     },
     "dependencies": {
-        "@rachelallyson/planning-center-base-ts": "*"
+        "@rachelallyson/planning-center-base-ts": "^1.0.0"
     }
 }

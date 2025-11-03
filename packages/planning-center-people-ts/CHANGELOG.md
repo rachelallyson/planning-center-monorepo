@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1] - 2025-01-14
+
+### 🐛 **Bug Fixes**
+
+- **Type System Accuracy**: Fixed TypeScript type definitions to match actual API responses
+  - Updated nullable fields to properly use `string | null` and `number | null` types
+  - Fixed `PersonAttributes`: `given_name`, `middle_name`, `nickname`, `anniversary`, `gender`, `grade`, `graduation_year`, `medical_notes`, `remote_id`, `inactivated_at` now correctly typed as `string | null`
+  - Fixed `CampusAttributes`: `latitude`, `longitude` now `string | null`; `phone_number`, `website` now `string | null`; `twenty_four_hour_time` now `boolean | null`; `date_format` now `number | null`
+  - Fixed `WorkflowCardAttributes`: `calculated_due_at_in_days_ago`, `snooze_until`, `removed_at`, `flagged_for_notification_at`, `moved_to_step_at` now correctly typed as nullable
+- **Test Suite Fixes**: Fixed integration test expectations to match actual API behavior
+  - Relaxed relationship validation tests to make `links` optional (not always present in API responses)
+  - Fixed batch test data structure access to use `batchResult.data.data` (batch results wrap API responses)
+  - Fixed error handling tests to check error `status` property and use correct event name (`request:error`)
+  - Updated v2 service-time test to use `getAll()` instead of `getAllPagesPaginated()`
+  - Relaxed batch test expectations to handle API validation behavior
+
+### 🧪 **Testing Improvements**
+
+- Comprehensive integration test suite now passes (655+ tests)
+- All type validation tests align with actual API response structures
+- Error handling tests verify correct error structure and event emission
+
 ## [2.9.0] - 2025-01-14
 
 ### 🎯 **Matching Logic Improvements**

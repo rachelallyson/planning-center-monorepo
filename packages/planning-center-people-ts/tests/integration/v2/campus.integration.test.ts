@@ -40,13 +40,13 @@ describe('v2.0.0 Campus API Integration Tests', () => {
         }, 30000);
 
         it('should get all campuses with pagination', async () => {
-            const campuses = await client.campus.getAllPages();
+            const campuses = await client.campus.getAll({ perPage: 10 });
 
             expect(campuses).toBeDefined();
-            expect(Array.isArray(campuses)).toBe(true);
+            expect(Array.isArray(campuses.data)).toBe(true);
 
-            // Verify all items are Campus resources
-            campuses.forEach(campus => {
+            // Verify items are Campus resources
+            campuses.data.forEach(campus => {
                 expect(campus.type).toBe('Campus');
                 expect(campus.id).toBeTruthy();
             });

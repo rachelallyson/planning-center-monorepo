@@ -3,8 +3,8 @@ import {
   hasRefreshTokenCapability,
   refreshAccessToken,
   updateClientTokens,
-  type TokenResponse,
 } from '../src/auth';
+import type { TokenResponse } from '../src/auth';
 import { createPcoClient } from '../src/core';
 
 // Mock fetch for testing

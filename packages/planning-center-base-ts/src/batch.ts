@@ -43,37 +43,36 @@ export class BatchExecutor {
             const operationResults = new Map<string, Promise<BatchResult>>();
 
             const executeOperationWithDependencies = async (operation: ResolvedBatchOperation, index: number): Promise<BatchResult> => {
-                // Wait for dependencies to complete
-                if (operation.dependencies && operation.dependencies.length > 0) {
-                    const dependencyPromises = operation.dependencies.map(depId => {
-                        // Handle index-based dependencies
-                        if (depId.startsWith('$index_')) {
-                            const depIndex = parseInt(depId.substring(7));
-                            const depOperation = resolvedOperations[depIndex];
-                            if (!depOperation) {
-                                throw new Error(`Dependency at index ${depIndex} not found`);
-                            }
-                            const depResult = operationResults.get(depOperation.id);
-                            if (!depResult) {
-                                throw new Error(`Dependency '${depOperation.id}' not found in operations list`);
-                            }
-                            return depResult;
-                        } else {
-                            // Handle operation ID-based dependencies
-                            const depResult = operationResults.get(depId);
-                            if (!depResult) {
-                                throw new Error(`Dependency '${depId}' not found in operations list`);
-                            }
-                            return depResult;
-                        }
-                    });
-
-                    await Promise.all(dependencyPromises);
-                }
-
                 await semaphore.acquire();
 
                 try {
+                    // Wait for dependencies to complete
+                    if (operation.dependencies && operation.dependencies.length > 0) {
+                        const dependencyPromises = operation.dependencies.map(depId => {
+                            // Handle index-based dependencies
+                            if (depId.startsWith('$index_')) {
+                                const depIndex = parseInt(depId.substring(7));
+                                const depOperation = resolvedOperations[depIndex];
+                                if (!depOperation) {
+                                    throw new Error(`Dependency at index ${depIndex} not found`);
+                                }
+                                const depResult = operationResults.get(depOperation.id);
+                                if (!depResult) {
+                                    throw new Error(`Dependency '${depOperation.id}' not found in operations list`);
+                                }
+                                return depResult;
+                            } else {
+                                // Handle operation ID-based dependencies
+                                const depResult = operationResults.get(depId);
+                                if (!depResult) {
+                                    throw new Error(`Dependency '${depId}' not found in operations list`);
+                                }
+                                return depResult;
+                            }
+                        });
+
+                        await Promise.all(dependencyPromises);
+                    }
                     // Create a function to get current results for reference resolution
                     const getCurrentResults = () => results;
                     

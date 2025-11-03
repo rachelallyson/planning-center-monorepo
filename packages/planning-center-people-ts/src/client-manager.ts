@@ -154,9 +154,11 @@ export class PcoClientManager {
         // Create a hash of the configuration
         const configStr = JSON.stringify({
             authType: config.auth.type,
-            hasAccessToken: config.auth.type === 'oauth' ? !!config.auth.accessToken : false,
-            hasRefreshToken: config.auth.type === 'oauth' ? !!config.auth.refreshToken : false,
-            hasPersonalAccessToken: config.auth.type === 'personal_access_token' ? !!config.auth.personalAccessToken : false,
+            accessToken: config.auth.type === 'oauth' ? config.auth.accessToken : undefined,
+            refreshToken: config.auth.type === 'oauth' ? config.auth.refreshToken : undefined,
+            personalAccessToken: config.auth.type === 'personal_access_token' ? config.auth.personalAccessToken : undefined,
+            appId: config.auth.type === 'basic' ? config.auth.appId : undefined,
+            appSecret: config.auth.type === 'basic' ? config.auth.appSecret : undefined,
             baseURL: config.baseURL,
             timeout: config.timeout,
         });

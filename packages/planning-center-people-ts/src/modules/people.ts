@@ -207,17 +207,17 @@ export class PeopleModule extends BaseModule {
         }
 
         // Get the full campus resource
-        return this.httpClient.request<CampusResource>({
+        return this.httpClient.request<{ data: CampusResource }>({
             method: 'GET',
             endpoint: `/campuses/${campusData.id}`
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**
      * Set a person's primary campus
      */
     async setPrimaryCampus(personId: string, campusId: string): Promise<PersonResource> {
-        return this.httpClient.request<PersonResource>({
+        return this.httpClient.request<{ data: PersonResource }>({
             method: 'PATCH',
             endpoint: `/people/${personId}`,
             data: {
@@ -229,14 +229,14 @@ export class PeopleModule extends BaseModule {
                     }
                 }
             }
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**
      * Remove a person's primary campus
      */
     async removePrimaryCampus(personId: string): Promise<PersonResource> {
-        return this.httpClient.request<PersonResource>({
+        return this.httpClient.request<{ data: PersonResource }>({
             method: 'PATCH',
             endpoint: `/people/${personId}`,
             data: {
@@ -248,7 +248,7 @@ export class PeopleModule extends BaseModule {
                     }
                 }
             }
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**
@@ -263,17 +263,17 @@ export class PeopleModule extends BaseModule {
         }
 
         // Get the full household resource
-        return this.httpClient.request<HouseholdResource>({
+        return this.httpClient.request<{ data: HouseholdResource }>({
             method: 'GET',
             endpoint: `/households/${householdData.id}`
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**
      * Set a person's household
      */
     async setHousehold(personId: string, householdId: string): Promise<PersonResource> {
-        return this.httpClient.request<PersonResource>({
+        return this.httpClient.request<{ data: PersonResource }>({
             method: 'PATCH',
             endpoint: `/people/${personId}`,
             data: {
@@ -285,14 +285,14 @@ export class PeopleModule extends BaseModule {
                     }
                 }
             }
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**
      * Remove a person from their household
      */
     async removeFromHousehold(personId: string): Promise<PersonResource> {
-        return this.httpClient.request<PersonResource>({
+        return this.httpClient.request<{ data: PersonResource }>({
             method: 'PATCH',
             endpoint: `/people/${personId}`,
             data: {
@@ -304,7 +304,7 @@ export class PeopleModule extends BaseModule {
                     }
                 }
             }
-        }).then(response => response.data);
+        }).then(response => response.data.data);
     }
 
     /**

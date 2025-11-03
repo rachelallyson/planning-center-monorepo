@@ -16,16 +16,16 @@ import {
 export interface PersonAttributes extends Attributes {
   first_name?: string;
   last_name?: string;
-  given_name?: string;
-  middle_name?: string;
-  nickname?: string;
+  given_name?: string | null;
+  middle_name?: string | null;
+  nickname?: string | null;
   birthdate?: string;
-  anniversary?: string;
-  gender?: string;
-  grade?: string;
+  anniversary?: string | null;
+  gender?: string | null;
+  grade?: string | null;
   child?: boolean;
   status?: string;
-  medical_notes?: string;
+  medical_notes?: string | null;
   created_at?: string;
   updated_at?: string;
   name?: string;
@@ -33,7 +33,7 @@ export interface PersonAttributes extends Attributes {
   job_title?: string;
   employer?: string;
   school?: string;
-  graduation_year?: string;
+  graduation_year?: string | null;
   avatar?: string;
   site_administrator?: boolean;
   accounting_administrator?: boolean;
@@ -507,7 +507,7 @@ export interface WorkflowCardAttributes extends Attributes {
   stage?: string; // Computed field - cannot be assigned
   completed_at?: string | null; // Computed field - cannot be assigned
   overdue?: boolean; // Computed field
-  calculated_due_at_in_days_ago?: number; // Computed field
+  calculated_due_at_in_days_ago?: number | null; // Computed field
   flagged_for_notification_at?: string | null; // Computed field
   moved_to_step_at?: string | null; // Computed field
 
@@ -628,18 +628,18 @@ export type OrganizationStatisticSingle =
 
 export interface CampusAttributes extends Attributes {
   name: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: string | null;
+  longitude?: string | null;
   description?: string;
   street?: string;
   city?: string;
   state?: string;
   zip?: string;
   country?: string;
-  phone_number?: string;
-  website?: string;
-  twenty_four_hour_time?: boolean;
-  date_format?: number;
+  phone_number?: string | null;
+  website?: string | null;
+  twenty_four_hour_time?: boolean | null;
+  date_format?: number | null;
   church_center_enabled?: boolean;
   created_at?: string;
   updated_at?: string;

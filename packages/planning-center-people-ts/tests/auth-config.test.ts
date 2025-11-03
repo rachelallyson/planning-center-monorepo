@@ -2,7 +2,8 @@
  * Test the new type-safe authentication configuration
  */
 
-import { PcoClient, type PcoClientConfig, type PersonalAccessTokenAuth, type OAuthAuth } from '../src';
+import { PcoClient } from '../src';
+import type { PcoClientConfig, PersonalAccessTokenAuth, OAuthAuth } from '../src';
 
 describe('Authentication Configuration v2.0.0', () => {
     describe('Personal Access Token Configuration', () => {

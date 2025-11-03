@@ -268,6 +268,158 @@ describe('BatchExecutor', () => {
         })
       );
     });
+    it('should handle dependency errors when dependency not found', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'create',
+          resourceType: 'Resource',
+          endpoint: '/resources',
+          data: { name: 'Test' },
+          dependsOn: ['nonexistent'],
+        },
+      ];
+
+      const result = await batchExecutor.execute(operations, { continueOnError: true });
+      expect(result.failed).toBe(1);
+      expect(result.results.length).toBe(1);
+      expect(result.results[0].success).toBe(false);
+      expect(result.results[0].error).toBeDefined();
+      expect(result.results[0].error?.message).toContain('not found');
+    });
+
+    it('should handle index-based dependencies', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'create',
+          resourceType: 'Resource',
+          endpoint: '/resources',
+          data: { name: 'Parent' },
+        },
+        {
+          id: 'op2',
+          type: 'create',
+          resourceType: 'Related',
+          endpoint: '/related',
+          data: { resource_id: '$index_0.id' },
+          dependsOn: ['$index_0'],
+        },
+      ];
+
+      mockClient.request
+        .mockResolvedValueOnce({
+          data: { data: { id: 'parent-123', type: 'Resource' } },
+          status: 201,
+        })
+        .mockResolvedValueOnce({
+          data: { data: { id: 'child-456', type: 'Related' } },
+          status: 201,
+        });
+
+      const result = await batchExecutor.execute(operations);
+      expect(result.successful).toBe(2);
+    });
+
+    it('should handle update operations', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'update',
+          resourceType: 'Resource',
+          endpoint: '/resources/123',
+          data: { name: 'Updated' },
+        },
+      ];
+
+      mockClient.request.mockResolvedValueOnce({
+        data: { data: { id: '123', type: 'Resource' } },
+        status: 200,
+      });
+
+      const result = await batchExecutor.execute(operations);
+      expect(result.successful).toBe(1);
+    });
+
+    it('should handle delete operations', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'delete',
+          resourceType: 'Resource',
+          endpoint: '/resources/123',
+        },
+      ];
+
+      mockClient.request.mockResolvedValueOnce({
+        data: undefined,
+        status: 204,
+      });
+
+      const result = await batchExecutor.execute(operations);
+      expect(result.successful).toBe(1);
+    });
+
+    it('should stop on error when continueOnError is false', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'create',
+          resourceType: 'Resource',
+          endpoint: '/resources',
+          data: { name: 'Failure' },
+        },
+        {
+          id: 'op2',
+          type: 'create',
+          resourceType: 'Resource',
+          endpoint: '/resources',
+          data: { name: 'Should not execute' },
+        },
+      ];
+
+      mockClient.request.mockRejectedValueOnce(new Error('Validation failed'));
+
+      await expect(batchExecutor.execute(operations, { continueOnError: false })).rejects.toThrow();
+    });
+
+    it('should resolve nested references', async () => {
+      const operations: BatchOperation[] = [
+        {
+          id: 'op1',
+          type: 'create',
+          resourceType: 'Resource',
+          endpoint: '/resources',
+          data: { name: 'Parent' },
+        },
+        {
+          id: 'op2',
+          type: 'create',
+          resourceType: 'Related',
+          endpoint: '/related',
+          data: { 
+            parent: {
+              id: '$op1.id',
+              name: '$op1.attributes.name'
+            }
+          },
+          dependsOn: ['op1'],
+        },
+      ];
+
+      mockClient.request
+        .mockResolvedValueOnce({
+          data: { data: { id: 'parent-123', type: 'Resource', attributes: { name: 'Parent' } } },
+          status: 201,
+        })
+        .mockResolvedValueOnce({
+          data: { data: { id: 'child-456', type: 'Related' } },
+          status: 201,
+        });
+
+      const result = await batchExecutor.execute(operations);
+      expect(result.successful).toBe(2);
+    });
   });
 });
 
