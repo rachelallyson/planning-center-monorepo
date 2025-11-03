@@ -20,5 +20,9 @@
         "type": "git",
         "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
     },
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "typedoc": "^0.28.14",
+        "typedoc-plugin-markdown": "^4.9.0"
+    }
 }
