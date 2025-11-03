@@ -8,7 +8,8 @@
         "docs:dev": "cd docs && next dev",
         "docs:build": "cd docs && next build",
         "docs:start": "cd docs && next start",
-        "docs:api": "typedoc --ignoreCompilerErrors"
+        "docs:api": "npm run docs:build:packages && typedoc",
+        "docs:build:packages": "(cd packages/planning-center-base-ts && npm run build) && (cd packages/planning-center-people-ts && npm run build) && (cd packages/planning-center-check-ins-ts && npm run build)"
     },
     "workspaces": [
         "packages/*"
