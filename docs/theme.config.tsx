@@ -1,6 +1,5 @@
-import { DocsThemeConfig } from 'nextra-theme-docs'
 
-const config: DocsThemeConfig = {
+const config = {
   logo: <span>Planning Center API Clients</span>,
   project: {
     link: 'https://github.com/rachelallyson/planning-center-monorepo',
