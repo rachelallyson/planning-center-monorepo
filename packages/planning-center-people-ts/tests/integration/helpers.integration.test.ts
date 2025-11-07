@@ -98,13 +98,8 @@ describe('Helpers API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test person
         if (testPersonId) {
-            try {
-                await deletePerson(client, testPersonId);
-                testPersonId = '';
-            } catch (error) {
-                // Ignore cleanup errors
-                console.warn('Failed to clean up test person:', error);
-            }
+            await deletePerson(client, testPersonId);
+            testPersonId = '';
         }
     }, 30000);
 

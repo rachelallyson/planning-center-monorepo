@@ -2,7 +2,10 @@ import {
     PcoClient,
     type PersonAttributes,
 } from '../../../src';
-import { validatePersonResource } from '../../type-validators';
+import {
+    validateResourceStructure,
+    validateRelationship,
+} from '../../type-validators';
 import { createTestClient, logAuthStatus } from '../test-config';
 
 const TEST_PREFIX = 'TEST_V2_HOUSEHOLDS_2025';
@@ -48,11 +51,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test persons (this will also clean up household memberships)
         if (testPersonId1) {
-            try {
-                await client.people.delete(testPersonId1);
-            } catch (error) {
-                console.warn('Failed to clean up test person 1:', error);
-            }
+            await client.people.delete(testPersonId1);
         }
 
         if (testPersonId2) {
@@ -79,8 +78,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
             const householdId = households.data[0].id;
             const household = await client.households.getById(householdId);
 
-            expect(household).toBeDefined();
-            expect(household.type).toBe('Household');
+            validateResourceStructure(household, 'Household');
             expect(household.id).toBe(householdId);
             expect(household.attributes).toBeDefined();
         }, 30000);
@@ -104,8 +102,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
 
             const household = await client.households.create(householdData);
 
-            expect(household).toBeDefined();
-            expect(household.type).toBe('Household');
+            validateResourceStructure(household, 'Household');
             expect(household.attributes?.name).toBe(householdData.name);
 
             testHouseholdId = household.id || '';
@@ -142,8 +139,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
 
             const updatedHousehold = await client.households.update(testHouseholdId, updateData);
 
-            expect(updatedHousehold).toBeDefined();
-            expect(updatedHousehold.type).toBe('Household');
+            validateResourceStructure(updatedHousehold, 'Household');
             expect(updatedHousehold.id).toBe(testHouseholdId);
             expect(updatedHousehold.attributes?.name).toBe(updateData.name);
         }, 60000);

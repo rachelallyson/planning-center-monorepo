@@ -1,5 +1,10 @@
 import { PcoClient, ServiceTimeAttributes, ServiceTimeResource } from '../../../src';
 import { createTestClient, logAuthStatus } from '../test-config';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateNumberAttribute,
+} from '../../type-validators';
 
 const TEST_PREFIX = 'TEST_V2_SERVICETIME_2025';
 
@@ -46,11 +51,15 @@ describe('v2.3.0 ServiceTime API Integration Tests', () => {
 
         // Create service time
         const newServiceTime = await client.serviceTime.create(testCampusId, serviceTimeData);
-        expect(newServiceTime).toBeDefined();
-        expect(newServiceTime.type).toBe('ServiceTime');
+        validateResourceStructure(newServiceTime, 'ServiceTime');
         expect(newServiceTime.attributes?.description).toBe(serviceTimeData.description);
         expect(newServiceTime.attributes?.start_time).toBe(serviceTimeData.start_time);
         expect(newServiceTime.attributes?.day).toBe('sunday'); // API returns day as string
+        
+        // Validate attribute types
+        if (newServiceTime.attributes?.description !== undefined) validateStringAttribute(newServiceTime.attributes, 'description');
+        if (newServiceTime.attributes?.start_time !== undefined) validateNumberAttribute(newServiceTime.attributes, 'start_time');
+        if (newServiceTime.attributes?.day !== undefined) validateStringAttribute(newServiceTime.attributes, 'day');
         testServiceTimeId = newServiceTime.id || '';
         expect(testServiceTimeId).toBeTruthy();
 
@@ -60,14 +69,14 @@ describe('v2.3.0 ServiceTime API Integration Tests', () => {
             description: `${TEST_PREFIX}_Updated_Service_${timestamp}`
         };
         const updatedServiceTime = await client.serviceTime.update(testCampusId, testServiceTimeId, updateData);
-        expect(updatedServiceTime).toBeDefined();
+        validateResourceStructure(updatedServiceTime, 'ServiceTime');
         expect(updatedServiceTime.id).toBe(testServiceTimeId);
         expect(updatedServiceTime.attributes?.start_time).toBe(updateData.start_time);
         expect(updatedServiceTime.attributes?.description).toBe(updateData.description);
 
         // Get service time by ID
         const fetchedServiceTime = await client.serviceTime.getById(testCampusId, testServiceTimeId);
-        expect(fetchedServiceTime).toBeDefined();
+        validateResourceStructure(fetchedServiceTime, 'ServiceTime');
         expect(fetchedServiceTime.id).toBe(testServiceTimeId);
         expect(fetchedServiceTime.attributes?.description).toBe(updateData.description);
         expect(fetchedServiceTime.attributes?.start_time).toBe(updateData.start_time);
@@ -81,6 +90,7 @@ describe('v2.3.0 ServiceTime API Integration Tests', () => {
         const serviceTimes = await client.serviceTime.getAll(testCampusId);
         expect(serviceTimes).toBeDefined();
         expect(Array.isArray(serviceTimes.data)).toBe(true);
+        serviceTimes.data.forEach(resource => validateResourceStructure(resource, 'ServiceTime'));
     }, 30000);
 
     it('should get all pages of service times with pagination', async () => {
@@ -134,17 +144,13 @@ describe('v2.3.0 ServiceTime API Integration Tests', () => {
     afterAll(async () => {
         // Clean up any remaining test service times
         if (testCampusId) {
-            try {
-                const remainingServiceTimes = await client.serviceTime.getAll(testCampusId, {
-                    where: { description: new RegExp(`^${TEST_PREFIX}`) }
-                });
-                for (const serviceTime of remainingServiceTimes.data) {
-                    if (serviceTime.id) {
-                        await client.serviceTime.delete(testCampusId, serviceTime.id);
-                    }
+            const remainingServiceTimes = await client.serviceTime.getAll(testCampusId, {
+                where: { description: new RegExp(`^${TEST_PREFIX}`) }
+            });
+            for (const serviceTime of remainingServiceTimes.data) {
+                if (serviceTime.id) {
+                    await client.serviceTime.delete(testCampusId, serviceTime.id);
                 }
-            } catch (error) {
-                console.warn('Cleanup error:', error);
             }
         }
     }, 30000);

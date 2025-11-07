@@ -2,7 +2,11 @@ import {
     PcoClient,
     type PersonAttributes,
 } from '../../../src';
-import { validatePersonResource } from '../../type-validators';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateRelationship,
+} from '../../type-validators';
 import { createTestClient, logAuthStatus } from '../test-config';
 
 const TEST_PREFIX = 'TEST_V2_WORKFLOWS_2025';
@@ -36,11 +40,7 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test person
         if (testPersonId) {
-            try {
-                await client.people.delete(testPersonId);
-            } catch (error) {
-                console.warn('Failed to clean up test person:', error);
-            }
+            await client.people.delete(testPersonId);
         }
     }, 60000);
 
@@ -60,7 +60,7 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             const workflow = await client.workflows.getById(workflowId);
 
             expect(workflow).toBeDefined();
-            expect(workflow.type).toBe('Workflow');
+            validateResourceStructure(workflow, 'Workflow');
             expect(workflow.id).toBe(workflowId);
             expect(workflow.attributes).toBeDefined();
 
@@ -80,7 +80,7 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             );
 
             expect(workflowCard).toBeDefined();
-            expect(workflowCard.type).toBe('WorkflowCard');
+            validateResourceStructure(workflowCard, 'WorkflowCard');
             expect(workflowCard.attributes).toBeDefined();
             expect(workflowCard.relationships?.person?.data?.id).toBe(testPersonId);
 
@@ -131,19 +131,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping update test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping update test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -168,19 +162,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping notes test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping notes test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -195,7 +183,7 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             );
 
             expect(note).toBeDefined();
-            expect(note.type).toBe('WorkflowCardNote');
+            validateResourceStructure(note, 'WorkflowCardNote');
             expect(note.attributes?.note).toBe(noteData.note);
             // Note: The workflow_card relationship is implicit through the URL path
             // and may not be included in the response data
@@ -205,19 +193,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping complete test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping complete test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -280,19 +262,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping snooze test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping snooze test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -316,19 +292,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping promote test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping promote test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -344,19 +314,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping skip step test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping skip step test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -372,19 +336,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping send email test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping send email test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 
@@ -417,19 +375,13 @@ describe('v2.0.0 Workflows API Integration Tests', () => {
             // Get workflow cards for the test person
             const workflowCards = await client.workflows.getPersonWorkflowCards(testPersonId);
 
-            if (workflowCards.data.length === 0) {
-                console.log('No workflow cards found for person - skipping remove/restore test');
-                return;
-            }
+            expect(workflowCards.data.length).toBeGreaterThan(0);
 
             const testCard = workflowCards.data.find(card =>
                 card.relationships?.person?.data?.id === testPersonId
             );
 
-            if (!testCard) {
-                console.log('No workflow card found for test person - skipping remove/restore test');
-                return;
-            }
+            expect(testCard).toBeDefined();
 
             const testWorkflowCardId = testCard.id;
 

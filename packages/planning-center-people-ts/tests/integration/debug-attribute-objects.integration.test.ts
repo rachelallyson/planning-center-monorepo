@@ -78,7 +78,7 @@ describe('Diagnostic: Inspect object-shaped attributes', () => {
 
     it('logs campus latitude/longitude types (if present)', async () => {
         const campuses = await client.campus.getAll({ perPage: 1 });
-        if (campuses.data.length === 0) return;
+        expect(campuses.data.length).toBeGreaterThan(0);
         const campus = campuses.data[0];
         const attrs = campus.attributes ?? {};
         const lat = (attrs as any)['latitude'];

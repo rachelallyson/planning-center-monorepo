@@ -341,7 +341,7 @@ describe('People API Endpoint Coverage Integration Tests', () => {
         it('should cover service times endpoints', async () => {
             // serviceTime.getAll requires a campusId
             const campuses = await client.campus.getAll({ perPage: 1 });
-            if (campuses.data.length === 0) return;
+            expect(campuses.data.length).toBeGreaterThan(0);
             const campusId = campuses.data[0].id;
             const serviceTimes = await client.serviceTime.getAll(campusId);
             expect(serviceTimes.data).toBeDefined();

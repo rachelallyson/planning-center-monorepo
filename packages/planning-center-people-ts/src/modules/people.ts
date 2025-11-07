@@ -100,6 +100,23 @@ export interface PersonMatchOptions {
     maxAge?: number;
     /** Birth year filter (exact match) */
     birthYear?: number;
+    /**
+     * Retry configuration for handling PCO contact verification delays.
+     * When a person is created, PCO needs time (30-90+ seconds) to verify/index contacts
+     * before they become searchable. This retry logic helps prevent duplicate person creation.
+     */
+    retryConfig?: {
+        /** Maximum number of retry attempts (default: 5) */
+        maxRetries?: number;
+        /** Maximum total wait time in milliseconds (default: 120000 = 120 seconds) */
+        maxWaitTime?: number;
+        /** Initial delay in milliseconds before first retry (default: 10000 = 10 seconds) */
+        initialDelay?: number;
+        /** Multiplier for exponential backoff (default: 1.5) */
+        backoffMultiplier?: number;
+        /** Whether to enable retry logic (default: true when email/phone provided and createIfNotFound: false) */
+        enabled?: boolean;
+    };
 }
 
 export class PeopleModule extends BaseModule {

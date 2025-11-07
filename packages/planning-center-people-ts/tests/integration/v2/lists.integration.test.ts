@@ -2,7 +2,10 @@ import {
     PcoClient,
     type PersonAttributes,
 } from '../../../src';
-import { validatePersonResource } from '../../type-validators';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+} from '../../type-validators';
 import { createTestClient, logAuthStatus } from '../test-config';
 
 const TEST_PREFIX = 'TEST_V2_LISTS_2025';
@@ -42,11 +45,7 @@ describe('v2.0.0 Lists API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test person (this will also clean up list memberships)
         if (testPersonId) {
-            try {
-                await client.people.delete(testPersonId);
-            } catch (error) {
-                console.warn('Failed to clean up test person:', error);
-            }
+            await client.people.delete(testPersonId);
         }
     }, 30000);
 
@@ -66,7 +65,7 @@ describe('v2.0.0 Lists API Integration Tests', () => {
             const list = await client.lists.getById(listId);
 
             expect(list).toBeDefined();
-            expect(list.type).toBe('List');
+            validateResourceStructure(list, 'List');
             expect(list.id).toBe(listId);
             expect(list.attributes).toBeDefined();
         }, 30000);
@@ -156,7 +155,7 @@ describe('v2.0.0 Lists API Integration Tests', () => {
             const category = await client.lists.getListCategoryById(categoryId);
 
             expect(category).toBeDefined();
-            expect(category.type).toBe('ListCategory');
+            validateResourceStructure(category, 'ListCategory');
             expect(category.id).toBe(categoryId);
             expect(category.attributes).toBeDefined();
         }, 60000);
@@ -170,7 +169,7 @@ describe('v2.0.0 Lists API Integration Tests', () => {
             const category = await client.lists.createListCategory(categoryData);
 
             expect(category).toBeDefined();
-            expect(category.type).toBe('ListCategory');
+            validateResourceStructure(category, 'ListCategory');
             expect(category.attributes?.name).toBe(categoryData.name);
 
             testCategoryId = category.id || '';

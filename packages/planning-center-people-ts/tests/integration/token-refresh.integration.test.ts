@@ -81,14 +81,9 @@ describe('Token Refresh Integration Tests', () => {
             // Create a client with invalid refresh token to test failure handling
             const invalidClient = createTestClient();
             
-            // This should not throw an error, but should handle the failure gracefully
-            try {
-                await invalidClient.people.getAll({ perPage: 1 });
-                console.log('✅ Request completed despite potential token issues');
-            } catch (error) {
-                console.log('⚠️  Request failed as expected:', error.message);
-                // This is acceptable - the important thing is that it doesn't crash
-            }
+            // The request may succeed or fail depending on token validity
+            // The important thing is that it doesn't crash - test should execute
+            await expect(invalidClient.people.getAll({ perPage: 1 })).resolves.toBeDefined();
         }, 30000);
     });
 

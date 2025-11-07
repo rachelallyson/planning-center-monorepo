@@ -120,11 +120,7 @@ describe('PCO API Integration Tests', () => {
     const cleanupPromises: Promise<any>[] = [];
 
     if (testWorkflowCardNoteId && testWorkflowCardId && testPersonId) {
-      cleanupPromises.push(
-        deletePerson(client, testPersonId).catch(() => {
-          // Ignore cleanup errors
-        })
-      );
+      cleanupPromises.push(deletePerson(client, testPersonId));
     }
 
     if (testSocialProfileId && testPersonId) {

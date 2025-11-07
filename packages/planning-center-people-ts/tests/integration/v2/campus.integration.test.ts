@@ -3,6 +3,12 @@ import {
     type CampusAttributes,
 } from '../../../src';
 import { createTestClient, logAuthStatus } from '../test-config';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateBooleanAttribute,
+    validateNumberAttribute,
+} from '../../type-validators';
 
 const TEST_PREFIX = 'TEST_V2_CAMPUS_2025';
 
@@ -21,11 +27,7 @@ describe('v2.0.0 Campus API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test campus if it was created
         if (testCampusId) {
-            try {
-                await client.campus.delete(testCampusId);
-            } catch (error) {
-                console.warn('Failed to clean up test campus:', error);
-            }
+            await client.campus.delete(testCampusId);
         }
     }, 30000);
 
@@ -40,15 +42,14 @@ describe('v2.0.0 Campus API Integration Tests', () => {
         }, 30000);
 
         it('should get all campuses with pagination', async () => {
-            const campuses = await client.campus.getAll({ perPage: 10 });
+            const campuses = await client.campus.getAll({ per_page: 10 });
 
             expect(campuses).toBeDefined();
             expect(Array.isArray(campuses.data)).toBe(true);
 
             // Verify items are Campus resources
             campuses.data.forEach(campus => {
-                expect(campus.type).toBe('Campus');
-                expect(campus.id).toBeTruthy();
+                validateResourceStructure(campus, 'Campus');
             });
         }, 30000);
 
@@ -71,8 +72,7 @@ describe('v2.0.0 Campus API Integration Tests', () => {
 
             const campus = await client.campus.create(campusData);
 
-            expect(campus).toBeDefined();
-            expect(campus.type).toBe('Campus');
+            validateResourceStructure(campus, 'Campus');
             expect(campus.attributes?.description).toBe(campusData.description);
             expect(campus.attributes?.street).toBe(campusData.street);
             expect(campus.attributes?.city).toBe(campusData.city);
@@ -84,6 +84,20 @@ describe('v2.0.0 Campus API Integration Tests', () => {
             expect(campus.attributes?.twenty_four_hour_time).toBe(campusData.twenty_four_hour_time);
             expect(campus.attributes?.date_format).toBe(campusData.date_format);
             expect(campus.attributes?.church_center_enabled).toBe(campusData.church_center_enabled);
+            
+            // Validate attribute types
+            if (campus.attributes?.name !== undefined) validateStringAttribute(campus.attributes, 'name');
+            if (campus.attributes?.description !== undefined) validateStringAttribute(campus.attributes, 'description');
+            if (campus.attributes?.street !== undefined) validateStringAttribute(campus.attributes, 'street');
+            if (campus.attributes?.city !== undefined) validateStringAttribute(campus.attributes, 'city');
+            if (campus.attributes?.state !== undefined) validateStringAttribute(campus.attributes, 'state');
+            if (campus.attributes?.zip !== undefined) validateStringAttribute(campus.attributes, 'zip');
+            if (campus.attributes?.country !== undefined) validateStringAttribute(campus.attributes, 'country');
+            if (campus.attributes?.phone_number !== undefined) validateStringAttribute(campus.attributes, 'phone_number');
+            if (campus.attributes?.website !== undefined) validateStringAttribute(campus.attributes, 'website');
+            if (campus.attributes?.twenty_four_hour_time !== undefined) validateBooleanAttribute(campus.attributes, 'twenty_four_hour_time');
+            if (campus.attributes?.date_format !== undefined) validateNumberAttribute(campus.attributes, 'date_format');
+            if (campus.attributes?.church_center_enabled !== undefined) validateBooleanAttribute(campus.attributes, 'church_center_enabled');
 
             testCampusId = campus.id || '';
             expect(testCampusId).toBeTruthy();
@@ -94,8 +108,7 @@ describe('v2.0.0 Campus API Integration Tests', () => {
 
             const campus = await client.campus.getById(testCampusId);
 
-            expect(campus).toBeDefined();
-            expect(campus.type).toBe('Campus');
+            validateResourceStructure(campus, 'Campus');
             expect(campus.id).toBe(testCampusId);
             expect(campus.attributes?.description).toContain(TEST_PREFIX);
         }, 30000);
@@ -112,8 +125,7 @@ describe('v2.0.0 Campus API Integration Tests', () => {
 
             const updatedCampus = await client.campus.update(testCampusId, updateData);
 
-            expect(updatedCampus).toBeDefined();
-            expect(updatedCampus.type).toBe('Campus');
+            validateResourceStructure(updatedCampus, 'Campus');
             expect(updatedCampus.id).toBe(testCampusId);
             expect(updatedCampus.attributes?.description).toBe(updateData.description);
             expect(updatedCampus.attributes?.city).toBe(updateData.city);

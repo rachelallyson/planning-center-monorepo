@@ -1,5 +1,10 @@
 import { PcoClient, ReportAttributes, ReportResource } from '../../../src';
 import { createTestClient, logAuthStatus } from '../test-config';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateRelationship,
+} from '../../type-validators';
 
 const TEST_PREFIX = 'TEST_V2_REPORTS_2025';
 
@@ -31,10 +36,13 @@ describe('v2.3.0 Reports API Integration Tests', () => {
 
         // Create report
         const newReport = await client.reports.create(reportData);
-        expect(newReport).toBeDefined();
-        expect(newReport.type).toBe('Report');
+        validateResourceStructure(newReport, 'Report');
         expect(newReport.attributes?.name).toBe(reportData.name);
         expect(newReport.attributes?.body).toBe(reportData.body);
+        
+        // Validate attribute types
+        if (newReport.attributes?.name !== undefined) validateStringAttribute(newReport.attributes, 'name');
+        if (newReport.attributes?.body !== undefined) validateStringAttribute(newReport.attributes, 'body');
         testReportId = newReport.id || '';
         expect(testReportId).toBeTruthy();
 
@@ -51,7 +59,7 @@ describe('v2.3.0 Reports API Integration Tests', () => {
 
         // Get report by ID
         const fetchedReport = await client.reports.getById(testReportId);
-        expect(fetchedReport).toBeDefined();
+        validateResourceStructure(fetchedReport, 'Report');
         expect(fetchedReport.id).toBe(testReportId);
         expect(fetchedReport.attributes?.name).toBe(updateData.name);
         expect(fetchedReport.attributes?.body).toBe(updateData.body);
@@ -68,8 +76,7 @@ describe('v2.3.0 Reports API Integration Tests', () => {
 
         if (reports.data.length > 0) {
             const report = reports.data[0];
-            expect(report.type).toBe('Report');
-            expect(report.id).toBeTruthy();
+            validateResourceStructure(report, 'Report');
             expect(report.attributes).toBeDefined();
         }
     }, 30000);
@@ -83,9 +90,16 @@ describe('v2.3.0 Reports API Integration Tests', () => {
 
         try {
             const report = await client.reports.getById(testReport.id || '', ['created_by', 'updated_by']);
-            expect(report).toBeDefined();
-            expect(report.type).toBe('Report');
+            validateResourceStructure(report, 'Report');
             expect(report.id).toBe(testReport.id);
+            
+            // Validate relationships when included
+            if (report.relationships?.created_by) {
+                validateRelationship(report.relationships.created_by);
+            }
+            if (report.relationships?.updated_by) {
+                validateRelationship(report.relationships.updated_by);
+            }
         } finally {
             // Clean up
             await client.reports.delete(testReport.id || '');
@@ -99,32 +113,16 @@ describe('v2.3.0 Reports API Integration Tests', () => {
             body: 'Test report for creator/updater testing'
         });
 
-        try {
-            // Test getting creator
-            try {
-                const creator = await client.reports.getCreatedBy(testReport.id || '');
-                expect(creator).toBeDefined();
-                expect(creator.type).toBe('Person');
-                expect(creator.id).toBeTruthy();
-            } catch (error) {
-                // Creator might not be available
-                console.warn('Report creator not available:', error);
-            }
+        // Test getting creator
+        const creator = await client.reports.getCreatedBy(testReport.id || '');
+        validateResourceStructure(creator, 'Person');
 
-            // Test getting updater
-            try {
-                const updater = await client.reports.getUpdatedBy(testReport.id || '');
-                expect(updater).toBeDefined();
-                expect(updater.type).toBe('Person');
-                expect(updater.id).toBeTruthy();
-            } catch (error) {
-                // Updater might not be available
-                console.warn('Report updater not available:', error);
-            }
-        } finally {
-            // Clean up
-            await client.reports.delete(testReport.id || '');
-        }
+        // Test getting updater
+        const updater = await client.reports.getUpdatedBy(testReport.id || '');
+        validateResourceStructure(updater, 'Person');
+
+        // Clean up
+        await client.reports.delete(testReport.id || '');
     }, 30000);
 
     it('should get all pages of reports with pagination', async () => {
@@ -166,8 +164,7 @@ describe('v2.3.0 Reports API Integration Tests', () => {
         };
 
         const report = await client.reports.create(minimalReportData);
-        expect(report).toBeDefined();
-        expect(report.type).toBe('Report');
+        validateResourceStructure(report, 'Report');
         expect(report.attributes?.name).toBe(minimalReportData.name);
 
         // Clean up
@@ -176,17 +173,13 @@ describe('v2.3.0 Reports API Integration Tests', () => {
 
     afterAll(async () => {
         // Clean up any remaining test reports
-        try {
-            const remainingReports = await client.reports.getAll({
-                where: { name: new RegExp(`^${TEST_PREFIX}`) }
-            });
-            for (const report of remainingReports.data) {
-                if (report.id) {
-                    await client.reports.delete(report.id);
-                }
+        const remainingReports = await client.reports.getAll({
+            where: { name: new RegExp(`^${TEST_PREFIX}`) }
+        });
+        for (const report of remainingReports.data) {
+            if (report.id) {
+                await client.reports.delete(report.id);
             }
-        } catch (error) {
-            console.warn('Cleanup error:', error);
         }
     }, 30000);
 });

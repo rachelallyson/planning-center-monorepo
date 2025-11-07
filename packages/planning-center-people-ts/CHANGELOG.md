@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2025-01-15
+
+### ✨ **New Features**
+
+- **🔄 Automatic Retry Logic for Contact Verification**: Added built-in retry logic to prevent duplicate person creation
+  - Automatically retries when searching for existing persons with email/phone
+  - Handles PCO contact verification delays (30-90+ seconds)
+  - Uses exponential backoff (10s → 15s → 22.5s → 33.75s → 50.6s)
+  - Configurable retry behavior via `retryConfig` option
+  - Default: 5 retries, 120 seconds max wait time
+  - Logs retry attempts with `[PERSON_MATCH]` prefix for debugging
+  - Prevents duplicate person creation when PCO takes time to verify/index contacts
+
+### 🔧 **Improvements**
+
+- **Duplicate Prevention**: `findOrCreate` now automatically handles PCO contact verification delays
+  - Retry logic activates automatically when `createIfNotFound: false` and email/phone are provided
+  - No manual retry code needed - library handles it automatically
+  - Prevents race conditions where duplicate persons are created
+
+### 📚 **Documentation**
+
+- Added `RETRY_LOGIC_FIX.md` - Detailed explanation of the retry logic fix
+- Added `USING_RETRY_LOGIC.md` - Guide for using retry logic in your app
+- Added `MIGRATION_GUIDE_FOR_YOUR_APP.md` - Migration guide to simplify existing code
+- Added `TEST_FAILURE_ANALYSIS.md` - Troubleshooting guide for test failures
+
+### 🧪 **Testing**
+
+- Added comprehensive integration tests for retry logic
+- Tests verify retry logic prevents duplicate person creation
+- Tests demonstrate bug scenario and fix
+
 ## [2.10.0] - 2025-01-15
 
 ### ✨ **New Features**

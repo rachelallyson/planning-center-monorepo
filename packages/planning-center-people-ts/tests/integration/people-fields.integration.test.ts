@@ -548,38 +548,21 @@ describe('People Fields API Integration Tests', () => {
                 { url: 'https://www.w3.org/TR/2003/REC-PNG-20031110/iso_8859-1.txt', expectedType: 'text/plain' },
             ];
 
-            let successCount = 0;
-            let errorCount = 0;
-
             for (const testFile of testFiles) {
-                try {
-                    const response = await createPersonFieldData(
-                        client,
-                        testPersonId,
-                        fileFieldId,
-                        testFile.url
-                    );
+                const response = await createPersonFieldData(
+                    client,
+                    testPersonId,
+                    fileFieldId,
+                    testFile.url
+                );
 
-                    // If successful, verify the response
-                    expect(response.data).toBeDefined();
-                    expect(response.data?.type).toBe('FieldDatum');
-                    successCount++;
+                // If successful, verify the response
+                expect(response.data).toBeDefined();
+                expect(response.data?.type).toBe('FieldDatum');
 
-                    // Clean up
-                    await deletePersonFieldData(client, testPersonId, response.data?.id || '');
-                } catch (error) {
-                    // Log the error for debugging
-                    const errorMessage = (error as Error).message;
-                    console.log(`File upload failed for ${testFile.url}:`, errorMessage);
-                    errorCount++;
-                    // Re-throw to fail the test if upload fails
-                    throw error;
-                }
+                // Clean up
+                await deletePersonFieldData(client, testPersonId, response.data?.id || '');
             }
-
-            // Verify we got some meaningful results - at least one should succeed
-            expect(successCount).toBeGreaterThan(0);
-            console.log(`MIME type detection test: ${successCount} successes, ${errorCount} errors`);
 
             // Clean up the field definition
             await deleteFieldDefinition(client, fileFieldId);

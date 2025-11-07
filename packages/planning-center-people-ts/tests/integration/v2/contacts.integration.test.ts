@@ -2,7 +2,11 @@ import {
     PcoClient,
     type PersonAttributes,
 } from '../../../src';
-import { validatePersonResource } from '../../type-validators';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateRelationship,
+} from '../../type-validators';
 import { createTestClient, logAuthStatus } from '../test-config';
 
 const TEST_PREFIX = 'TEST_V2_CONTACTS_2025';
@@ -58,7 +62,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const email = await client.people.addEmail(testPersonId, emailData);
 
             expect(email).toBeDefined();
-            expect(email.type).toBe('Email');
+            validateResourceStructure(email, 'Email');
             expect(email.attributes?.address).toBe(emailData.address);
             expect(email.attributes?.location).toBe(emailData.location);
             expect(email.attributes?.primary).toBe(true);
@@ -98,7 +102,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const updatedEmail = await client.people.updateEmail(testPersonId, testEmailId, updateData);
 
             expect(updatedEmail).toBeDefined();
-            expect(updatedEmail.type).toBe('Email');
+            validateResourceStructure(updatedEmail, 'Email');
             expect(updatedEmail.id).toBe(testEmailId);
             expect(updatedEmail.attributes?.location).toBe(updateData.location);
             expect(updatedEmail.attributes?.primary).toBe(false);
@@ -149,7 +153,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const phone = await client.people.addPhoneNumber(testPersonId, phoneData);
 
             expect(phone).toBeDefined();
-            expect(phone.type).toBe('PhoneNumber');
+            validateResourceStructure(phone, 'PhoneNumber');
             expect(phone.attributes?.number).toBe(phoneData.number);
             expect(phone.attributes?.location).toBe(phoneData.location);
             expect(phone.attributes?.primary).toBe(true);
@@ -206,7 +210,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const updatedPhone = await client.people.updatePhoneNumber(testPersonId, testPhoneId, updateData);
 
             expect(updatedPhone).toBeDefined();
-            expect(updatedPhone.type).toBe('PhoneNumber');
+            validateResourceStructure(updatedPhone, 'PhoneNumber');
             expect(updatedPhone.id).toBe(testPhoneId);
             expect(updatedPhone.attributes?.location).toBe(updateData.location);
             expect(updatedPhone.attributes?.primary).toBe(false);
@@ -249,7 +253,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const address = await client.people.addAddress(testPersonId, addressData);
 
             expect(address).toBeDefined();
-            expect(address.type).toBe('Address');
+            validateResourceStructure(address, 'Address');
             expect(address.attributes?.street).toBe(addressData.street);
             expect(address.attributes?.city).toBe(addressData.city);
             expect(address.attributes?.state).toBe(addressData.state);
@@ -307,7 +311,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const updatedAddress = await client.people.updateAddress(testPersonId, testAddressId, updateData);
 
             expect(updatedAddress).toBeDefined();
-            expect(updatedAddress.type).toBe('Address');
+            validateResourceStructure(updatedAddress, 'Address');
             expect(updatedAddress.id).toBe(testAddressId);
             expect(updatedAddress.attributes?.city).toBe(updateData.city);
             expect(updatedAddress.attributes?.location).toBe(updateData.location);
@@ -340,7 +344,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const social = await client.people.addSocialProfile(testPersonId, socialData);
 
             expect(social).toBeDefined();
-            expect(social.type).toBe('SocialProfile');
+            validateResourceStructure(social, 'SocialProfile');
             expect(social.attributes?.site).toBe(socialData.site);
             // Note: username field is not allowed in PCO social profile creation
             expect(social.attributes?.url).toBe(socialData.url);
@@ -370,10 +374,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
         it('should update social profile', async () => {
             if (!testSocialId) {
                 const socials = await client.people.getSocialProfiles(testPersonId);
-                if (socials.data.length === 0) {
-                    console.log('No social profiles found - skipping update test');
-                    return;
-                }
+                expect(socials.data.length).toBeGreaterThan(0);
                 testSocialId = socials.data[0].id || '';
             }
 
@@ -387,7 +388,7 @@ describe('v2.0.0 Contacts API Integration Tests', () => {
             const updatedSocial = await client.people.updateSocialProfile(testPersonId, testSocialId, updateData);
 
             expect(updatedSocial).toBeDefined();
-            expect(updatedSocial.type).toBe('SocialProfile');
+            validateResourceStructure(updatedSocial, 'SocialProfile');
             expect(updatedSocial.id).toBe(testSocialId);
             // Note: username field is not assignable in PCO social profiles
             expect(updatedSocial.attributes?.url).toBe(updateData.url);

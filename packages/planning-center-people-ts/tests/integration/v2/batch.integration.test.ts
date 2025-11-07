@@ -45,25 +45,13 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
                 endpoint: `/people/${id}`,
             }));
 
-            try {
-                // Use a shorter timeout for batch cleanup to avoid hanging
-                const cleanupPromise = client.batch.execute(deleteOperations);
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
-                );
+            // Use a shorter timeout for batch cleanup to avoid hanging
+            const cleanupPromise = client.batch.execute(deleteOperations);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+            );
 
-                await Promise.race([cleanupPromise, timeoutPromise]);
-            } catch (error) {
-                console.warn('Failed to clean up test persons:', error);
-                // Try individual deletes as fallback
-                for (const id of testPersonIds) {
-                    try {
-                        await client.people.delete(id);
-                    } catch (deleteError) {
-                        console.warn(`Failed to delete person ${id}:`, deleteError);
-                    }
-                }
-            }
+            await Promise.race([cleanupPromise, timeoutPromise]);
             testPersonIds = [];
         }
     }, 90000);

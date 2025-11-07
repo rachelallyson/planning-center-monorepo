@@ -31,14 +31,12 @@ module.exports = {
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {
-    '^@rachelallyson/planning-center-base-ts$': '<rootDir>/node_modules/@rachelallyson/planning-center-base-ts',
+    '^@rachelallyson/planning-center-base-ts$': '<rootDir>/../planning-center-base-ts',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    'integration.test.ts',
-    '!**/*.integration.test.ts'
   ],
   transformIgnorePatterns: [
     '/node_modules/(?!@rachelallyson/)'

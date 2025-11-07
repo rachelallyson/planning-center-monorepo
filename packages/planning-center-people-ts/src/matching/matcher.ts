@@ -32,12 +32,28 @@ export class PersonMatcher {
      * - Verifies email/phone matches by checking actual contact information
      * - Only uses name matching when appropriate (multiple people share contact info, or no contact info provided)
      * - Can automatically add missing contact information when a match is found (if addMissingContactInfo is true)
+     * - Retries with exponential backoff when contacts may not be verified yet (PCO takes 30-90+ seconds)
      * 
      * @param options - Matching options
      * @param options.addMissingContactInfo - If true, automatically adds missing email/phone to matched person's profile
+     * @param options.retryConfig - Configuration for retry logic to handle PCO contact verification delays
      */
     async findOrCreate(options: PersonMatchOptions): Promise<PersonResource> {
-        const { createIfNotFound = true, matchStrategy = 'fuzzy', addMissingContactInfo = false, ...searchOptions } = options;
+        const { createIfNotFound = true, matchStrategy = 'fuzzy', addMissingContactInfo = false, retryConfig, ...searchOptions } = options;
+
+        // Determine if retry logic should be enabled
+        // Retry is useful when:
+        // 1. We have email/phone (these need verification)
+        // 2. createIfNotFound is false (we're trying to find existing, not create new)
+        // 3. retryConfig.enabled is not explicitly false
+        const hasContactInfo = !!(options.email || options.phone);
+        const shouldRetry = hasContactInfo && 
+                           !createIfNotFound && 
+                           (retryConfig?.enabled !== false);
+
+        if (shouldRetry) {
+            return this.findOrCreateWithRetry(options);
+        }
 
         // Try to find existing person
         const match = await this.findMatch({ ...searchOptions, matchStrategy });
@@ -59,6 +75,97 @@ export class PersonMatcher {
         }
 
         throw new Error(`No matching person found and creation is disabled`);
+    }
+
+    /**
+     * Find or create with retry logic to handle PCO contact verification delays
+     * 
+     * PCO takes 30-90+ seconds to verify/index contacts after a person is created.
+     * This method retries with exponential backoff to give PCO time to process contacts.
+     */
+    private async findOrCreateWithRetry(options: PersonMatchOptions): Promise<PersonResource> {
+        const { createIfNotFound = false, matchStrategy = 'fuzzy', addMissingContactInfo = false, retryConfig, ...searchOptions } = options;
+        
+        // Default retry configuration
+        const maxRetries = retryConfig?.maxRetries ?? 5;
+        const maxWaitTime = retryConfig?.maxWaitTime ?? 120000; // 120 seconds
+        const initialDelay = retryConfig?.initialDelay ?? 10000; // 10 seconds
+        const backoffMultiplier = retryConfig?.backoffMultiplier ?? 1.5;
+
+        let totalWaitTime = 0;
+        let lastError: Error | null = null;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                // Try to find existing person
+                const match = await this.findMatch({ ...searchOptions, matchStrategy });
+
+                if (match) {
+                    const person = match.person;
+                    
+                    // Add missing contact information if requested
+                    if (addMissingContactInfo) {
+                        await this.addMissingContactInfo(person, options);
+                    }
+                    
+                    // Log success if we had to retry
+                    if (attempt > 1) {
+                        console.log(`[PERSON_MATCH] Found person after ${attempt} attempts (waited ${totalWaitTime}ms)`, {
+                            personId: person.id,
+                            attempt,
+                            totalWaitTime
+                        });
+                    }
+                    
+                    return person;
+                }
+
+                // No match found - this might be because contacts aren't verified yet
+                lastError = new Error(`No matching person found and creation is disabled`);
+                
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+            }
+
+            // Don't retry on the last attempt
+            if (attempt === maxRetries) {
+                break;
+            }
+
+            // Calculate delay with exponential backoff
+            const delay = Math.min(
+                initialDelay * Math.pow(backoffMultiplier, attempt - 1),
+                maxWaitTime - totalWaitTime // Don't exceed maxWaitTime
+            );
+
+            // Check if we've exceeded max wait time
+            if (totalWaitTime + delay > maxWaitTime) {
+                console.warn(`[PERSON_MATCH] Max wait time (${maxWaitTime}ms) exceeded, stopping retries`, {
+                    attempt,
+                    totalWaitTime,
+                    remainingDelay: maxWaitTime - totalWaitTime
+                });
+                break;
+            }
+
+            totalWaitTime += delay;
+
+            // Log retry attempt
+            console.log(`[PERSON_MATCH] Attempt ${attempt} failed, retrying in ${delay}ms`, {
+                attempt,
+                delay,
+                totalWaitTime,
+                errorMessage: lastError?.message,
+                maxRetries,
+                maxWaitTime
+            });
+
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // All retries exhausted - throw error
+        throw lastError || new Error(`No matching person found after ${maxRetries} attempts (waited ${totalWaitTime}ms) and creation is disabled`);
     }
 
     /**

@@ -31,12 +31,7 @@ describe('findOrCreate Integration Test', () => {
     afterAll(async () => {
         // Clean up test person
         if (testPersonId) {
-            try {
-                await client.people.delete(testPersonId);
-                console.log('🧹 Cleaned up test person:', testPersonId);
-            } catch (error) {
-                console.warn('⚠️  Failed to clean up test person:', error);
-            }
+            await client.people.delete(testPersonId);
         }
     }, 30000);
 

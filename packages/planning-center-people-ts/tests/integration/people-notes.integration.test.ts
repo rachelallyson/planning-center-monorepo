@@ -109,18 +109,10 @@ describe('People Notes API Integration Tests', () => {
     afterAll(async () => {
         // Clean up test data
         if (testNoteId && testPersonId) {
-            try {
-                await v2Client.notes.delete(testPersonId, testNoteId);
-            } catch (error) {
-                console.log('Note cleanup failed:', error);
-            }
+            await v2Client.notes.delete(testPersonId, testNoteId);
         }
         if (testPersonId) {
-            try {
-                await deletePerson(client, testPersonId);
-            } catch (error) {
-                console.log('Person cleanup failed:', error);
-            }
+            await deletePerson(client, testPersonId);
         }
     }, 30000);
 

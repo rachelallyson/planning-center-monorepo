@@ -2,7 +2,11 @@ import {
     PcoClient,
     type PersonAttributes,
 } from '../../../src';
-import { validatePersonResource } from '../../type-validators';
+import {
+    validateResourceStructure,
+    validateStringAttribute,
+    validateRelationship,
+} from '../../type-validators';
 import { createTestClient, logAuthStatus } from '../test-config';
 
 const TEST_PREFIX = 'TEST_V2_NOTES_2025';
@@ -55,17 +59,12 @@ describe('v2.0.0 Notes API Integration Tests', () => {
         it('should get note by ID', async () => {
             const notes = await client.notes.getAll();
 
-            if (notes.data.length === 0) {
-                // Skip this test if no notes exist
-                console.log('Skipping note by ID test - no notes available in system');
-                return;
-            }
+            expect(notes.data.length).toBeGreaterThan(0);
 
             const noteId = notes.data[0].id;
             const note = await client.notes.getById(noteId);
 
-            expect(note).toBeDefined();
-            expect(note.type).toBe('Note');
+            validateResourceStructure(note, 'Note');
             expect(note.id).toBe(noteId);
             expect(note.attributes).toBeDefined();
         }, 30000);
@@ -85,7 +84,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             const note = await client.notes.create(testPersonId, noteData);
 
             expect(note).toBeDefined();
-            expect(note.type).toBe('Note');
+            validateResourceStructure(note, 'Note');
             expect(note.attributes?.note).toBe(noteData.note);
             expect(note.relationships?.person?.data?.id).toBe(testPersonId);
 
@@ -100,10 +99,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             expect(Array.isArray(notes.data)).toBe(true);
 
             // If no notes exist, that's okay - just verify the structure
-            if (notes.data.length === 0) {
-                console.log('No notes found for person - this is expected if note creation is not permitted');
-                return;
-            }
+            expect(notes.data.length).toBeGreaterThan(0);
 
             // Verify our test note is in the list
             const hasTestNote = notes.data.some(note =>
@@ -126,8 +122,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
 
             const updatedNote = await client.notes.update(testNoteId, updateData);
 
-            expect(updatedNote).toBeDefined();
-            expect(updatedNote.type).toBe('Note');
+            validateResourceStructure(updatedNote, 'Note');
             expect(updatedNote.id).toBe(testNoteId);
             expect(updatedNote.attributes?.note).toBe(updateData.note);
         }, 60000);
@@ -164,8 +159,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             const categoryId = categories.data[0].id;
             const category = await client.notes.getNoteCategoryById(categoryId);
 
-            expect(category).toBeDefined();
-            expect(category.type).toBe('NoteCategory');
+            validateResourceStructure(category, 'NoteCategory');
             expect(category.id).toBe(categoryId);
             expect(category.attributes).toBeDefined();
         }, 30000);
@@ -178,8 +172,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
 
             const category = await client.notes.createNoteCategory(categoryData);
 
-            expect(category).toBeDefined();
-            expect(category.type).toBe('NoteCategory');
+            validateResourceStructure(category, 'NoteCategory');
             expect(category.attributes?.name).toBe(categoryData.name);
 
             testCategoryId = category.id || '';
@@ -205,8 +198,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
 
             const updatedCategory = await client.notes.updateNoteCategory(testCategoryId, updateData);
 
-            expect(updatedCategory).toBeDefined();
-            expect(updatedCategory.type).toBe('NoteCategory');
+            validateResourceStructure(updatedCategory, 'NoteCategory');
             expect(updatedCategory.id).toBe(testCategoryId);
             expect(updatedCategory.attributes?.name).toBe(updateData.name);
         }, 60000);
@@ -233,7 +225,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             const note = await client.notes.create(testPersonId, noteData);
 
             expect(note).toBeDefined();
-            expect(note.type).toBe('Note');
+            validateResourceStructure(note, 'Note');
             expect(note.attributes?.note).toBe(noteData.note);
             expect(note.relationships?.person?.data?.id).toBe(testPersonId);
             expect(note.relationships?.note_category?.data?.id).toBe(testCategoryId);
@@ -243,10 +235,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             // Get existing categories first
             const categories = await client.notes.getNoteCategories();
 
-            if (categories.data.length === 0) {
-                console.log('No note categories available - skipping category filter test');
-                return;
-            }
+            expect(categories.data.length).toBeGreaterThan(0);
 
             const testCategoryId = categories.data[0].id;
 
@@ -258,10 +247,7 @@ describe('v2.0.0 Notes API Integration Tests', () => {
             expect(Array.isArray(notes.data)).toBe(true);
 
             // If no notes exist in this category, that's okay
-            if (notes.data.length === 0) {
-                console.log('No notes found in category - this is expected if note creation is not permitted');
-                return;
-            }
+            expect(notes.data.length).toBeGreaterThan(0);
 
             // Verify all notes are in the specified category
             const allInCategory = notes.data.every(note =>
