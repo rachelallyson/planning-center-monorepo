@@ -62,6 +62,7 @@ This document provides a comprehensive checklist of all functions available in t
 
 - [ ] `getLists(client, params?, context?)` - Get all lists
 - [ ] `getListById(client, listId, params?, context?)` - Get a single list
+- [ ] `runList(client, listId, context?)` - Run a List to update its results
 
 ### List Categories
 
@@ -101,7 +102,7 @@ This document provides a comprehensive checklist of all functions available in t
 
 ## Summary
 
-**Total Functions: 36**
+**Total Functions: 37**
 
 ### Function Categories
 
@@ -109,7 +110,7 @@ This document provides a comprehensive checklist of all functions available in t
 - **Contacts**: 9 functions (emails, phones, addresses, social profiles)
 - **Field Data**: 7 functions (custom fields, file uploads, field definitions)
 - **Households**: 2 functions (household management)
-- **Lists**: 3 functions (lists and list categories)
+- **Lists**: 4 functions (lists, list categories, and list operations)
 - **Notes**: 3 functions (notes and note categories)
 - **Workflows**: 6 functions (workflow cards, notes, workflows)
 - **Organization**: 1 function (organization info)

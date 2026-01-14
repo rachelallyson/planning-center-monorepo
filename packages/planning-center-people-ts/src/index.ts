@@ -172,6 +172,7 @@ export {
   getListById,
   getListCategories,
   getLists,
+  runList,
   getNote,
   getNoteCategories,
   getNotes,

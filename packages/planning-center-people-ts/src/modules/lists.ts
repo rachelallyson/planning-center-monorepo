@@ -120,4 +120,15 @@ export class ListsModule extends BaseModule {
     async getPeople(listId: string): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
         return this.getList<PersonResource>(`/lists/${listId}/people`);
     }
+
+    /**
+     * Run a List to update its results
+     */
+    async run(listId: string): Promise<ListResource> {
+        const response = await this.httpClient.request<{ data: ListResource }>({
+            method: 'POST',
+            endpoint: `/lists/${listId}/run`,
+        });
+        return response.data.data;
+    }
 }

@@ -137,6 +137,18 @@ describe('v2.0.0 Lists API Integration Tests', () => {
             // Lists have rules that determine membership automatically
             expect(list.attributes?.description).toContain('First name starts with');
         }, 60000);
+
+        it('should run a list to update its results', async () => {
+            expect(testListId).toBeTruthy();
+
+            // Run the list to update its results
+            const updatedList = await client.lists.run(testListId);
+
+            expect(updatedList).toBeDefined();
+            validateResourceStructure(updatedList, 'List');
+            expect(updatedList.id).toBe(testListId);
+            expect(updatedList.attributes).toBeDefined();
+        }, 30000);
     });
 
     describe('v2.0 List Category Operations', () => {

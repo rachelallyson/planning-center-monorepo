@@ -1,4 +1,4 @@
-import { getList, getSingle, PcoClientState } from '../core';
+import { getList, getSingle, PcoClientState, post } from '../core';
 import type { ErrorContext } from '@rachelallyson/planning-center-base-ts';
 import { buildQueryParams } from '../helpers';
 import {
@@ -76,6 +76,27 @@ export async function getListCategories(
             ...context,
             endpoint: '/list_categories',
             method: 'GET',
+        }
+    );
+}
+
+/**
+ * Run a List to update its results
+ */
+export async function runList(
+    client: PcoClientState,
+    listId: string,
+    context?: Partial<ErrorContext>
+): Promise<ListSingle> {
+    return post<ListResource>(
+        client,
+        `/lists/${listId}/run`,
+        {},
+        undefined,
+        {
+            ...context,
+            endpoint: `/lists/${listId}/run`,
+            method: 'POST',
         }
     );
 }

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-01-14
+
+### ✨ **New Features**
+
+- **📋 List Run Functionality**: Added ability to run a List to update its results
+  - New `runList()` function in `src/people/lists.ts` for running lists via the function API
+  - New `run()` method in `ListsModule` for running lists via the module API
+  - Endpoint: `POST /people/v2/lists/{list_id}/run`
+  - Updates list results based on current list rules
+
 ## [2.11.0] - 2025-01-15
 
 ### ✨ **New Features**
