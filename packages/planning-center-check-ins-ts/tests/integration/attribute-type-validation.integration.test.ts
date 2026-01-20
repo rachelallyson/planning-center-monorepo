@@ -200,7 +200,12 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
     describe('EventPeriod Attributes Type Validation', () => {
         it('should validate EventPeriodAttributes types match API response', async () => {
-            const response = await client.eventPeriods.getAll({ perPage: 1 });
+            // Event periods must be accessed through events
+            const events = await client.events.getAll({ perPage: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            
+            const eventId = events.data[0].id;
+            const response = await client.events.getEventPeriods(eventId);
             if (response.data.length > 0) {
                 const eventPeriod = response.data[0];
 

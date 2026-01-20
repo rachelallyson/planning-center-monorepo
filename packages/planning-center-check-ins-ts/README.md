@@ -35,7 +35,7 @@ const checkIn = await client.checkIns.getById('123', ['person', 'event']);
 ## Features
 
 - **Type-safe**: Full TypeScript support with complete type definitions for all 24 Check-Ins API resource types
-- **Modular architecture**: 19 specialized modules organized by resource domain
+- **Modular architecture**: 16 specialized modules organized by resource domain
 - **Batch operations**: Execute multiple operations with dependency resolution
 - **Event system**: Monitor requests, errors, and rate limits
 - **Rate limiting**: Automatic rate limit handling (100 requests per 20 seconds)
@@ -45,19 +45,16 @@ const checkIn = await client.checkIns.getById('123', ['person', 'event']);
 
 ## Modules
 
-The client exposes 19 specialized modules:
+The client exposes 16 specialized modules:
 
 - **events** - Event management (recurring events)
 - **checkIns** - Check-in records (attendance)
 - **locations** - Location management
-- **eventPeriods** - Event period management
 - **eventTimes** - Specific check-in times
 - **stations** - Check-in stations
 - **labels** - Labels for check-ins, events, and locations
 - **options** - Check-in options
 - **checkInGroups** - Group check-ins
-- **checkInTimes** - When check-ins occurred
-- **personEvents** - Person-event relationships
 - **preChecks** - Pre-check records
 - **passes** - Pass management
 - **headcounts** - Headcount tracking
@@ -76,6 +73,7 @@ For complete documentation, see the [monorepo documentation site](../../docs/con
 ### Unit Tests (Mocked Data)
 
 Run unit tests with mocked HTTP responses:
+
 ```bash
 npm test
 ```
@@ -92,6 +90,7 @@ npm run test:integration
 ```
 
 Integration tests verify:
+
 - Real API responses and data structures
 - End-to-end functionality with actual Planning Center data
 - Error handling with real API errors

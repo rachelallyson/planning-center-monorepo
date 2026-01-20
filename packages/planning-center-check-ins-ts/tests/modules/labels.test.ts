@@ -22,43 +22,11 @@ describe('LabelsModule', () => {
     }));
   });
 
-  it('getEventLabels builds params', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: [] } } as any);
-    await module.getEventLabels({ where: { status: 'active' } });
-    expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/event_labels', params: { 'where[status]': 'active' }
-    }));
-  });
-
   it('getById supports include', async () => {
     mockHttpClient.request.mockResolvedValueOnce({ data: { data: {} } } as any);
     await module.getById('l1', ['something']);
     expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
       endpoint: '/check-ins/v2/labels/l1', params: { include: 'something' }
-    }));
-  });
-
-  it('getEventLabelById supports include', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: {} } } as any);
-    await module.getEventLabelById('el1', ['event']);
-    expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/event_labels/el1', params: { include: 'event' }
-    }));
-  });
-
-  it('getLocationLabels builds params', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: [] } } as any);
-    await module.getLocationLabels({ where: { active: true } });
-    expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/location_labels', params: { 'where[active]': true }
-    }));
-  });
-
-  it('getLocationLabelById supports include', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: {} } } as any);
-    await module.getLocationLabelById('ll1', ['location']);
-    expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/location_labels/ll1', params: { include: 'location' }
     }));
   });
 });

@@ -283,6 +283,11 @@ describe('v2.0.0 Token Refresh', () => {
 
     describe('Personal Access Token Auth', () => {
         it('should not attempt token refresh for personal access token', async () => {
+            // Mock environment variables for personal access token
+            const originalEnv = process.env;
+            process.env.PCO_PERSONAL_ACCESS_TOKEN = 'test-client-id';
+            process.env.PCO_PERSONAL_ACCESS_SECRET = 'test-client-secret';
+
             const client = new PcoClient({
                 auth: {
                     type: 'personal_access_token',
@@ -300,11 +305,14 @@ describe('v2.0.0 Token Refresh', () => {
             await client.people.getAll();
 
             // Verify that no token refresh was attempted
-            const tokenRefreshCall = mockFetch.mock.calls.find(call => 
+            const tokenRefreshCall = mockFetch.mock.calls.find(call =>
                 call[0].includes('/oauth/token')
             );
-            
+
             expect(tokenRefreshCall).toBeUndefined();
+
+            // Restore environment variables
+            process.env = originalEnv;
         });
     });
 

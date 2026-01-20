@@ -16,7 +16,7 @@ module.exports = {
     ],
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
     moduleNameMapper: {
-        '^@rachelallyson/planning-center-base-ts$': '<rootDir>/node_modules/@rachelallyson/planning-center-base-ts',
+        '^@rachelallyson/planning-center-base-ts$': '<rootDir>/../../packages/planning-center-base-ts/dist',
     },
     setupFilesAfterEnv: ['<rootDir>/tests/integration-setup.ts'],
     testPathIgnorePatterns: [

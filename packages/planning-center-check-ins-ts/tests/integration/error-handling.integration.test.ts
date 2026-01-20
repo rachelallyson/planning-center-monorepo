@@ -42,9 +42,6 @@ describe('Check-ins API Error Handling Integration Tests', () => {
             await expect(client.locations.getById('999999999')).rejects.toThrow();
         }, 30000);
 
-        it('should handle 404 errors for non-existent event periods', async () => {
-            await expect(client.eventPeriods.getById('999999999')).rejects.toThrow();
-        }, 30000);
 
         it('should handle 404 errors for non-existent event times', async () => {
             await expect(client.eventTimes.getById('999999999')).rejects.toThrow();

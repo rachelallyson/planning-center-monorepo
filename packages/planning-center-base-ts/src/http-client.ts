@@ -162,12 +162,36 @@ export class PcoHttpClient {
 
         // Add timeout
         const timeout = options.timeout || this.config.timeout || 30000;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        requestOptions.signal = controller.signal;
+        // Note: AbortController may not be available in all Node.js versions or polyfills
+        let controller: AbortController | undefined;
+        let timeoutId: NodeJS.Timeout;
 
         try {
-            const response = await fetch(url, requestOptions);
+            controller = new AbortController();
+            timeoutId = setTimeout(() => controller && controller.abort(), timeout);
+            if (controller) {
+                requestOptions.signal = controller.signal;
+            }
+        } catch (error) {
+            // AbortController not available, skip timeout
+            timeoutId = setTimeout(() => {}, 0); // No-op
+        }
+
+        try {
+            console.log('🚀 About to call fetch...');
+            let response = await fetch(url, requestOptions);
+
+            // Fallback for broken fetch implementations
+            if (!response) {
+                console.log('⚠️  Fetch returned null, using HTTPS fallback...');
+                response = await this.makeHttpsRequest(url, requestOptions);
+            }
+
+            console.log('📥 Response received, status:', response?.status);
+            if (!response) {
+                console.error('❌ Response is still null/undefined!');
+                throw new Error('Both fetch and HTTPS fallback returned null/undefined response');
+            }
             clearTimeout(timeoutId);
 
             // Update rate limiter from headers
@@ -249,9 +273,15 @@ export class PcoHttpClient {
 
     private addAuthentication(headers: Record<string, string>): void {
         if (this.config.auth.type === 'personal_access_token') {
-            // Personal Access Tokens use HTTP Basic Auth format: app_id:secret
-            // The personalAccessToken should be in the format "app_id:secret"
-            headers.Authorization = `Basic ${Buffer.from(this.config.auth.personalAccessToken).toString('base64')}`;
+            // Personal Access Tokens use client_id:secret format with HTTP Basic Auth
+            const clientId = process.env.PCO_PERSONAL_ACCESS_TOKEN;
+            const clientSecret = process.env.PCO_PERSONAL_ACCESS_SECRET;
+            if (clientId && clientSecret) {
+                const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+                headers.Authorization = `Basic ${credentials}`;
+            } else {
+                throw new Error('PCO_PERSONAL_ACCESS_TOKEN and PCO_PERSONAL_ACCESS_SECRET environment variables are required for personal access token authentication');
+            }
         } else if (this.config.auth.type === 'oauth') {
             headers.Authorization = `Bearer ${this.config.auth.accessToken}`;
         } else if (this.config.auth.type === 'basic') {
@@ -375,6 +405,48 @@ export class PcoHttpClient {
             return `Bearer ${this.config.auth.accessToken}`;
         }
         return '';
+    }
+
+    /**
+     * Fallback HTTP request method using Node.js https for environments where fetch is broken
+     */
+    private async makeHttpsRequest(url: string, options: RequestInit): Promise<any> {
+        const https = require('https');
+        const urlObj = new URL(url);
+
+        const requestOptions = {
+            hostname: urlObj.hostname,
+            path: urlObj.pathname + urlObj.search,
+            method: options.method || 'GET',
+            headers: options.headers as Record<string, string> || {},
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(requestOptions, (res: any) => {
+                let data = '';
+                res.on('data', (chunk: Buffer) => data += chunk);
+                res.on('end', () => {
+                    // Create a response-like object
+                    resolve({
+                        status: res.statusCode,
+                        headers: {
+                            get: (name: string) => res.headers[name.toLowerCase()],
+                        },
+                        text: () => Promise.resolve(data),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                    });
+                });
+            });
+
+            req.on('error', reject);
+
+            if (options.body) {
+                req.write(options.body);
+            }
+
+            req.end();
+        });
     }
 }
 

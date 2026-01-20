@@ -57,14 +57,14 @@ describe('PcoCheckInsClient v1.0.0', () => {
             expect(client.events).toBeDefined();
             expect(client.checkIns).toBeDefined();
             expect(client.locations).toBeDefined();
-            expect(client.eventPeriods).toBeDefined();
+            // EventPeriodsModule removed - event periods only accessible via events.getEventPeriods()
             expect(client.eventTimes).toBeDefined();
             expect(client.stations).toBeDefined();
             expect(client.labels).toBeDefined();
             expect(client.options).toBeDefined();
             expect(client.checkInGroups).toBeDefined();
-            expect(client.checkInTimes).toBeDefined();
-            expect(client.personEvents).toBeDefined();
+            // checkInTimes removed - only accessible via checkIns.getCheckInTimes(checkInId)
+            // personEvents removed - only accessible via events.getPersonEvents(eventId)
             expect(client.preChecks).toBeDefined();
             expect(client.passes).toBeDefined();
             expect(client.headcounts).toBeDefined();
@@ -76,19 +76,16 @@ describe('PcoCheckInsClient v1.0.0', () => {
             expect(client.batch).toBeDefined();
         });
 
-        it('should have 19 modules', () => {
+        it('should have 16 modules', () => {
             const modules = [
                 'events',
                 'checkIns',
                 'locations',
-                'eventPeriods',
                 'eventTimes',
                 'stations',
                 'labels',
                 'options',
                 'checkInGroups',
-                'checkInTimes',
-                'personEvents',
                 'preChecks',
                 'passes',
                 'headcounts',

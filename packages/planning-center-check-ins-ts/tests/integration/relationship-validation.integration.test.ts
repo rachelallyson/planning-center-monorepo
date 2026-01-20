@@ -9,6 +9,10 @@
 
 import { PcoCheckInsClient } from '../../src';
 import { createTestClient, logAuthStatus } from './test-config';
+import {
+    validateRelationship,
+    validateResourceStructure,
+} from '../type-validators';
 
 describe('Check-ins API Relationship Validation Integration Tests', () => {
     let client: PcoCheckInsClient;
@@ -85,22 +89,8 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                 if (event.relationships?.attendance_types?.data) {
                     const attendanceTypesData = event.relationships.attendance_types.data;
                     
-                    if (Array.isArray(attendanceTypesData)) {
-                        // To-many relationship
-                        expect(Array.isArray(attendanceTypesData)).toBe(true);
-                        attendanceTypesData.forEach((attendanceTypeRef) => {
-                            expect(attendanceTypeRef).toHaveProperty('type');
-                            expect(attendanceTypeRef).toHaveProperty('id');
-                            expect(typeof attendanceTypeRef.type).toBe('string');
-                            expect(typeof attendanceTypeRef.id).toBe('string');
-                        });
-                    } else {
-                        // To-one relationship
-                        expect(attendanceTypesData).toHaveProperty('type');
-                        expect(attendanceTypesData).toHaveProperty('id');
-                        expect(typeof attendanceTypesData.type).toBe('string');
-                        expect(typeof attendanceTypesData.id).toBe('string');
-                    }
+                    // Use validateRelationship which handles both to-one and to-many
+                    validateRelationship(event.relationships.attendance_types);
                 }
             }
         }, 30000);
@@ -196,7 +186,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     const attendanceTypes = response.included.filter(included => included.type === 'AttendanceType');
                     
                     attendanceTypes.forEach((attendanceType) => {
-                        expect(attendanceType.type).toBe('AttendanceType');
+                        validateResourceStructure(attendanceType, 'AttendanceType');
                         expect(attendanceType.attributes).toBeDefined();
                         
                         if (attendanceType.attributes?.name) {
@@ -215,7 +205,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
             if (response.data.length > 0) {
                 const location = response.data[0];
-                expect(location.type).toBe('Location');
+                validateResourceStructure(location, 'Location');
                 expect(location.attributes).toBeDefined();
                 
                 if (location.attributes?.name) {
@@ -227,10 +217,12 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
     describe('Event Period Relationships Validation', () => {
         it('should validate event period relationships', async () => {
-            const response = await client.eventPeriods.getAll({
-                perPage: 1,
-                include: ['event', 'event_times', 'check_ins']
-            });
+            // Event periods must be accessed through events
+            const events = await client.events.getAll({ perPage: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            
+            const eventId = events.data[0].id;
+            const response = await client.events.getEventPeriods(eventId);
 
             if (response.data.length > 0) {
                 const eventPeriod = response.data[0];
@@ -239,24 +231,14 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(eventPeriod.relationships.event).toHaveProperty('data');
                     expect(eventPeriod.relationships.event).toHaveProperty('links');
                     
-                    const eventData = eventPeriod.relationships.event.data;
-                    if (eventData && !Array.isArray(eventData)) {
-                        expect(eventData.type).toBe('Event');
-                    }
+                    validateRelationship(eventPeriod.relationships.event);
                 }
 
                 if (eventPeriod.relationships?.event_times) {
                     expect(eventPeriod.relationships.event_times).toHaveProperty('data');
                     expect(eventPeriod.relationships.event_times).toHaveProperty('links');
                     
-                    const eventTimesData = eventPeriod.relationships.event_times.data;
-                    if (Array.isArray(eventTimesData)) {
-                        eventTimesData.forEach((eventTimeRef) => {
-                            expect(eventTimeRef).toHaveProperty('type');
-                            expect(eventTimeRef).toHaveProperty('id');
-                            expect(eventTimeRef.type).toBe('EventTime');
-                        });
-                    }
+                    validateRelationship(eventPeriod.relationships.event_times);
                 }
             }
         }, 30000);
@@ -276,20 +258,14 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(eventTime.relationships.event).toHaveProperty('data');
                     expect(eventTime.relationships.event).toHaveProperty('links');
                     
-                    const eventData = eventTime.relationships.event.data;
-                    if (eventData && !Array.isArray(eventData)) {
-                        expect(eventData.type).toBe('Event');
-                    }
+                    validateRelationship(eventTime.relationships.event);
                 }
 
                 if (eventTime.relationships?.event_period) {
                     expect(eventTime.relationships.event_period).toHaveProperty('data');
                     expect(eventTime.relationships.event_period).toHaveProperty('links');
                     
-                    const eventPeriodData = eventTime.relationships.event_period.data;
-                    if (eventPeriodData && !Array.isArray(eventPeriodData)) {
-                        expect(eventPeriodData.type).toBe('EventPeriod');
-                    }
+                    validateRelationship(eventTime.relationships.event_period);
                 }
             }
         }, 30000);
@@ -309,14 +285,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(station.relationships.check_ins).toHaveProperty('data');
                     expect(station.relationships.check_ins).toHaveProperty('links');
                     
-                    const checkInsData = station.relationships.check_ins.data;
-                    if (Array.isArray(checkInsData)) {
-                        checkInsData.forEach((checkInRef) => {
-                            expect(checkInRef).toHaveProperty('type');
-                            expect(checkInRef).toHaveProperty('id');
-                            expect(checkInRef.type).toBe('CheckIn');
-                        });
-                    }
+                    validateRelationship(station.relationships.check_ins);
                 }
             }
         }, 30000);
@@ -363,20 +332,14 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(checkInTime.relationships.check_in).toHaveProperty('data');
                     expect(checkInTime.relationships.check_in).toHaveProperty('links');
                     
-                    const checkInData = checkInTime.relationships.check_in.data;
-                    if (checkInData && !Array.isArray(checkInData)) {
-                        expect(checkInData.type).toBe('CheckIn');
-                    }
+                    validateRelationship(checkInTime.relationships.check_in);
                 }
 
                 if (checkInTime.relationships?.event_time) {
                     expect(checkInTime.relationships.event_time).toHaveProperty('data');
                     expect(checkInTime.relationships.event_time).toHaveProperty('links');
                     
-                    const eventTimeData = checkInTime.relationships.event_time.data;
-                    if (eventTimeData && !Array.isArray(eventTimeData)) {
-                        expect(eventTimeData.type).toBe('EventTime');
-                    }
+                    validateRelationship(checkInTime.relationships.event_time);
                 }
             }
         }, 30000);
@@ -396,20 +359,14 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(personEvent.relationships.event).toHaveProperty('data');
                     expect(personEvent.relationships.event).toHaveProperty('links');
                     
-                    const eventData = personEvent.relationships.event.data;
-                    if (eventData && !Array.isArray(eventData)) {
-                        expect(eventData.type).toBe('Event');
-                    }
+                    validateRelationship(personEvent.relationships.event);
                 }
 
                 if (personEvent.relationships?.person) {
                     expect(personEvent.relationships.person).toHaveProperty('data');
                     expect(personEvent.relationships.person).toHaveProperty('links');
                     
-                    const personData = personEvent.relationships.person.data;
-                    if (personData && !Array.isArray(personData)) {
-                        expect(personData.type).toBe('Person');
-                    }
+                    validateRelationship(personEvent.relationships.person);
                 }
             }
         }, 30000);
@@ -429,20 +386,14 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
                     expect(preCheck.relationships.event).toHaveProperty('data');
                     expect(preCheck.relationships.event).toHaveProperty('links');
                     
-                    const eventData = preCheck.relationships.event.data;
-                    if (eventData && !Array.isArray(eventData)) {
-                        expect(eventData.type).toBe('Event');
-                    }
+                    validateRelationship(preCheck.relationships.event);
                 }
 
                 if (preCheck.relationships?.person) {
                     expect(preCheck.relationships.person).toHaveProperty('data');
                     expect(preCheck.relationships.person).toHaveProperty('links');
                     
-                    const personData = preCheck.relationships.person.data;
-                    if (personData && !Array.isArray(personData)) {
-                        expect(personData.type).toBe('Person');
-                    }
+                    validateRelationship(preCheck.relationships.person);
                 }
             }
         }, 30000);
@@ -462,10 +413,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
             // Validate each resource has required fields
             response.data.forEach((resource) => {
-                expect(resource).toHaveProperty('type');
-                expect(resource).toHaveProperty('id');
-                expect(typeof resource.type).toBe('string');
-                expect(typeof resource.id).toBe('string');
+                validateResourceStructure(resource, resource.type);
             });
         }, 30000);
 

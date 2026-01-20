@@ -13,14 +13,11 @@ import {
 import { EventsModule } from './modules/events';
 import { CheckInsModule } from './modules/check-ins';
 import { LocationsModule } from './modules/locations';
-import { EventPeriodsModule } from './modules/event-periods';
 import { EventTimesModule } from './modules/event-times';
 import { StationsModule } from './modules/stations';
 import { LabelsModule } from './modules/labels';
 import { OptionsModule } from './modules/options';
 import { CheckInGroupsModule } from './modules/check-in-groups';
-import { CheckInTimesModule } from './modules/check-in-times';
-import { PersonEventsModule } from './modules/person-events';
 import { PreChecksModule } from './modules/pre-checks';
 import { PassesModule } from './modules/passes';
 import { HeadcountsModule } from './modules/headcounts';
@@ -34,14 +31,11 @@ export class PcoCheckInsClient implements EventEmitter {
     public events: EventsModule;
     public checkIns: CheckInsModule;
     public locations: LocationsModule;
-    public eventPeriods: EventPeriodsModule;
     public eventTimes: EventTimesModule;
     public stations: StationsModule;
     public labels: LabelsModule;
     public options: OptionsModule;
     public checkInGroups: CheckInGroupsModule;
-    public checkInTimes: CheckInTimesModule;
-    public personEvents: PersonEventsModule;
     public preChecks: PreChecksModule;
     public passes: PassesModule;
     public headcounts: HeadcountsModule;
@@ -62,7 +56,7 @@ export class PcoCheckInsClient implements EventEmitter {
         const { baseUrl, ...restConfig } = config;
         const fullConfig: any = {
             ...restConfig,
-            baseURL: baseUrl || 'https://api.planningcenteronline.com',
+            baseURL: baseUrl || 'https://api.planningcenteronline.com/check-ins/v2',
         };
 
         this.config = config;
@@ -74,14 +68,11 @@ export class PcoCheckInsClient implements EventEmitter {
         this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.eventPeriods = new EventPeriodsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkInTimes = new CheckInTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.personEvents = new PersonEventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
@@ -199,14 +190,11 @@ export class PcoCheckInsClient implements EventEmitter {
         this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.eventPeriods = new EventPeriodsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkInTimes = new CheckInTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.personEvents = new PersonEventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
         this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter);

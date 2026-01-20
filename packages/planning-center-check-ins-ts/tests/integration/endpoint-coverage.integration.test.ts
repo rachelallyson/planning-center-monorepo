@@ -122,19 +122,20 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     });
 
     describe('Event Periods Module Endpoint Coverage', () => {
-        it('should cover event periods endpoints', async () => {
-            // READ - List
-            const eventPeriods = await client.eventPeriods.getAll({ perPage: 10 });
+        it('should cover event periods endpoints via event associations', async () => {
+            // Event periods must be accessed through events
+            const events = await client.events.getAll({ perPage: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            
+            const eventId = events.data[0].id;
+            const eventPeriods = await client.events.getEventPeriods(eventId);
             expect(eventPeriods.data).toBeDefined();
             expect(Array.isArray(eventPeriods.data)).toBe(true);
 
             if (eventPeriods.data.length > 0) {
-                const eventPeriodId = eventPeriods.data[0].id;
-                
-                // READ - Single
-                const eventPeriod = await client.eventPeriods.getById(eventPeriodId, ['event']);
+                const eventPeriod = eventPeriods.data[0];
                 expect(eventPeriod.type).toBe('EventPeriod');
-                expect(eventPeriod.id).toBe(eventPeriodId);
+                expect(eventPeriod.id).toBeDefined();
             }
         }, 30000);
     });

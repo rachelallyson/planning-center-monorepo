@@ -9,8 +9,8 @@ const nextConfig = {
   output: 'export',
   images: { unoptimized: true },
   trailingSlash: true,
-  basePath: process.env.NODE_ENV === 'production' ? '/planning-center-monorepo' : '',
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/planning-center-monorepo' : ''
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/planning-center-monorepo' : ''),
+  assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/planning-center-monorepo' : '')
 }
 
 export default withNextra(nextConfig)

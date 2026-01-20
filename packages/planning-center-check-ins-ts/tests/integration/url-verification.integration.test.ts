@@ -216,23 +216,22 @@ describe('Check-ins API URL Verification Integration Tests', () => {
     });
 
     describe('Event Periods API URL Verification', () => {
-        it('should access event periods list endpoint', async () => {
-            const response = await client.eventPeriods.getAll({ perPage: 5 });
+        it('should access event periods via event associations', async () => {
+            // Event periods must be accessed through events
+            const events = await client.events.getAll({ perPage: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            
+            const eventId = events.data[0].id;
+            const response = await client.events.getEventPeriods(eventId);
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
-        }, 30000);
-
-        it('should access single event period endpoint', async () => {
-            // First get an event period ID
-            const eventPeriodsResponse = await client.eventPeriods.getAll({ perPage: 1 });
-            if (eventPeriodsResponse.data.length > 0) {
-                const eventPeriodId = eventPeriodsResponse.data[0].id;
-                const eventPeriod = await client.eventPeriods.getById(eventPeriodId, ['event']);
-                
+            
+            if (response.data.length > 0) {
+                const eventPeriod = response.data[0];
                 expect(eventPeriod).toBeDefined();
                 expect(eventPeriod.type).toBe('EventPeriod');
-                expect(eventPeriod.id).toBe(eventPeriodId);
+                expect(eventPeriod.id).toBeDefined();
             }
         }, 30000);
     });
