@@ -46,10 +46,14 @@ npm install @rachelallyson/planning-center-base-ts
 ```typescript
 import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
+// Set environment variables first:
+// export PCO_PERSONAL_ACCESS_TOKEN="your_client_id"
+// export PCO_PERSONAL_ACCESS_SECRET="your_client_secret"
+
 const client = new PcoClient({
   auth: {
     type: 'personal_access_token',
-    personalAccessToken: 'your-token-here'
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
   }
 });
 
@@ -62,6 +66,8 @@ const person = await client.people.findOrCreate({
 
 console.log(`Person ID: ${person.id}`);
 ```
+
+**See [Quick Start Guide](./guides/quickstart) for complete Personal Access Token setup instructions.**
 
 ## Documentation
 

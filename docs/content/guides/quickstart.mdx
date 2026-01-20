@@ -23,16 +23,40 @@ Choose your authentication method:
 
 ### Personal Access Token (Recommended for scripts)
 
+#### Step 1: Create Personal Access Token
+
+1. Go to [Planning Center Developer Account](https://api.planningcenteronline.com/oauth/applications)
+2. Click "Personal Access Tokens" in the left sidebar
+3. Click "New Personal Access Token"
+4. Give it a name (e.g., "My Integration")
+5. Select appropriate scopes (People, Check-Ins, etc.)
+6. Click "Create Personal Access Token"
+7. **Copy both values immediately** (you won't see them again):
+   - **Client ID** (long hex string)
+   - **Client Secret** (even longer string)
+
+#### Step 2: Configure Environment Variables
+
+```bash
+# Set these environment variables
+export PCO_PERSONAL_ACCESS_TOKEN="your_client_id_here"
+export PCO_PERSONAL_ACCESS_SECRET="your_client_secret_here"
+```
+
+#### Step 3: Create Client
+
 ```typescript
 import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
 const client = new PcoClient({
   auth: {
     type: 'personal_access_token',
-    personalAccessToken: 'your-token-here'
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
   }
 });
 ```
+
+**Note**: The `personalAccessToken` field should contain your **Client ID**. The **Client Secret** is read from the `PCO_PERSONAL_ACCESS_SECRET` environment variable.
 
 ### OAuth 2.0 (Required for multi-user apps)
 

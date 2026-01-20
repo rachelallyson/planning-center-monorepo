@@ -110,6 +110,22 @@ Three authentication methods with different lifecycles:
 - **Stable**: Never expires (unless revoked)
 - **Use Case**: Single-user applications, scripts
 - **No Refresh**: Direct authentication
+- **Setup**: Requires both Client ID and Client Secret
+
+**Configuration**:
+```typescript
+// Environment variables required:
+process.env.PCO_PERSONAL_ACCESS_TOKEN = 'your_client_id';
+process.env.PCO_PERSONAL_ACCESS_SECRET = 'your_client_secret';
+
+// Client configuration:
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  }
+});
+```
 
 #### OAuth 2.0
 
