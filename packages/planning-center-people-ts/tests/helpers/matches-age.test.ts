@@ -15,6 +15,11 @@ describe('helpers: age and file utilities', () => {
     expect(matchesAgeCriteria(undefined, { agePreference: 'any' })).toBe(true);
     expect(matchesAgeCriteria(undefined, {} as any)).toBe(true);
 
+    // Test lenient age preference behavior
+    expect(matchesAgeCriteria(undefined, { agePreference: 'adults', agePreferenceLenient: true })).toBe(true);
+    expect(matchesAgeCriteria(undefined, { agePreference: 'adults', agePreferenceLenient: false })).toBe(false);
+    expect(matchesAgeCriteria(undefined, { agePreference: 'adults' })).toBe(false); // default is strict
+
     expect(matchesAgeCriteria(adultBirth.toISOString(), { minAge: 20, maxAge: 40 })).toBe(true);
     expect(matchesAgeCriteria(adultBirth.toISOString(), { minAge: 40, maxAge: 50 })).toBe(false);
 

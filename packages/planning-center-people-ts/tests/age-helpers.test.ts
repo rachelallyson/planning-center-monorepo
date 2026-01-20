@@ -128,6 +128,10 @@ describe('Age Helper Functions', () => {
             expect(matchesAgeCriteria(undefined, { agePreference: 'any' })).toBe(true);
             expect(matchesAgeCriteria(undefined, { agePreference: 'adults' })).toBe(false);
             expect(matchesAgeCriteria(undefined, { agePreference: 'children' })).toBe(false);
+
+            // Test lenient mode - profiles without birthdates are included
+            expect(matchesAgeCriteria(undefined, { agePreference: 'adults', agePreferenceLenient: true })).toBe(true);
+            expect(matchesAgeCriteria(undefined, { agePreference: 'children', agePreferenceLenient: true })).toBe(true);
         });
 
         it('should combine multiple criteria', () => {

@@ -64,6 +64,7 @@ const adultPerson = await client.people.findOrCreate({
   lastName: 'Smith',
   email: 'jane@example.com',
   agePreference: 'adults',
+  agePreferenceLenient: true, // Include profiles without birthdates
   matchStrategy: 'fuzzy'
 });
 

@@ -189,7 +189,8 @@ export class MatchScorer {
             agePreference: options.agePreference,
             minAge: options.minAge,
             maxAge: options.maxAge,
-            birthYear: options.birthYear
+            birthYear: options.birthYear,
+            agePreferenceLenient: options.agePreferenceLenient
         });
 
         if (!matches) {

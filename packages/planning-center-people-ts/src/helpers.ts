@@ -134,12 +134,18 @@ export function matchesAgeCriteria(
         minAge?: number;
         maxAge?: number;
         birthYear?: number;
+        agePreferenceLenient?: boolean;
     }
 ): boolean {
     const age = calculateAgeSafe(birthdate);
 
-    // If no birthdate, only match if preference is 'any'
+    // If no birthdate, match based on lenient setting
     if (age === null) {
+        if (criteria.agePreferenceLenient) {
+            // Lenient mode: include profiles without birthdates regardless of agePreference
+            return true;
+        }
+        // Strict mode (default): only match if preference is 'any'
         return criteria.agePreference === 'any' || criteria.agePreference === undefined;
     }
 

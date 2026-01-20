@@ -451,7 +451,8 @@ export class PersonMatcher {
                 agePreference: options.agePreference,
                 minAge: options.minAge,
                 maxAge: options.maxAge,
-                birthYear: options.birthYear
+                birthYear: options.birthYear,
+                agePreferenceLenient: options.agePreferenceLenient
             });
         });
     }

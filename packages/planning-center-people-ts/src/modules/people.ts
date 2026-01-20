@@ -94,6 +94,12 @@ export interface PersonMatchOptions {
     addMissingContactInfo?: boolean;
     /** Age preference filter: 'adults' (18+), 'children' (<18), or 'any' */
     agePreference?: 'adults' | 'children' | 'any';
+    /**
+     * When true, age preference filters only apply to profiles with birthdates.
+     * Profiles without birthdates are included regardless of agePreference.
+     * When false (default), profiles without birthdates only match when agePreference is 'any'.
+     */
+    agePreferenceLenient?: boolean;
     /** Minimum age filter */
     minAge?: number;
     /** Maximum age filter */
