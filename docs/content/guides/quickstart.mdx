@@ -35,7 +35,9 @@ Choose your authentication method:
    - **Client ID** (long hex string)
    - **Client Secret** (even longer string)
 
-#### Step 2: Configure Environment Variables
+#### Step 2: Configure Authentication
+
+**Option A: Environment Variables (Recommended for production)**
 
 ```bash
 # Set these environment variables
@@ -43,11 +45,7 @@ export PCO_PERSONAL_ACCESS_TOKEN="your_client_id_here"
 export PCO_PERSONAL_ACCESS_SECRET="your_client_secret_here"
 ```
 
-#### Step 3: Create Client
-
 ```typescript
-import { PcoClient } from '@rachelallyson/planning-center-people-ts';
-
 const client = new PcoClient({
   auth: {
     type: 'personal_access_token',
@@ -56,7 +54,19 @@ const client = new PcoClient({
 });
 ```
 
-**Note**: The `personalAccessToken` field should contain your **Client ID**. The **Client Secret** is read from the `PCO_PERSONAL_ACCESS_SECRET` environment variable.
+**Option B: Direct Configuration (Convenient for development)**
+
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: 'your_client_id_here',
+    personalAccessTokenSecret: 'your_client_secret_here'
+  }
+});
+```
+
+**Note**: Both approaches use your **Client ID** and **Client Secret** from the Personal Access Token you created in Step 1.
 
 ### OAuth 2.0 (Required for multi-user apps)
 

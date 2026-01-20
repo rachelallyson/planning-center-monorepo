@@ -274,14 +274,24 @@ export class PcoHttpClient {
     private addAuthentication(headers: Record<string, string>): void {
         if (this.config.auth.type === 'personal_access_token') {
             // Personal Access Tokens use client_id:secret format with HTTP Basic Auth
-            const clientId = process.env.PCO_PERSONAL_ACCESS_TOKEN;
-            const clientSecret = process.env.PCO_PERSONAL_ACCESS_SECRET;
-            if (clientId && clientSecret) {
-                const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-                headers.Authorization = `Basic ${credentials}`;
-            } else {
-                throw new Error('PCO_PERSONAL_ACCESS_TOKEN and PCO_PERSONAL_ACCESS_SECRET environment variables are required for personal access token authentication');
+
+            // Get client ID from config (required)
+            const clientId = this.config.auth.personalAccessToken;
+
+            // Get client secret from config or environment (with config taking precedence)
+            const clientSecret = (this.config.auth as any).personalAccessTokenSecret ||
+                                process.env.PCO_PERSONAL_ACCESS_SECRET;
+
+            if (!clientId) {
+                throw new Error('personalAccessToken is required for personal access token authentication');
             }
+
+            if (!clientSecret) {
+                throw new Error('personalAccessTokenSecret (in config) or PCO_PERSONAL_ACCESS_SECRET environment variable is required for personal access token authentication');
+            }
+
+            const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+            headers.Authorization = `Basic ${credentials}`;
         } else if (this.config.auth.type === 'oauth') {
             headers.Authorization = `Bearer ${this.config.auth.accessToken}`;
         } else if (this.config.auth.type === 'basic') {

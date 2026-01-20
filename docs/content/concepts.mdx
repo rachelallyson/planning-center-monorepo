@@ -112,17 +112,30 @@ Three authentication methods with different lifecycles:
 - **No Refresh**: Direct authentication
 - **Setup**: Requires both Client ID and Client Secret
 
-**Configuration**:
+**Configuration Options**:
+
+**Option 1: Environment Variables (Recommended for production)**
 ```typescript
-// Environment variables required:
+// Set environment variables
 process.env.PCO_PERSONAL_ACCESS_TOKEN = 'your_client_id';
 process.env.PCO_PERSONAL_ACCESS_SECRET = 'your_client_secret';
 
-// Client configuration:
+// Client configuration
 const client = new PcoClient({
   auth: {
     type: 'personal_access_token',
     personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  }
+});
+```
+
+**Option 2: Direct Configuration (Convenient for development)**
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: 'your_client_id',
+    personalAccessTokenSecret: 'your_client_secret'
   }
 });
 ```

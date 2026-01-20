@@ -5,7 +5,10 @@
 /** Authentication configuration for Personal Access Token */
 export interface PersonalAccessTokenAuth {
     type: 'personal_access_token';
+    /** Client ID from Planning Center */
     personalAccessToken: string;
+    /** Client Secret from Planning Center (optional, can use PCO_PERSONAL_ACCESS_SECRET env var) */
+    personalAccessTokenSecret?: string;
 }
 
 /** Authentication configuration for OAuth 2.0 with required refresh handling */

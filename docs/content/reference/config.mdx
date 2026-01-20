@@ -26,18 +26,47 @@ interface PcoClientConfig {
 {
   type: 'personal_access_token';
   personalAccessToken: string;  // REQUIRED: Client ID
+  personalAccessTokenSecret?: string;  // Optional: Client Secret (or use env var)
 }
 ```
 
-**Environment Variables** (Required):
+**Environment Variables** (Alternative to config):
 - `PCO_PERSONAL_ACCESS_TOKEN`: Your Client ID
 - `PCO_PERSONAL_ACCESS_SECRET`: Your Client Secret
+
+**Configuration Options**:
+
+**Option 1: Environment Variables (Recommended for production)**
+```typescript
+// Set environment variables
+process.env.PCO_PERSONAL_ACCESS_TOKEN = 'your_client_id';
+process.env.PCO_PERSONAL_ACCESS_SECRET = 'your_client_secret';
+
+// Config only needs client ID
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  }
+});
+```
+
+**Option 2: Direct Config (Convenient for development)**
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: 'your_client_id',
+    personalAccessTokenSecret: 'your_client_secret'
+  }
+});
+```
 
 **Setup Steps**:
 1. Visit [Planning Center Developer Account](https://api.planningcenteronline.com/oauth/applications)
 2. Create a new Personal Access Token
 3. Copy both Client ID and Client Secret
-4. Set as environment variables or pass Client ID to `personalAccessToken`
+4. Configure using either environment variables or direct config
 
 **Use case**: Single-user applications, scripts, server-to-server
 
