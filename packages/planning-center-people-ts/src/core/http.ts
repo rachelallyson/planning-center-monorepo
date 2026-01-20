@@ -204,7 +204,7 @@ export class PcoHttpClient {
                     } catch (refreshError) {
                         console.warn('Token refresh failed:', refreshError);
                         // Call the onRefreshFailure callback
-                        await this.config.auth.onRefreshFailure(refreshError as Error);
+                        await (this.config.auth as any).onRefreshFailure?.(refreshError as Error);
                         throw refreshError;
                     }
                 }
@@ -250,9 +250,25 @@ export class PcoHttpClient {
 
     private addAuthentication(headers: Record<string, string>): void {
         if (this.config.auth.type === 'personal_access_token') {
-            // Personal Access Tokens use HTTP Basic Auth format: app_id:secret
-            // The personalAccessToken should be in the format "app_id:secret"
-            headers.Authorization = `Basic ${Buffer.from(this.config.auth.personalAccessToken).toString('base64')}`;
+            // Personal Access Tokens use client_id:secret format with HTTP Basic Auth
+
+            // Get client ID from config (required)
+            const clientId = this.config.auth.personalAccessToken;
+
+            // Get client secret from config or environment (with config taking precedence)
+            const clientSecret = this.config.auth.personalAccessTokenSecret ||
+                                process.env.PCO_PERSONAL_ACCESS_SECRET;
+
+            if (!clientId) {
+                throw new Error('personalAccessToken is required for personal access token authentication');
+            }
+
+            if (!clientSecret) {
+                throw new Error('personalAccessTokenSecret (in config) or PCO_PERSONAL_ACCESS_SECRET environment variable is required for personal access token authentication');
+            }
+
+            const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+            headers.Authorization = `Basic ${credentials}`;
         } else if (this.config.auth.type === 'oauth') {
             headers.Authorization = `Bearer ${this.config.auth.accessToken}`;
         } else if (this.config.auth.type === 'basic') {
@@ -304,12 +320,12 @@ export class PcoHttpClient {
         // Prepare the request body for token refresh
         const body = new URLSearchParams({
             grant_type: 'refresh_token',
-            refresh_token: this.config.auth.refreshToken,
+            refresh_token: (this.config.auth as any).refreshToken || '',
         });
 
         // Add client credentials if available from the config or environment
-        const clientId = this.config.auth.clientId || process.env.PCO_APP_ID;
-        const clientSecret = this.config.auth.clientSecret || process.env.PCO_APP_SECRET;
+        const clientId = (this.config.auth as any).appId || process.env.PCO_APP_ID;
+        const clientSecret = (this.config.auth as any).appSecret || process.env.PCO_APP_SECRET;
         
         if (clientId && clientSecret) {
             body.append('client_id', clientId);
@@ -333,13 +349,13 @@ export class PcoHttpClient {
         const tokens = await response.json();
 
         // Update the config with new tokens
-        this.config.auth.accessToken = tokens.access_token;
-        this.config.auth.refreshToken = tokens.refresh_token || this.config.auth.refreshToken;
+        (this.config.auth as any).accessToken = tokens.access_token;
+        (this.config.auth as any).refreshToken = tokens.refresh_token || (this.config.auth as any).refreshToken;
 
-        // Call the onRefresh callback with the expected format
-        await this.config.auth.onRefresh({
+        // Call the onRefresh callback
+        await (this.config.auth as any).onRefresh?.({
             accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token || this.config.auth.refreshToken,
+            refreshToken: tokens.refresh_token || (this.config.auth as any).refreshToken
         });
     }
 
@@ -370,11 +386,60 @@ export class PcoHttpClient {
      * Get authentication header for external services (like file uploads)
      */
     getAuthHeader(): string {
+        // The base package's PcoHttpClient handles authentication, so this method should delegate
+        // But for backward compatibility, we'll implement it
         if (this.config.auth.type === 'personal_access_token') {
-            return `Basic ${Buffer.from(this.config.auth.personalAccessToken).toString('base64')}`;
+            const clientSecret = this.config.auth.personalAccessTokenSecret || process.env.PCO_PERSONAL_ACCESS_SECRET;
+            return `Basic ${Buffer.from(`${this.config.auth.personalAccessToken}:${clientSecret}`).toString('base64')}`;
         } else if (this.config.auth.type === 'oauth') {
             return `Bearer ${this.config.auth.accessToken}`;
+        } else if (this.config.auth.type === 'basic') {
+            return `Basic ${Buffer.from(`${(this.config.auth as any).appId}:${(this.config.auth as any).appSecret}`).toString('base64')}`;
         }
         return '';
+    }
+
+    /**
+     * Make HTTPS request using Node.js HTTPS module (fallback when fetch is unavailable)
+     */
+    private async makeHttpsRequest(url: string, options: RequestInit): Promise<any> {
+        const https = require('https');
+        const urlObj = new URL(url);
+
+        const requestOptions = {
+            hostname: urlObj.hostname,
+            port: urlObj.port || 443,
+            path: urlObj.pathname + urlObj.search,
+            method: options.method || 'GET',
+            headers: options.headers as Record<string, string>,
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(requestOptions, (res: any) => {
+                let data = '';
+                res.on('data', (chunk: any) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    // Create a response-like object
+                    const response = {
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                        status: res.statusCode,
+                        statusText: res.statusMessage,
+                        headers: res.headers,
+                        text: () => Promise.resolve(data),
+                        json: () => Promise.resolve(JSON.parse(data)),
+                    };
+                    resolve(response);
+                });
+            });
+
+            req.on('error', reject);
+
+            if (options.body) {
+                req.write(options.body);
+            }
+            req.end();
+        });
     }
 }

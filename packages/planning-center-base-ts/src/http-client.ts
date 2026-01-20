@@ -279,7 +279,7 @@ export class PcoHttpClient {
             const clientId = this.config.auth.personalAccessToken;
 
             // Get client secret from config or environment (with config taking precedence)
-            const clientSecret = (this.config.auth as any).personalAccessTokenSecret ||
+            const clientSecret = this.config.auth.personalAccessTokenSecret ||
                                 process.env.PCO_PERSONAL_ACCESS_SECRET;
 
             if (!clientId) {

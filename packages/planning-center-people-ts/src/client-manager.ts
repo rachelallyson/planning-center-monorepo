@@ -194,6 +194,13 @@ export class PcoClientManager {
             return oldConfig.auth.personalAccessToken !== newConfig.auth.personalAccessToken;
         }
 
+        if (oldConfig.auth.type === 'basic' && newConfig.auth.type === 'basic') {
+            return (
+                oldConfig.auth.appId !== newConfig.auth.appId ||
+                oldConfig.auth.appSecret !== newConfig.auth.appSecret
+            );
+        }
+
         return (
             oldConfig.baseURL !== newConfig.baseURL ||
             oldConfig.timeout !== newConfig.timeout

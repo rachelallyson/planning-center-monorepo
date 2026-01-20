@@ -4,11 +4,11 @@
 
 import type { PcoClientConfig } from './types/client';
 import type { EventEmitter, PcoEvent, EventHandler, EventType } from '@rachelallyson/planning-center-base-ts';
-import { 
-    PcoEventEmitter, 
-    PcoHttpClient, 
-    PaginationHelper, 
-    BatchExecutor 
+import {
+    PcoEventEmitter,
+    PcoHttpClient,
+    PaginationHelper,
+    BatchExecutor
 } from '@rachelallyson/planning-center-base-ts';
 import { PeopleModule } from './modules/people';
 import { FieldsModule } from './modules/fields';
@@ -62,7 +62,6 @@ export class PcoClient implements EventEmitter {
         this.batch = new BatchExecutor(this, this.eventEmitter);
 
         // Set up event handlers from config
-        this.setupEventHandlers();
     }
 
     // EventEmitter implementation
@@ -133,28 +132,6 @@ export class PcoClient implements EventEmitter {
         return this.eventEmitter.eventTypes();
     }
 
-    private setupEventHandlers(): void {
-        // Set up config event handlers
-        if (this.config.events?.onError) {
-            this.on('error', this.config.events.onError as any);
-        }
-
-        if (this.config.events?.onAuthFailure) {
-            this.on('auth:failure', this.config.events.onAuthFailure as any);
-        }
-
-        if (this.config.events?.onRequestStart) {
-            this.on('request:start', this.config.events.onRequestStart as any);
-        }
-
-        if (this.config.events?.onRequestComplete) {
-            this.on('request:complete', this.config.events.onRequestComplete as any);
-        }
-
-        if (this.config.events?.onRateLimit) {
-            this.on('rate:limit', this.config.events.onRateLimit as any);
-        }
-    }
 
     private updateModules(): void {
         // Recreate modules with new HTTP client

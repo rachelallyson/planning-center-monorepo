@@ -4,6 +4,7 @@
  * Re-exports from base package for convenience
  */
 
+// Use base package's configuration for consistency
 export type {
     PcoClientConfig,
     PcoAuthConfig,

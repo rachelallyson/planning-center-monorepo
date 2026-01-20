@@ -16,8 +16,10 @@ import { attemptTokenRefresh, hasRefreshTokenCapability, type TokenRefreshCallba
 
 // ===== PCO Client Configuration =====
 export interface PcoClientConfig {
-  /** Personal Access Token (for single-user apps) */
+  /** Personal Access Token Client ID (for single-user apps) */
   personalAccessToken?: string;
+  /** Personal Access Token Client Secret (alternative to PCO_PERSONAL_ACCESS_SECRET env var) */
+  personalAccessTokenSecret?: string;
   /** OAuth 2.0 Access Token (for multi-user apps) */
   accessToken?: string;
   /** OAuth 2.0 Refresh Token (for multi-user apps) */

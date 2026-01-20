@@ -35,7 +35,15 @@ jest.mock('@rachelallyson/planning-center-base-ts', () => ({
 
 // Mock the auth module
 jest.mock('../../src/auth', () => ({
-  attemptTokenRefresh: jest.fn(),
+  attemptTokenRefresh: jest.fn().mockImplementation(async (config) => {
+    // Simulate successful token refresh
+    config.auth.accessToken = 'new-access-token';
+    config.auth.refreshToken = 'new-refresh-token';
+    await config.auth.onRefresh?.({
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token'
+    });
+  }),
   hasRefreshTokenCapability: jest.fn().mockReturnValue(true),
 }));
 
@@ -127,7 +135,13 @@ describe('PcoHttpClient', () => {
     } as any;
     
     config = {
-      auth: { type: 'oauth', accessToken: 'test-token' },
+      auth: {
+        type: 'oauth',
+        accessToken: 'test-token',
+        refreshToken: 'test-refresh-token',
+        onRefresh: jest.fn(),
+        onRefreshFailure: jest.fn(),
+      } as OAuthAuth,
       baseURL: 'https://api.planningcenteronline.com/people/v2',
     };
     
@@ -448,7 +462,13 @@ describe('PcoHttpClient', () => {
   describe('authentication', () => {
     it('should use Bearer token for OAuth', async () => {
       const oauthConfig: PcoClientConfig = {
-        auth: { type: 'oauth', accessToken: 'oauth-token' },
+        auth: {
+          type: 'oauth',
+          accessToken: 'oauth-token',
+          refreshToken: 'refresh-token',
+          onRefresh: jest.fn(),
+          onRefreshFailure: jest.fn(),
+        } as OAuthAuth,
         baseURL: 'https://api.planningcenteronline.com/people/v2',
       };
       
@@ -472,7 +492,11 @@ describe('PcoHttpClient', () => {
 
     it('should use Basic auth for personal access token', async () => {
       const patConfig: PcoClientConfig = {
-        auth: { type: 'personal_access_token', personalAccessToken: 'app-id:app-secret' },
+        auth: {
+          type: 'personal_access_token',
+          personalAccessToken: 'app-id',
+          personalAccessTokenSecret: 'app-secret'
+        } as PersonalAccessTokenAuth,
         baseURL: 'https://api.planningcenteronline.com/people/v2',
       };
       
@@ -576,10 +600,14 @@ describe('PcoHttpClient', () => {
 
     it('should return Basic auth header for PAT', () => {
       const patConfig: PcoClientConfig = {
-        auth: { type: 'personal_access_token', personalAccessToken: 'app-id:app-secret' },
+        auth: {
+          type: 'personal_access_token',
+          personalAccessToken: 'app-id',
+          personalAccessTokenSecret: 'app-secret'
+        } as PersonalAccessTokenAuth,
         baseURL: 'https://api.planningcenteronline.com/people/v2',
       };
-      
+
       const patClient = new PcoHttpClient(patConfig, mockEventEmitter);
       const authHeader = patClient.getAuthHeader();
       const expectedAuth = `Basic ${Buffer.from('app-id:app-secret').toString('base64')}`;
