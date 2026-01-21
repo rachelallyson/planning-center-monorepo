@@ -50,6 +50,85 @@ if (person.match?.found) {
 
 ---
 
+### Find or Create with Multi-Step Search
+
+```typescript
+// Multi-step search tries multiple strategies in order until a match is found
+// This maximizes matching success and prevents duplicate creation
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step', // Tries: fuzzy+age → fuzzy → exact+age → exact
+  agePreference: 'adults',
+  createIfNotFound: true
+});
+
+console.log(`Person ID: ${person.id}`);
+```
+
+**Result**: `PersonResource` found using the first successful strategy
+
+---
+
+### Find or Create with Name Fallback
+
+```typescript
+// Falls back to name search when email/phone search fails
+// Validates contact info to prevent wrong-person matches
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  fallbackToNameSearch: true,
+  contactValidation: 'domain' // 'strict' | 'domain' | 'similarity'
+});
+```
+
+**Result**: `PersonResource` with contact validation preventing wrong matches
+
+---
+
+### Find or Create with Phase-Specific Retries
+
+```typescript
+// Different retry configs for different search phases
+// Prevents duplicates when PCO hasn't indexed contacts yet
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step',
+  retryConfigs: {
+    initial: { maxRetries: 3, maxWaitTime: 30000 },    // Quick search
+    aggressive: { maxRetries: 6, maxWaitTime: 60000 }  // Final search before create
+  },
+  createIfNotFound: true
+});
+```
+
+**Result**: `PersonResource` with aggressive duplicate prevention
+
+---
+
+### Verify Person Exists
+
+```typescript
+// Check if a cached person ID is still valid (handles merges/deletions)
+const exists = await client.people.verifyPersonExists('person-123', {
+  timeout: 30000
+});
+
+if (!exists) {
+  console.log('Person was merged or deleted - need to search again');
+  const person = await client.people.findOrCreate({...});
+}
+```
+
+**Result**: `boolean` - true if person exists, false if not found (404)
+
+---
+
 ### Get Person with Relationships
 
 ```typescript
@@ -501,6 +580,106 @@ async function importPeopleFromCSV(filePath: string) {
 ```
 
 **Result**: CSV imported with summary of created/found/errors
+
+---
+
+## Contact Validation Utilities
+
+### Check Email Domain Match
+
+```typescript
+import { emailDomainsMatch } from '@rachelallyson/planning-center-people-ts';
+
+// Handles aliases (gmail/googlemail) and similar prefixes
+emailDomainsMatch('user@gmail.com', 'other@googlemail.com'); // true
+emailDomainsMatch('user@gmail.com', 'other@gmaill.com'); // true (typo)
+emailDomainsMatch('user@gmail.com', 'other@yahoo.com'); // false
+```
+
+**Result**: `boolean` - true if domains match or are similar
+
+---
+
+### Check Phone Number Similarity
+
+```typescript
+import { phoneNumbersSimilar } from '@rachelallyson/planning-center-people-ts';
+
+// Handles format variations and country codes
+phoneNumbersSimilar('+15551234567', '555-123-4567'); // true
+phoneNumbersSimilar('15551234567', '5551234567'); // true
+phoneNumbersSimilar('+15551234567', '+15559876543'); // false
+```
+
+**Result**: `boolean` - true if phone numbers are similar
+
+---
+
+### Validate Contact Similarity
+
+```typescript
+import { validateContactSimilarity } from '@rachelallyson/planning-center-people-ts';
+
+// Validate contact info for name-based search matches
+const validation = validateContactSimilarity(
+  'jane@example.com',           // Search email
+  '+15551234567',               // Search phone
+  ['john@example.com'],         // Person's emails
+  ['+15551234567']              // Person's phones
+);
+
+console.log(validation);
+// { emailMatch: true, phoneMatch: true, isValid: true }
+```
+
+**Result**: Object with `emailMatch`, `phoneMatch`, and `isValid` booleans
+
+---
+
+## Trust-Based Caching
+
+### Calculate Trust for Cached Person ID
+
+```typescript
+import { calculateTrust, DEFAULT_TRUST_WINDOW } from '@rachelallyson/planning-center-people-ts';
+
+// Check if cached personId can be trusted without re-verification
+const trust = calculateTrust(personIdCreatedAt);
+
+if (trust.shouldTrust) {
+  // Use cached personId without API call
+  console.log(`Trusting fresh personId: ${trust.reason}`);
+  return cachedPersonId;
+} else {
+  // Verify personId still exists (handles merges/deletions)
+  console.log(`Verifying old personId: ${trust.reason}`);
+  const exists = await client.people.verifyPersonExists(cachedPersonId);
+  if (!exists) {
+    // Person was merged or deleted, search again
+    const person = await client.people.findOrCreate({...});
+  }
+}
+```
+
+**Result**: `TrustResult` with `shouldTrust`, `age`, and `reason`
+
+---
+
+### Custom Trust Window
+
+```typescript
+import { calculateTrust } from '@rachelallyson/planning-center-people-ts';
+
+// Use custom trust window (e.g., 30 minutes instead of default 1 hour)
+const shortWindow = 30 * 60 * 1000; // 30 minutes
+const trust = calculateTrust(personIdCreatedAt, shortWindow);
+
+if (trust.shouldTrust) {
+  return cachedPersonId;
+}
+```
+
+**Result**: Trust calculation with custom window
 
 ---
 

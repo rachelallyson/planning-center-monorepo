@@ -4,10 +4,23 @@
 
 import type { PeopleModule } from '../modules/people';
 import type { PersonResource } from '../types';
-import { PersonMatchOptions } from '../modules/people';
+import { 
+    PersonMatchOptions, 
+    RetryConfig,
+    DEFAULT_INITIAL_RETRY_CONFIG,
+    DEFAULT_AGGRESSIVE_RETRY_CONFIG 
+} from '../modules/people';
 import { MatchStrategies } from './strategies';
 import { MatchScorer } from './scoring';
-import { matchesAgeCriteria, normalizeEmail, normalizePhone, isValidEmail } from '../helpers';
+import { 
+    matchesAgeCriteria, 
+    normalizeEmail, 
+    normalizePhone, 
+    isValidEmail,
+    validateContactSimilarity,
+    emailDomainsMatch,
+    phoneNumbersSimilar 
+} from '../helpers';
 
 export interface MatchResult {
     person: PersonResource;
@@ -26,6 +39,25 @@ export class PersonMatcher {
     }
 
     /**
+     * Resolve retry configuration from options, with defaults
+     */
+    private resolveRetryConfig(
+        explicitConfig?: RetryConfig,
+        phaseConfig?: RetryConfig,
+        defaults: Required<Omit<RetryConfig, 'enabled'>> = DEFAULT_INITIAL_RETRY_CONFIG
+    ): Required<Omit<RetryConfig, 'enabled'>> {
+        // Phase config takes precedence over explicit config
+        const config = phaseConfig || explicitConfig;
+        
+        return {
+            maxRetries: config?.maxRetries ?? defaults.maxRetries,
+            maxWaitTime: config?.maxWaitTime ?? defaults.maxWaitTime,
+            initialDelay: config?.initialDelay ?? defaults.initialDelay,
+            backoffMultiplier: config?.backoffMultiplier ?? defaults.backoffMultiplier,
+        };
+    }
+
+    /**
      * Find or create a person with smart matching
      * 
      * Uses intelligent matching logic that:
@@ -33,13 +65,22 @@ export class PersonMatcher {
      * - Only uses name matching when appropriate (multiple people share contact info, or no contact info provided)
      * - Can automatically add missing contact information when a match is found (if addMissingContactInfo is true)
      * - Retries with exponential backoff when contacts may not be verified yet (PCO takes 30-90+ seconds)
+     * - Supports multi-step search strategy for maximum matching success
      * 
      * @param options - Matching options
      * @param options.addMissingContactInfo - If true, automatically adds missing email/phone to matched person's profile
      * @param options.retryConfig - Configuration for retry logic to handle PCO contact verification delays
+     * @param options.searchStrategy - 'single' for standard search, 'multi-step' for trying multiple strategies
      */
     async findOrCreate(options: PersonMatchOptions): Promise<PersonResource> {
-        const { createIfNotFound = true, matchStrategy = 'fuzzy', addMissingContactInfo = false, retryConfig, ...searchOptions } = options;
+        const { 
+            createIfNotFound = true, 
+            matchStrategy = 'fuzzy', 
+            searchStrategy = 'single',
+            addMissingContactInfo = false, 
+            retryConfig, 
+            ...searchOptions 
+        } = options;
 
         // Determine if retry logic should be enabled
         // Retry is useful when:
@@ -55,8 +96,14 @@ export class PersonMatcher {
             return this.findOrCreateWithRetry(options);
         }
 
-        // Try to find existing person
-        const match = await this.findMatch({ ...searchOptions, matchStrategy });
+        // Try to find existing person using appropriate search strategy
+        let match: MatchResult | null = null;
+        
+        if (searchStrategy === 'multi-step') {
+            match = await this.findMatchMultiStep(options);
+        } else {
+            match = await this.findMatch({ ...searchOptions, matchStrategy });
+        }
 
         if (match) {
             const person = match.person;
@@ -71,6 +118,19 @@ export class PersonMatcher {
 
         // Create new person if not found and creation is enabled
         if (createIfNotFound) {
+            // If aggressive retry config is provided, do a final aggressive search before creating
+            // This is a safeguard to prevent duplicates when PCO hasn't indexed contacts yet
+            if (options.retryConfigs?.aggressive) {
+                const aggressiveMatch = await this.findWithAggressiveRetry(options);
+                if (aggressiveMatch) {
+                    const person = aggressiveMatch.person;
+                    if (addMissingContactInfo) {
+                        await this.addMissingContactInfo(person, options);
+                    }
+                    return person;
+                }
+            }
+            
             return this.createPerson(options);
         }
 
@@ -78,27 +138,186 @@ export class PersonMatcher {
     }
 
     /**
+     * Final aggressive search before creating a new person
+     * 
+     * This is a safeguard to prevent duplicate person creation when:
+     * - PCO hasn't indexed contacts yet (15-30 minute delay)
+     * - Multiple workers are processing the same person
+     * - The fast path didn't find an existing person
+     */
+    private async findWithAggressiveRetry(options: PersonMatchOptions): Promise<MatchResult | null> {
+        const { 
+            matchStrategy = 'fuzzy', 
+            searchStrategy = 'single',
+            retryConfigs 
+        } = options;
+        
+        const aggressiveConfig = this.resolveRetryConfig(
+            undefined, 
+            retryConfigs?.aggressive,
+            DEFAULT_AGGRESSIVE_RETRY_CONFIG
+        );
+        
+        console.log(`[PERSON_MATCH] Starting aggressive final search before create`, {
+            maxWaitTime: aggressiveConfig.maxWaitTime,
+            maxRetries: aggressiveConfig.maxRetries,
+        });
+        
+        let totalWaitTime = 0;
+        
+        for (let attempt = 1; attempt <= aggressiveConfig.maxRetries; attempt++) {
+            try {
+                let match: MatchResult | null = null;
+                
+                if (searchStrategy === 'multi-step') {
+                    match = await this.findMatchMultiStep(options);
+                } else {
+                    match = await this.findMatch({ ...options, matchStrategy });
+                }
+                
+                if (match) {
+                    console.log(`[PERSON_MATCH] Aggressive search found person (would have created duplicate)`, {
+                        personId: match.person.id,
+                        attempt,
+                        totalWaitTime,
+                    });
+                    return match;
+                }
+            } catch (error) {
+                console.warn(`[PERSON_MATCH] Aggressive search attempt ${attempt} failed:`, error);
+            }
+            
+            // Don't wait on the last attempt
+            if (attempt === aggressiveConfig.maxRetries) {
+                break;
+            }
+            
+            // Calculate delay with exponential backoff
+            const delay = Math.min(
+                aggressiveConfig.initialDelay * Math.pow(aggressiveConfig.backoffMultiplier, attempt - 1),
+                aggressiveConfig.maxWaitTime - totalWaitTime
+            );
+            
+            if (totalWaitTime + delay > aggressiveConfig.maxWaitTime) {
+                break;
+            }
+            
+            totalWaitTime += delay;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        console.log(`[PERSON_MATCH] Aggressive search completed - no match found, safe to create`, {
+            totalWaitTime,
+            maxRetries: aggressiveConfig.maxRetries,
+        });
+        
+        return null;
+    }
+
+    /**
+     * Multi-step search strategy configuration
+     */
+    private static readonly MULTI_STEP_STRATEGIES: Array<{
+        matchStrategy: 'fuzzy' | 'exact' | 'aggressive';
+        useAgePreference: boolean;
+        description: string;
+    }> = [
+        { matchStrategy: 'fuzzy', useAgePreference: true, description: 'fuzzy with age preference' },
+        { matchStrategy: 'fuzzy', useAgePreference: false, description: 'fuzzy without age preference' },
+        { matchStrategy: 'exact', useAgePreference: true, description: 'exact with age preference' },
+        { matchStrategy: 'exact', useAgePreference: false, description: 'exact without age preference' },
+    ];
+
+    /**
+     * Find a match using multi-step search strategy
+     * 
+     * Tries multiple matching strategies in order until a match is found:
+     * 1. Fuzzy with age preference (handles name variations, prefers adults)
+     * 2. Fuzzy without age preference (catches single matches filtered by age)
+     * 3. Exact with age preference (high confidence, prefers adults)
+     * 4. Exact without age preference (high confidence, any age)
+     * 
+     * This approach maximizes matching success while maintaining quality.
+     */
+    async findMatchMultiStep(options: PersonMatchOptions): Promise<MatchResult | null> {
+        const { agePreference, agePreferenceLenient, ...baseOptions } = options;
+        
+        for (const strategy of PersonMatcher.MULTI_STEP_STRATEGIES) {
+            try {
+                const searchOptions: PersonMatchOptions = {
+                    ...baseOptions,
+                    matchStrategy: strategy.matchStrategy,
+                };
+                
+                // Apply age preference only when specified by strategy
+                if (strategy.useAgePreference && agePreference) {
+                    searchOptions.agePreference = agePreference;
+                    // Use lenient mode when specified, so profiles without birthdates are included
+                    searchOptions.agePreferenceLenient = agePreferenceLenient ?? true;
+                }
+                
+                const match = await this.findMatch(searchOptions);
+                
+                if (match) {
+                    console.log(`[PERSON_MATCH] Multi-step search found match using ${strategy.description}`, {
+                        personId: match.person.id,
+                        score: match.score,
+                        reason: match.reason,
+                    });
+                    return match;
+                }
+            } catch (error) {
+                // Log but continue to next strategy
+                console.warn(`[PERSON_MATCH] Multi-step strategy "${strategy.description}" failed:`, error);
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Find or create with retry logic to handle PCO contact verification delays
      * 
      * PCO takes 30-90+ seconds to verify/index contacts after a person is created.
      * This method retries with exponential backoff to give PCO time to process contacts.
+     * 
+     * Supports phase-specific retry configurations via retryConfigs:
+     * - initial: Quick search (default 30s)
+     * - aggressive: Final search before create (default 60s)
      */
     private async findOrCreateWithRetry(options: PersonMatchOptions): Promise<PersonResource> {
-        const { createIfNotFound = false, matchStrategy = 'fuzzy', addMissingContactInfo = false, retryConfig, ...searchOptions } = options;
+        const { 
+            createIfNotFound = false, 
+            matchStrategy = 'fuzzy', 
+            searchStrategy = 'single',
+            addMissingContactInfo = false, 
+            retryConfig,
+            retryConfigs,
+            ...searchOptions 
+        } = options;
         
-        // Default retry configuration
-        const maxRetries = retryConfig?.maxRetries ?? 5;
-        const maxWaitTime = retryConfig?.maxWaitTime ?? 120000; // 120 seconds
-        const initialDelay = retryConfig?.initialDelay ?? 10000; // 10 seconds
-        const backoffMultiplier = retryConfig?.backoffMultiplier ?? 1.5;
+        // Determine which retry configuration to use
+        // Priority: retryConfigs.initial > retryConfig > defaults
+        const effectiveRetryConfig = this.resolveRetryConfig(retryConfig, retryConfigs?.initial);
+        
+        const maxRetries = effectiveRetryConfig.maxRetries;
+        const maxWaitTime = effectiveRetryConfig.maxWaitTime;
+        const initialDelay = effectiveRetryConfig.initialDelay;
+        const backoffMultiplier = effectiveRetryConfig.backoffMultiplier;
 
         let totalWaitTime = 0;
         let lastError: Error | null = null;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // Try to find existing person
-                const match = await this.findMatch({ ...searchOptions, matchStrategy });
+                // Try to find existing person using appropriate search strategy
+                let match: MatchResult | null = null;
+                
+                if (searchStrategy === 'multi-step') {
+                    match = await this.findMatchMultiStep(options);
+                } else {
+                    match = await this.findMatch({ ...searchOptions, matchStrategy });
+                }
 
                 if (match) {
                     const person = match.person;
@@ -113,7 +332,8 @@ export class PersonMatcher {
                         console.log(`[PERSON_MATCH] Found person after ${attempt} attempts (waited ${totalWaitTime}ms)`, {
                             personId: person.id,
                             attempt,
-                            totalWaitTime
+                            totalWaitTime,
+                            searchStrategy,
                         });
                     }
                     
@@ -172,7 +392,15 @@ export class PersonMatcher {
      * Find the best match for a person
      */
     async findMatch(options: PersonMatchOptions): Promise<MatchResult | null> {
-        const { matchStrategy = 'fuzzy', email, phone, firstName, lastName } = options;
+        const { 
+            matchStrategy = 'fuzzy', 
+            email, 
+            phone, 
+            firstName, 
+            lastName,
+            fallbackToNameSearch = false,
+            contactValidation = 'similarity'
+        } = options;
 
         // Step 1: Try email/phone search first
         const emailPhoneMatches: PersonResource[] = [];
@@ -291,12 +519,169 @@ export class PersonMatcher {
             const exactMatches = scoredCandidates.filter(
                 c => c.isVerifiedContactMatch && c.score >= 0.8
             );
-            return exactMatches.length > 0 ? exactMatches[0] : null;
+            if (exactMatches.length > 0) {
+                return exactMatches[0];
+            }
+            // Continue to fallback if enabled
+        } else {
+            // Apply strategy-specific filtering
+            const bestMatch = this.strategies.selectBestMatch(scoredCandidates, matchStrategy);
+            if (bestMatch) {
+                return bestMatch;
+            }
+            // Continue to fallback if enabled
         }
 
-        // Apply strategy-specific filtering
-        const bestMatch = this.strategies.selectBestMatch(scoredCandidates, matchStrategy);
-        return bestMatch;
+        // Step 5: Fallback to name-based search with contact validation
+        // Only used when email/phone search fails to find a match
+        if (fallbackToNameSearch && firstName && lastName && (email || phone)) {
+            const nameSearchMatch = await this.findMatchByNameWithContactValidation(
+                firstName,
+                lastName,
+                email,
+                phone,
+                contactValidation,
+                options
+            );
+            if (nameSearchMatch) {
+                return nameSearchMatch;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Find a match by name with contact validation
+     * 
+     * This is a fallback when email/phone search fails. It searches by name
+     * but validates that the person's contact info is similar to prevent
+     * wrong-person matches (e.g., two people named "John Smith").
+     */
+    private async findMatchByNameWithContactValidation(
+        firstName: string,
+        lastName: string,
+        searchEmail: string | undefined,
+        searchPhone: string | undefined,
+        validationStrategy: 'strict' | 'domain' | 'similarity',
+        options: PersonMatchOptions
+    ): Promise<MatchResult | null> {
+        try {
+            console.log(`[PERSON_MATCH] Attempting name-based search fallback for ${firstName} ${lastName}`);
+            
+            const nameResults = await this.peopleModule.search({
+                name: `${firstName} ${lastName}`
+            });
+            
+            if (nameResults.data.length === 0) {
+                return null;
+            }
+            
+            // Validate each candidate's contact info
+            for (const candidate of nameResults.data) {
+                const isValid = await this.validateCandidateContact(
+                    candidate,
+                    searchEmail,
+                    searchPhone,
+                    validationStrategy
+                );
+                
+                if (isValid) {
+                    const score = await this.scorer.scoreMatch(candidate, options);
+                    const reason = await this.scorer.getMatchReason(candidate, options);
+                    
+                    console.log(`[PERSON_MATCH] Name-based search found validated match`, {
+                        personId: candidate.id,
+                        validationStrategy,
+                        score,
+                    });
+                    
+                    return {
+                        person: candidate,
+                        score,
+                        reason: `name match with ${validationStrategy} contact validation, ${reason}`,
+                        isVerifiedContactMatch: false, // Not a direct contact match
+                    };
+                }
+            }
+            
+            console.log(`[PERSON_MATCH] Name-based search found candidates but none passed contact validation`, {
+                candidateCount: nameResults.data.length,
+                validationStrategy,
+            });
+            
+            return null;
+        } catch (error) {
+            console.warn('[PERSON_MATCH] Name-based search fallback failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Validate a candidate's contact info based on the validation strategy
+     */
+    private async validateCandidateContact(
+        candidate: PersonResource,
+        searchEmail: string | undefined,
+        searchPhone: string | undefined,
+        validationStrategy: 'strict' | 'domain' | 'similarity'
+    ): Promise<boolean> {
+        try {
+            // Get person's contact info
+            const [personEmails, personPhones] = await Promise.all([
+                this.peopleModule.getEmails(candidate.id).then(r => 
+                    r.data?.map(e => e.attributes?.address || '').filter(Boolean) || []
+                ).catch(() => []),
+                this.peopleModule.getPhoneNumbers(candidate.id).then(r => 
+                    r.data?.map(p => p.attributes?.number || '').filter(Boolean) || []
+                ).catch(() => []),
+            ]);
+            
+            switch (validationStrategy) {
+                case 'strict':
+                    // Require exact match
+                    if (searchEmail) {
+                        const normalizedSearch = normalizeEmail(searchEmail);
+                        if (personEmails.some(e => normalizeEmail(e) === normalizedSearch)) {
+                            return true;
+                        }
+                    }
+                    if (searchPhone) {
+                        const normalizedSearch = normalizePhone(searchPhone);
+                        if (personPhones.some(p => normalizePhone(p) === normalizedSearch)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                    
+                case 'domain':
+                    // Require domain match for email or exact match for phone
+                    if (searchEmail && personEmails.some(e => emailDomainsMatch(searchEmail, e))) {
+                        return true;
+                    }
+                    if (searchPhone) {
+                        const normalizedSearch = normalizePhone(searchPhone);
+                        if (personPhones.some(p => normalizePhone(p) === normalizedSearch)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                    
+                case 'similarity':
+                default:
+                    // Use domain matching for email and similarity for phone
+                    const validation = validateContactSimilarity(
+                        searchEmail,
+                        searchPhone,
+                        personEmails,
+                        personPhones
+                    );
+                    return validation.isValid;
+            }
+        } catch (error) {
+            console.warn(`[PERSON_MATCH] Contact validation failed for person ${candidate.id}:`, error);
+            return false;
+        }
     }
 
     /**

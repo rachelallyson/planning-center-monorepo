@@ -209,9 +209,13 @@ export {
 export {
   buildQueryParams,
   calculateAge,
+  calculateTrust,
   createPersonWithContact,
   createWorkflowCardWithNote,
+  DEFAULT_TRUST_WINDOW,
+  emailDomainsMatch,
   exportAllPeopleData,
+  extractEmailDomain,
   extractFileUrl,
   formatDate,
   formatPersonName,
@@ -229,10 +233,20 @@ export {
   isValidPhone,
   normalizeEmail,
   normalizePhone,
+  phoneNumbersSimilar,
   processFileValue,
   searchPeople,
+  validateContactSimilarity,
   validatePersonData,
 } from './helpers';
+export type { TrustResult } from './helpers';
+
+// ===== Matching Configuration =====
+export {
+  DEFAULT_INITIAL_RETRY_CONFIG,
+  DEFAULT_AGGRESSIVE_RETRY_CONFIG,
+} from './modules/people';
+export type { RetryConfig, PersonMatchOptions } from './modules/people';
 
 // ===== Performance Optimization =====
 export {

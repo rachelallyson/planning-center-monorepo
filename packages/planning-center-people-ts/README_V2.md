@@ -101,6 +101,84 @@ const person = await client.people.findOrCreate({
   phone: '+1987654321',
   addMissingContactInfo: true  // Adds phone if person only has email, or email if person only has phone
 });
+
+// Multi-step search strategy - tries multiple matching approaches
+// This maximizes matching success by trying different strategies in order
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step', // Tries: fuzzy+age, fuzzy, exact+age, exact
+  agePreference: 'adults',
+  createIfNotFound: true
+});
+
+// Name-based search fallback with contact validation
+// When email/phone search fails, falls back to name search but validates contact info
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  fallbackToNameSearch: true,
+  contactValidation: 'domain'  // 'strict' | 'domain' | 'similarity'
+});
+
+// Phase-specific retry configurations for advanced control
+const person = await client.people.findOrCreate({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step',
+  retryConfigs: {
+    initial: { maxRetries: 3, maxWaitTime: 30000 },    // Quick search
+    aggressive: { maxRetries: 6, maxWaitTime: 60000 }  // Final search before create
+  },
+  createIfNotFound: true
+});
+
+// Verify a person exists (handles merges/deletions)
+const exists = await client.people.verifyPersonExists('person-123', {
+  timeout: 30000
+});
+```
+
+#### **3a. Contact Validation Helpers**
+
+```typescript
+import { 
+  emailDomainsMatch, 
+  phoneNumbersSimilar, 
+  validateContactSimilarity,
+  calculateTrust,
+  DEFAULT_TRUST_WINDOW
+} from '@rachelallyson/planning-center-people-ts';
+
+// Check if email domains match (handles typos and aliases)
+emailDomainsMatch('user@gmail.com', 'other@googlemail.com'); // true
+emailDomainsMatch('user@gmail.com', 'other@gmial.com'); // true (typo)
+
+// Check if phone numbers are similar (handles formatting)
+phoneNumbersSimilar('+15551234567', '555-123-4567'); // true
+phoneNumbersSimilar('15551234567', '5551234567'); // true
+
+// Validate contact similarity for name-based matches
+const validation = validateContactSimilarity(
+  'jane@example.com',
+  '+15551234567',
+  ['john@example.com', 'john@work.com'],  // Person's emails
+  ['+15551234567']  // Person's phones
+);
+// { emailMatch: true, phoneMatch: true, isValid: true }
+
+// Calculate trust for cached person IDs
+const trust = calculateTrust(personIdCreatedAt);
+if (trust.shouldTrust) {
+  // Use cached personId without verification
+  return cachedPersonId;
+} else {
+  // Verify personId still exists in PCO
+  const exists = await client.people.verifyPersonExists(cachedPersonId);
+}
 ```
 
 #### **4. Batch Operations**

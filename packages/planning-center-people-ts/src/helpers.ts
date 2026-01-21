@@ -214,6 +214,253 @@ export function normalizePhone(phone: string): string {
     return `+${digits}`;
 }
 
+// ===== Contact Validation Helpers =====
+
+/**
+ * Extract domain from email address
+ */
+export function extractEmailDomain(email: string): string {
+    const normalized = normalizeEmail(email);
+    const atIndex = normalized.indexOf('@');
+    return atIndex >= 0 ? normalized.substring(atIndex + 1) : '';
+}
+
+/**
+ * Common email domain aliases (e.g., gmail.com and googlemail.com are the same)
+ */
+const EMAIL_DOMAIN_ALIASES: Record<string, string> = {
+    'googlemail.com': 'gmail.com',
+    'google.com': 'gmail.com',
+};
+
+/**
+ * Normalize email domain to handle common aliases
+ */
+function normalizeEmailDomain(domain: string): string {
+    const lowerDomain = domain.toLowerCase();
+    return EMAIL_DOMAIN_ALIASES[lowerDomain] || lowerDomain;
+}
+
+/**
+ * Check if two email domains match or are similar
+ * Handles:
+ * - Exact domain matches
+ * - Common aliases (gmail.com vs googlemail.com)
+ * - Prefix matching for similar domains (first 3+ characters)
+ * 
+ * @param email1 - First email address
+ * @param email2 - Second email address
+ * @returns True if domains match or are similar
+ */
+export function emailDomainsMatch(email1: string, email2: string): boolean {
+    const domain1 = normalizeEmailDomain(extractEmailDomain(email1));
+    const domain2 = normalizeEmailDomain(extractEmailDomain(email2));
+    
+    if (!domain1 || !domain2) {
+        return false;
+    }
+    
+    // Exact match after normalization
+    if (domain1 === domain2) {
+        return true;
+    }
+    
+    // Check if domains share a common prefix (at least 3 characters)
+    // This helps catch typos like "gmial.com" vs "gmail.com"
+    const minPrefixLength = 3;
+    if (domain1.length >= minPrefixLength && domain2.length >= minPrefixLength) {
+        const prefix1 = domain1.substring(0, minPrefixLength);
+        const prefix2 = domain2.substring(0, minPrefixLength);
+        if (prefix1 === prefix2) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Normalize phone number to digits only, stripping country code if present
+ */
+function normalizePhoneDigits(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    // Strip leading 1 for US numbers (11 digits starting with 1)
+    if (digits.length === 11 && digits.startsWith('1')) {
+        return digits.substring(1);
+    }
+    return digits;
+}
+
+/**
+ * Check if two phone numbers are similar
+ * Handles:
+ * - Different formats (+1, 1, or just 10 digits)
+ * - Country code variations
+ * 
+ * @param phone1 - First phone number
+ * @param phone2 - Second phone number
+ * @returns True if phone numbers are similar
+ */
+export function phoneNumbersSimilar(phone1: string, phone2: string): boolean {
+    if (!phone1 || !phone2) {
+        return false;
+    }
+    
+    const normalized1 = normalizePhoneDigits(phone1);
+    const normalized2 = normalizePhoneDigits(phone2);
+    
+    // Empty after normalization
+    if (!normalized1 || !normalized2) {
+        return false;
+    }
+    
+    // Exact match after normalization
+    if (normalized1 === normalized2) {
+        return true;
+    }
+    
+    // Also check raw digits (handles international numbers)
+    const digits1 = phone1.replace(/\D/g, '');
+    const digits2 = phone2.replace(/\D/g, '');
+    
+    return digits1 === digits2;
+}
+
+/**
+ * Validate contact info similarity for name-based matches
+ * 
+ * This is useful when falling back to name-based search to ensure
+ * we don't match the wrong person with the same name.
+ * 
+ * @param searchEmail - Email being searched for
+ * @param searchPhone - Phone being searched for
+ * @param personEmails - Array of email addresses from the person's profile
+ * @param personPhones - Array of phone numbers from the person's profile
+ * @returns Object with match results and overall validity
+ */
+export function validateContactSimilarity(
+    searchEmail: string | undefined,
+    searchPhone: string | undefined,
+    personEmails: string[],
+    personPhones: string[]
+): { emailMatch: boolean; phoneMatch: boolean; isValid: boolean } {
+    let emailMatch = false;
+    let phoneMatch = false;
+    
+    // Check email domain match
+    if (searchEmail) {
+        emailMatch = personEmails.some(personEmail => 
+            emailDomainsMatch(searchEmail, personEmail)
+        );
+    }
+    
+    // Check phone similarity
+    if (searchPhone) {
+        phoneMatch = personPhones.some(personPhone => 
+            phoneNumbersSimilar(searchPhone, personPhone)
+        );
+    }
+    
+    // Valid if either email domain matches or phone is similar
+    // (or if we didn't have search criteria to check)
+    const hasSearchCriteria = !!(searchEmail || searchPhone);
+    const isValid = !hasSearchCriteria || emailMatch || phoneMatch;
+    
+    return { emailMatch, phoneMatch, isValid };
+}
+
+// ===== Person ID Trust Calculation =====
+
+/**
+ * Default trust window for person IDs (1 hour in milliseconds)
+ * If a personId was saved within this time, it can be trusted without verification
+ */
+export const DEFAULT_TRUST_WINDOW = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Result of trust calculation for a person ID
+ */
+export interface TrustResult {
+    /** Whether the person ID should be trusted without verification */
+    shouldTrust: boolean;
+    /** Age of the person ID in milliseconds (null if no timestamp) */
+    age: number | null;
+    /** Human-readable reason for the trust decision */
+    reason: string;
+}
+
+/**
+ * Calculate whether a person ID can be trusted based on when it was created/verified
+ * 
+ * This is useful for caching person IDs to avoid unnecessary API calls.
+ * PCO takes 15-30 minutes to index new contacts, so recently created person IDs
+ * should be trusted without re-verification to avoid race conditions.
+ * 
+ * @param createdAt - ISO timestamp when the person ID was created/saved
+ * @param trustWindow - Trust window in milliseconds (default: 1 hour)
+ * @returns Object with trust decision, age, and reason
+ * 
+ * @example
+ * ```typescript
+ * const trust = calculateTrust(pcoInfo.personIdCreatedAt);
+ * if (trust.shouldTrust) {
+ *   // Use cached personId without verification
+ *   return cachedPersonId;
+ * } else {
+ *   // Verify personId still exists in PCO
+ *   await client.people.getById(cachedPersonId);
+ * }
+ * ```
+ */
+export function calculateTrust(
+    createdAt: string | undefined,
+    trustWindow: number = DEFAULT_TRUST_WINDOW
+): TrustResult {
+    if (!createdAt) {
+        return {
+            shouldTrust: false,
+            age: null,
+            reason: 'No timestamp (legacy data or never saved)',
+        };
+    }
+    
+    const createdDate = new Date(createdAt);
+    if (isNaN(createdDate.getTime())) {
+        return {
+            shouldTrust: false,
+            age: null,
+            reason: 'Invalid timestamp format',
+        };
+    }
+    
+    const age = Date.now() - createdDate.getTime();
+    
+    if (age < 0) {
+        return {
+            shouldTrust: false,
+            age,
+            reason: 'Timestamp is in the future (clock skew)',
+        };
+    }
+    
+    if (age < trustWindow) {
+        const ageSeconds = Math.round(age / 1000);
+        const trustWindowMinutes = Math.round(trustWindow / 1000 / 60);
+        return {
+            shouldTrust: true,
+            age,
+            reason: `Fresh personId (${ageSeconds}s old, within ${trustWindowMinutes}min trust window)`,
+        };
+    }
+    
+    const ageMinutes = Math.round(age / 1000 / 60);
+    return {
+        shouldTrust: false,
+        age,
+        reason: `Old personId (${ageMinutes}min old, needs verification)`,
+    };
+}
+
 /**
  * Format person name from attributes
  */

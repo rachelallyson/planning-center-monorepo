@@ -82,6 +82,16 @@ export interface PersonMatchOptions {
      * - 'aggressive': Return best match with lower threshold
      */
     matchStrategy?: 'exact' | 'fuzzy' | 'aggressive';
+    /**
+     * Search strategy for finding matches:
+     * - 'single': Use only the specified matchStrategy (default)
+     * - 'multi-step': Try multiple strategies in order until a match is found:
+     *   1. Fuzzy with age preference
+     *   2. Fuzzy without age preference
+     *   3. Exact with age preference
+     *   4. Exact without age preference
+     */
+    searchStrategy?: 'single' | 'multi-step';
     /** Campus ID to associate with the person */
     campusId?: string;
     /** If true, create a new person if no match is found (default: true) */
@@ -111,19 +121,67 @@ export interface PersonMatchOptions {
      * When a person is created, PCO needs time (30-90+ seconds) to verify/index contacts
      * before they become searchable. This retry logic helps prevent duplicate person creation.
      */
-    retryConfig?: {
-        /** Maximum number of retry attempts (default: 5) */
-        maxRetries?: number;
-        /** Maximum total wait time in milliseconds (default: 120000 = 120 seconds) */
-        maxWaitTime?: number;
-        /** Initial delay in milliseconds before first retry (default: 10000 = 10 seconds) */
-        initialDelay?: number;
-        /** Multiplier for exponential backoff (default: 1.5) */
-        backoffMultiplier?: number;
-        /** Whether to enable retry logic (default: true when email/phone provided and createIfNotFound: false) */
-        enabled?: boolean;
+    retryConfig?: RetryConfig;
+    /**
+     * Phase-specific retry configurations for advanced control.
+     * When both retryConfig and retryConfigs are provided, retryConfigs takes precedence.
+     */
+    retryConfigs?: {
+        /** Configuration for initial/quick search phase (default: 30s max wait) */
+        initial?: RetryConfig;
+        /** Configuration for aggressive search before creating (default: 60s max wait) */
+        aggressive?: RetryConfig;
     };
+    /**
+     * If true, fall back to name-based search when email/phone search fails.
+     * Requires both firstName and lastName to be provided.
+     * Uses contact validation to avoid wrong-person matches. (default: false)
+     */
+    fallbackToNameSearch?: boolean;
+    /**
+     * Contact validation strategy for name-based search fallback:
+     * - 'strict': Requires exact email or phone match
+     * - 'domain': Requires matching email domain or similar phone
+     * - 'similarity': Uses domain matching for email, similarity for phone (default)
+     */
+    contactValidation?: 'strict' | 'domain' | 'similarity';
 }
+
+/**
+ * Retry configuration for handling PCO contact verification delays
+ */
+export interface RetryConfig {
+    /** Maximum number of retry attempts (default: 5) */
+    maxRetries?: number;
+    /** Maximum total wait time in milliseconds (default: 120000 = 120 seconds) */
+    maxWaitTime?: number;
+    /** Initial delay in milliseconds before first retry (default: 10000 = 10 seconds) */
+    initialDelay?: number;
+    /** Multiplier for exponential backoff (default: 1.5) */
+    backoffMultiplier?: number;
+    /** Whether to enable retry logic (default: true when email/phone provided and createIfNotFound: false) */
+    enabled?: boolean;
+}
+
+/**
+ * Default retry configuration for initial search phase
+ */
+export const DEFAULT_INITIAL_RETRY_CONFIG: Required<Omit<RetryConfig, 'enabled'>> = {
+    maxRetries: 3,
+    maxWaitTime: 30000, // 30 seconds
+    initialDelay: 3000,
+    backoffMultiplier: 2,
+};
+
+/**
+ * Default retry configuration for aggressive search phase (before creating)
+ */
+export const DEFAULT_AGGRESSIVE_RETRY_CONFIG: Required<Omit<RetryConfig, 'enabled'>> = {
+    maxRetries: 6,
+    maxWaitTime: 60000, // 60 seconds
+    initialDelay: 5000,
+    backoffMultiplier: 2,
+};
 
 export class PeopleModule extends BaseModule {
     private personMatcher: PersonMatcher;
@@ -193,6 +251,53 @@ export class PeopleModule extends BaseModule {
         }
 
         return this.getSingle<PersonResource>(`/people/${id}`, params);
+    }
+
+    /**
+     * Verify that a person exists in PCO
+     * 
+     * This is useful for validating cached person IDs before use,
+     * especially when person records may have been merged or deleted.
+     * 
+     * @param personId - The person ID to verify
+     * @param options - Optional configuration
+     * @param options.timeout - Timeout in milliseconds (default: 30000)
+     * @returns True if person exists, false if not found
+     * @throws Error if request times out or other error occurs (except 404)
+     * 
+     * @example
+     * ```typescript
+     * const exists = await client.people.verifyPersonExists(cachedPersonId);
+     * if (!exists) {
+     *   // Person was merged or deleted, need to search again
+     *   const person = await client.people.findOrCreate(options);
+     * }
+     * ```
+     */
+    async verifyPersonExists(
+        personId: string,
+        options?: { timeout?: number }
+    ): Promise<boolean> {
+        const timeout = options?.timeout ?? 30000;
+        
+        const verificationPromise = this.getById(personId)
+            .then(() => true)
+            .catch((error: any) => {
+                // 404 means person doesn't exist (merged or deleted)
+                if (error?.status === 404 || error?.response?.status === 404) {
+                    return false;
+                }
+                // Re-throw other errors
+                throw error;
+            });
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+                reject(new Error(`Person verification timed out after ${timeout}ms`));
+            }, timeout);
+        });
+        
+        return Promise.race([verificationPromise, timeoutPromise]);
     }
 
     /**

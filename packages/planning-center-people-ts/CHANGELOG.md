@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-01-21
+
+### ✨ **New Features**
+
+- **🔍 Multi-Step Search Strategy**: New `searchStrategy: 'multi-step'` option for maximum matching success
+  - Tries multiple matching approaches in order until a match is found
+  - Strategy order: fuzzy+age → fuzzy → exact+age → exact
+  - Handles name variations and age preference filtering automatically
+  - Significantly reduces duplicate person creation
+
+- **📛 Name-Based Search Fallback**: New `fallbackToNameSearch` option with contact validation
+  - Falls back to name search when email/phone search fails
+  - Validates contact info to prevent wrong-person matches (e.g., two "John Smith"s)
+  - Configurable validation: `contactValidation: 'strict' | 'domain' | 'similarity'`
+
+- **⚡ Multi-Phase Retry Configurations**: New `retryConfigs` option for phase-specific retry control
+  - `initial`: Quick search phase (default: 30s max wait, 3 retries)
+  - `aggressive`: Final search before create (default: 60s max wait, 6 retries)
+  - Prevents duplicates when PCO hasn't indexed contacts yet (15-30 min delay)
+
+- **✅ Person ID Verification**: New `client.people.verifyPersonExists()` method
+  - Verifies a person exists in PCO with configurable timeout
+  - Handles merged/deleted persons gracefully (returns false for 404)
+  - Useful for validating cached person IDs before use
+
+- **🔐 Trust-Based Caching Helpers**: New utilities for smart person ID caching
+  - `calculateTrust(createdAt, trustWindow)`: Determines if cached personId can be trusted
+  - `DEFAULT_TRUST_WINDOW`: 1-hour default trust window constant
+  - Skip verification for fresh personIds to avoid race conditions
+
+- **📧 Contact Validation Helpers**: New utilities for contact info matching
+  - `emailDomainsMatch(email1, email2)`: Handles aliases (gmail/googlemail) and typos
+  - `phoneNumbersSimilar(phone1, phone2)`: Handles format variations and country codes
+  - `validateContactSimilarity()`: Validates contact info for name-based matches
+  - `extractEmailDomain()`: Extracts domain from email address
+
+### 🔧 **Improvements**
+
+- **Retry Config Refactoring**: Extracted `RetryConfig` interface for reusability
+- **Better Logging**: Multi-step search logs which strategy found the match
+- **Aggressive Final Search**: When `retryConfigs.aggressive` is set, performs final search before creating
+
+### 📚 **Documentation**
+
+- Updated README_V2.md with examples for all new features
+- Added code examples for multi-step search, contact validation, and trust calculation
+
+### 🧪 **Testing**
+
+- Added `tests/helpers/contact-validation.test.ts` - Contact validation helper tests
+- Added `tests/helpers/trust-calculation.test.ts` - Trust calculation tests
+- Added `tests/matching/multi-step.test.ts` - Multi-step search strategy tests
+- Added `tests/modules/people-verify.test.ts` - Person verification tests
+
+### 📦 **Exports**
+
+New exports from the package:
+
+- `emailDomainsMatch`, `extractEmailDomain`, `phoneNumbersSimilar`, `validateContactSimilarity`
+- `calculateTrust`, `DEFAULT_TRUST_WINDOW`, `TrustResult` (type)
+- `RetryConfig` (type), `PersonMatchOptions` (type)
+- `DEFAULT_INITIAL_RETRY_CONFIG`, `DEFAULT_AGGRESSIVE_RETRY_CONFIG`
+
 ## [2.13.0] - 2026-01-20
 
 ### ✨ **New Features**
