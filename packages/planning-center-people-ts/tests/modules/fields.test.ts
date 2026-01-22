@@ -468,6 +468,54 @@ describe('FieldsModule', () => {
     });
   });
 
+  describe('getTabById', () => {
+    it('should get a single tab by ID', async () => {
+      const mockResponse = {
+        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
+      };
+
+      mockHttpClient.request.mockResolvedValueOnce({
+        data: mockResponse,
+        status: 200,
+        headers: {},
+        requestId: 'test',
+        duration: 100,
+      });
+
+      const result = await module.getTabById('1');
+
+      expect(result).toEqual(mockResponse.data);
+      expect(mockHttpClient.request).toHaveBeenCalledWith({
+        method: 'GET',
+        endpoint: '/tabs/1',
+        params: {},
+      });
+    });
+
+    it('should get a tab with includes', async () => {
+      const mockResponse = {
+        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
+      };
+
+      mockHttpClient.request.mockResolvedValueOnce({
+        data: mockResponse,
+        status: 200,
+        headers: {},
+        requestId: 'test',
+        duration: 100,
+      });
+
+      const result = await module.getTabById('1', ['field_definitions']);
+
+      expect(result).toEqual(mockResponse.data);
+      expect(mockHttpClient.request).toHaveBeenCalledWith({
+        method: 'GET',
+        endpoint: '/tabs/1',
+        params: { include: 'field_definitions' },
+      });
+    });
+  });
+
   describe('createTab', () => {
     it('should create a new tab', async () => {
       const mockResponse = {

@@ -68,6 +68,23 @@ New exports from the package:
 - `RetryConfig` (type), `PersonMatchOptions` (type)
 - `DEFAULT_INITIAL_RETRY_CONFIG`, `DEFAULT_AGGRESSIVE_RETRY_CONFIG`
 
+## [2.14.1] - 2026-01-21
+
+### 🔧 **Bug Fixes**
+
+- **Complete Tab API Coverage**: Added missing `getTabById()` / `getTab()` method to retrieve a single tab by ID
+  - Module API: `client.fields.getTabById(id, include?)`
+  - Function API: `getTab(client, tabId, params?, context?)`
+  - Completes full CRUD coverage for tabs (get, list, create, update, delete)
+
+### 📦 **Exports**
+
+- `getTab` - Function API for retrieving a single tab by ID
+
+### 🧪 **Testing**
+
+- Added tests for `getTabById()` / `getTab()` in fields test suites
+
 ## [2.13.0] - 2026-01-20
 
 ### ✨ **New Features**

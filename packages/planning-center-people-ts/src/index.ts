@@ -169,6 +169,7 @@ export {
   getHousehold,
   getHouseholds,
   getTabs,
+  getTab,
   getListById,
   getListCategories,
   getLists,

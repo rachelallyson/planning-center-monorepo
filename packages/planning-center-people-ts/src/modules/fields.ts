@@ -272,6 +272,17 @@ export class FieldsModule extends BaseModule {
     }
 
     /**
+     * Get a single tab by ID
+     */
+    async getTabById(id: string, include?: string[]): Promise<TabResource> {
+        const params: Record<string, any> = {};
+        if (include) {
+            params.include = include.join(',');
+        }
+        return this.getSingle<TabResource>(`/tabs/${id}`, params);
+    }
+
+    /**
      * Create a tab
      */
     async createTab(data: TabAttributes): Promise<TabResource> {

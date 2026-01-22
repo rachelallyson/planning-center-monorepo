@@ -19,6 +19,7 @@ import {
     FieldOptionSingle,
     FieldOptionsList,
     TabResource,
+    TabSingle,
     TabsList,
 } from '../types';
 
@@ -327,6 +328,29 @@ export async function getTabs(
         {
             ...context,
             endpoint: '/tabs',
+            method: 'GET',
+        }
+    );
+}
+
+/**
+ * Get a single tab by ID
+ */
+export async function getTab(
+    client: PcoClientState,
+    tabId: string,
+    params?: {
+        include?: string[];
+    },
+    context?: Partial<ErrorContext>
+): Promise<TabSingle> {
+    return getSingle<TabResource>(
+        client,
+        `/tabs/${tabId}`,
+        buildQueryParams(params),
+        {
+            ...context,
+            endpoint: `/tabs/${tabId}`,
             method: 'GET',
         }
     );

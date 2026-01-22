@@ -6,6 +6,7 @@ import {
   getFieldOptions,
   createFieldOption,
   getTabs,
+  getTab,
   createFieldDefinition,
   deleteFieldDefinition,
   createPersonFieldData
@@ -162,6 +163,34 @@ describe('Fields Functions', () => {
 
       expect(result).toEqual(mockResponse);
       expect(getList).toHaveBeenCalled();
+    });
+  });
+
+  describe('getTab', () => {
+    it('should get a single tab by ID', async () => {
+      const mockResponse = {
+        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
+      };
+
+      (getSingle as jest.Mock).mockResolvedValueOnce(mockResponse);
+
+      const result = await getTab(mockClient, '1');
+
+      expect(result).toEqual(mockResponse);
+      expect(getSingle).toHaveBeenCalled();
+    });
+
+    it('should get a tab with includes', async () => {
+      const mockResponse = {
+        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
+      };
+
+      (getSingle as jest.Mock).mockResolvedValueOnce(mockResponse);
+
+      const result = await getTab(mockClient, '1', { include: ['field_definitions'] });
+
+      expect(result).toEqual(mockResponse);
+      expect(getSingle).toHaveBeenCalled();
     });
   });
 
