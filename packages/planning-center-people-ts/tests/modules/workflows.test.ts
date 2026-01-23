@@ -32,38 +32,33 @@ describe('WorkflowsModule', () => {
 
   describe('getAll', () => {
     it('should fetch all workflows with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Workflow', attributes: { name: 'Workflow 1' } }],
+      const mockWorkflows = [{ id: '1', type: 'Workflow', attributes: { name: 'Workflow 1' } }];
+      const expectedResponse = {
+        data: mockWorkflows,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockWorkflows,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/workflows', {}, undefined);
     });
 
     it('should fetch workflows with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Workflow', attributes: { name: 'Workflow 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockWorkflows = [{ id: '1', type: 'Workflow', attributes: { name: 'Workflow 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockWorkflows,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('WorkflowsModule', () => {
 
       await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/workflows',
+        { 'where[status]': 'active', include: 'workflow_cards' },
+        undefined
+      );
     });
   });
 

@@ -32,7 +32,7 @@ export interface AddPersonToWorkflowOptions {
 
 export class WorkflowsModule extends BaseModule {
     /**
-     * Get all workflows
+     * Get all workflows across all pages
      */
     async getAll(options: WorkflowListOptions = {}): Promise<{ data: WorkflowResource[]; meta?: any; links?: any }> {
         const params: Record<string, any> = {};
@@ -47,15 +47,17 @@ export class WorkflowsModule extends BaseModule {
             params.include = options.include.join(',');
         }
 
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
+        // Note: perPage and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
 
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<WorkflowResource>('/workflows', params);
+        const result = await this.getAllPages<WorkflowResource>('/workflows', params);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        };
     }
 
     /**

@@ -41,22 +41,22 @@ describe('FieldsModule', () => {
       const result = await module.getAllFieldDefinitions();
 
       expect(result).toEqual(mockResponse.data);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/field_definitions', { include: ['tab'] }, undefined);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/field_definitions', { include: 'tab' }, undefined);
     });
 
-    it('should use cache when available', async () => {
+    it('should fetch from API on every call', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1' } }],
       };
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
+      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse as any);
 
       // First call should fetch from API
       await module.getAllFieldDefinitions();
-      // Second call should use cache
+      // Second call should also fetch from API (no caching)
       const result = await module.getAllFieldDefinitions();
 
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledTimes(1);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledTimes(2);
       expect(result).toEqual(mockResponse.data);
     });
   });
@@ -353,7 +353,7 @@ describe('FieldsModule', () => {
         data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
       };
 
-      // load cache -> slug lookup
+      // fetch all field definitions -> slug lookup
       mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [fieldDefList] } as any);
       // getFieldDefinition within createPersonFieldData
       mockHttpClient.request.mockResolvedValueOnce({
@@ -395,7 +395,7 @@ describe('FieldsModule', () => {
         data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
       };
 
-      // load cache -> name lookup
+      // fetch all field definitions -> name lookup
       mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [fieldDefList] } as any);
       // getFieldDefinition
       mockHttpClient.request.mockResolvedValueOnce({

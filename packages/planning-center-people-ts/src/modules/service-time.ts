@@ -23,7 +23,7 @@ export class ServiceTimeModule extends BaseModule {
     }
 
     /**
-     * Get all service times for a specific campus
+     * Get all service times for a specific campus across all pages
      */
     async getAll(campusId: string, params?: {
         where?: Record<string, any>;
@@ -31,7 +31,29 @@ export class ServiceTimeModule extends BaseModule {
         per_page?: number;
         page?: number;
     }): Promise<ServiceTimesList> {
-        return this.getList<ServiceTimeResource>(`/campuses/${campusId}/service_times`, params) as Promise<ServiceTimesList>;
+        const queryParams: Record<string, any> = {};
+
+        if (params?.where) {
+            Object.entries(params.where).forEach(([key, value]) => {
+                queryParams[`where[${key}]`] = value;
+            });
+        }
+
+        if (params?.include) {
+            queryParams.include = params.include.join(',');
+        }
+
+        // Note: per_page and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
+
+        const result = await this.getAllPages<ServiceTimeResource>(`/campuses/${campusId}/service_times`, queryParams);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        } as ServiceTimesList;
     }
 
     /**

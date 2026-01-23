@@ -32,38 +32,33 @@ describe('ReportsModule', () => {
 
   describe('getAll', () => {
     it('should fetch all reports with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }],
+      const mockReports = [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }];
+      const expectedResponse = {
+        data: mockReports,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockReports,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/reports', {}, undefined);
     });
 
     it('should fetch reports with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockReports = [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockReports,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('ReportsModule', () => {
 
       await module.getAll(params);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/reports',
+        { 'where[status]': 'active', include: 'created_by' },
+        undefined
+      );
     });
   });
 

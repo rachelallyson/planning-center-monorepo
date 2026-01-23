@@ -196,7 +196,7 @@ export class PeopleModule extends BaseModule {
     }
 
     /**
-     * Get all people with optional filtering
+     * Get all people across all pages with optional filtering
      */
     async getAll(options: PeopleListOptions = {}): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
         const params: Record<string, any> = {};
@@ -211,15 +211,17 @@ export class PeopleModule extends BaseModule {
             params.include = options.include.join(',');
         }
 
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
+        // Note: perPage and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
 
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<PersonResource>('/people', params);
+        const result = await this.getAllPages<PersonResource>('/people', params);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        };
     }
 
     /**

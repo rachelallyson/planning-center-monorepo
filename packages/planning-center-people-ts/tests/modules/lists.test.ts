@@ -32,38 +32,33 @@ describe('ListsModule', () => {
 
   describe('getAll', () => {
     it('should fetch all lists with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'List', attributes: { name: 'List 1' } }],
+      const mockLists = [{ id: '1', type: 'List', attributes: { name: 'List 1' } }];
+      const expectedResponse = {
+        data: mockLists,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockLists,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/lists', {}, undefined);
     });
 
     it('should fetch lists with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'List', attributes: { name: 'List 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockLists = [{ id: '1', type: 'List', attributes: { name: 'List 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockLists,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('ListsModule', () => {
 
       await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/lists',
+        { 'where[status]': 'active', include: 'list_category' },
+        undefined
+      );
     });
   });
 

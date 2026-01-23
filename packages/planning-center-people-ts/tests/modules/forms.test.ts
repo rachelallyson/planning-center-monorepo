@@ -32,38 +32,33 @@ describe('FormsModule', () => {
 
   describe('getAll', () => {
     it('should fetch all forms with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }],
+      const mockForms = [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }];
+      const expectedResponse = {
+        data: mockForms,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockForms,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/forms', {}, undefined);
     });
 
     it('should fetch forms with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockForms = [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockForms,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('FormsModule', () => {
 
       await module.getAll(params);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/forms',
+        { 'where[status]': 'active', include: 'form_category' },
+        undefined
+      );
     });
   });
 

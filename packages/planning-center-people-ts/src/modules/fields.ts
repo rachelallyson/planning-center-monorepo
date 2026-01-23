@@ -17,13 +17,6 @@ import type {
     TabAttributes
 } from '../types';
 
-export interface FieldDefinitionCache {
-    byId: Map<string, FieldDefinitionResource>;
-    bySlug: Map<string, FieldDefinitionResource>;
-    byName: Map<string, FieldDefinitionResource>;
-    lastUpdated: number;
-}
-
 export interface FieldSetOptions {
     /** Field definition ID */
     fieldId?: string;
@@ -38,9 +31,6 @@ export interface FieldSetOptions {
 }
 
 export class FieldsModule extends BaseModule {
-    private fieldDefinitionCache: FieldDefinitionCache | null = null;
-    private cacheTtl: number = 300000; // 5 minutes
-
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
@@ -50,19 +40,15 @@ export class FieldsModule extends BaseModule {
     }
 
     /**
-     * Get all field definitions with caching
+     * Get all field definitions
      */
-    async getAllFieldDefinitions(useCache: boolean = true): Promise<FieldDefinitionResource[]> {
-        if (useCache && this.isCacheValid()) {
-            return Array.from(this.fieldDefinitionCache!.byId.values());
-        }
+    async getAllFieldDefinitions(): Promise<FieldDefinitionResource[]> {
+        // Build query params - include must be a comma-separated string, not an array
+        const params: Record<string, any> = {
+            include: 'tab',
+        };
 
-        const result = await this.getAllPages<FieldDefinitionResource>('/field_definitions', {
-            include: ['tab'],
-        });
-
-        // Update cache
-        this.updateFieldDefinitionCache(result.data);
+        const result = await this.getAllPages<FieldDefinitionResource>('/field_definitions', params);
 
         return result.data;
     }
@@ -78,63 +64,37 @@ export class FieldsModule extends BaseModule {
      * Get field definition by slug
      */
     async getFieldDefinitionBySlug(slug: string): Promise<FieldDefinitionResource | null> {
-        await this.ensureCacheLoaded();
-
-        return this.fieldDefinitionCache?.bySlug.get(slug) || null;
+        const allFieldDefinitions = await this.getAllFieldDefinitions();
+        return allFieldDefinitions.find(fd => fd.attributes?.slug === slug) || null;
     }
 
     /**
      * Get field definition by name
      */
     async getFieldDefinitionByName(name: string): Promise<FieldDefinitionResource | null> {
-        await this.ensureCacheLoaded();
-
-        return this.fieldDefinitionCache?.byName.get(name) || null;
+        const allFieldDefinitions = await this.getAllFieldDefinitions();
+        return allFieldDefinitions.find(fd => fd.attributes?.name === name) || null;
     }
 
     /**
      * Create a field definition
      */
     async createFieldDefinition(tabId: string, data: FieldDefinitionAttributes): Promise<FieldDefinitionResource> {
-        const fieldDef = await this.createResource<FieldDefinitionResource>(`/tabs/${tabId}/field_definitions`, data);
-
-        // Invalidate cache
-        this.invalidateCache();
-
-        return fieldDef;
+        return this.createResource<FieldDefinitionResource>(`/tabs/${tabId}/field_definitions`, data);
     }
 
     /**
      * Update a field definition
      */
     async updateFieldDefinition(id: string, data: Partial<FieldDefinitionAttributes>): Promise<FieldDefinitionResource> {
-        const fieldDef = await this.updateResource<FieldDefinitionResource>(`/field_definitions/${id}`, data);
-
-        // Update cache
-        if (this.fieldDefinitionCache && fieldDef.attributes) {
-            this.fieldDefinitionCache.byId.set(id, fieldDef);
-            this.fieldDefinitionCache.bySlug.set(fieldDef.attributes.slug, fieldDef);
-            this.fieldDefinitionCache.byName.set(fieldDef.attributes.name, fieldDef);
-        }
-
-        return fieldDef;
+        return this.updateResource<FieldDefinitionResource>(`/field_definitions/${id}`, data);
     }
 
     /**
      * Delete a field definition
      */
     async deleteFieldDefinition(id: string): Promise<void> {
-        await this.deleteResource(`/field_definitions/${id}`);
-
-        // Remove from cache
-        if (this.fieldDefinitionCache) {
-            const fieldDef = this.fieldDefinitionCache.byId.get(id);
-            if (fieldDef && fieldDef.attributes) {
-                this.fieldDefinitionCache.byId.delete(id);
-                this.fieldDefinitionCache.bySlug.delete(fieldDef.attributes.slug);
-                this.fieldDefinitionCache.byName.delete(fieldDef.attributes.name);
-            }
-        }
+        return this.deleteResource(`/field_definitions/${id}`);
     }
 
     /**
@@ -396,53 +356,6 @@ export class FieldsModule extends BaseModule {
             });
             throw error;
         }
-    }
-
-    /**
-     * Check if cache is valid
-     */
-    private isCacheValid(): boolean {
-        if (!this.fieldDefinitionCache) {
-            return false;
-        }
-
-        return Date.now() - this.fieldDefinitionCache.lastUpdated < this.cacheTtl;
-    }
-
-    /**
-     * Ensure cache is loaded
-     */
-    private async ensureCacheLoaded(): Promise<void> {
-        if (!this.isCacheValid()) {
-            await this.getAllFieldDefinitions(false);
-        }
-    }
-
-    /**
-     * Update field definition cache
-     */
-    private updateFieldDefinitionCache(fieldDefinitions: FieldDefinitionResource[]): void {
-        this.fieldDefinitionCache = {
-            byId: new Map(),
-            bySlug: new Map(),
-            byName: new Map(),
-            lastUpdated: Date.now(),
-        };
-
-        for (const fieldDef of fieldDefinitions) {
-            if (fieldDef.attributes) {
-                this.fieldDefinitionCache.byId.set(fieldDef.id, fieldDef);
-                this.fieldDefinitionCache.bySlug.set(fieldDef.attributes.slug, fieldDef);
-                this.fieldDefinitionCache.byName.set(fieldDef.attributes.name, fieldDef);
-            }
-        }
-    }
-
-    /**
-     * Invalidate cache
-     */
-    private invalidateCache(): void {
-        this.fieldDefinitionCache = null;
     }
 
     /**

@@ -32,38 +32,33 @@ describe('ServiceTimeModule', () => {
 
   describe('getAll', () => {
     it('should fetch all service times for a campus with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }],
+      const mockServiceTimes = [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }];
+      const expectedResponse = {
+        data: mockServiceTimes,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockServiceTimes,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll('campus-1');
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses/campus-1/service_times', {}, undefined);
     });
 
     it('should fetch service times for a campus with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockServiceTimes = [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockServiceTimes,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('ServiceTimeModule', () => {
 
       await module.getAll('campus-1', params);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/campuses/campus-1/service_times',
+        { 'where[status]': 'active', include: 'campus' },
+        undefined
+      );
     });
   });
 

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.1] - 2026-01-21
+
+### 🔧 **Bug Fixes**
+
+- **Complete Tab API Coverage**: Added missing `getTabById()` / `getTab()` method to retrieve a single tab by ID
+  - Module API: `client.fields.getTabById(id, include?)`
+  - Function API: `getTab(client, tabId, params?, context?)`
+  - Completes full CRUD coverage for tabs (get, list, create, update, delete)
+
+- **Fixed `getAll()` Methods to Actually Get All Pages**: All `getAll()` methods now fetch all pages instead of just one
+  - Fixed: `people.getAll()`, `workflows.getAll()`, `notes.getAll()`, `lists.getAll()`, `households.getAll()`, `campus.getAll()`, `forms.getAll()`, `reports.getAll()`, `service-time.getAll()`
+  - Previously used `getList()` (one page), now uses `getAllPages()` (all pages)
+  - Note: `perPage` and `page` options are ignored when using `getAll()` - use `getAllPagesPaginated()` for pagination control
+
+- **Fixed `getAllFieldDefinitions()` Pagination**: Changed `include: ['tab']` to `include: 'tab'` to properly fetch all pages
+  - `getAllPages()` expects query params where `include` is a comma-separated string, not an array
+
+### 📦 **Exports**
+
+- `getTab` - Function API for retrieving a single tab by ID
+
+### 🧪 **Testing**
+
+- Added tests for `getTabById()` / `getTab()` in fields test suites
+- Updated all `getAll()` tests to mock `paginationHelper.getAllPages()` instead of `httpClient.request()`
+
 ## [2.14.0] - 2026-01-21
 
 ### ✨ **New Features**
@@ -67,23 +93,6 @@ New exports from the package:
 - `calculateTrust`, `DEFAULT_TRUST_WINDOW`, `TrustResult` (type)
 - `RetryConfig` (type), `PersonMatchOptions` (type)
 - `DEFAULT_INITIAL_RETRY_CONFIG`, `DEFAULT_AGGRESSIVE_RETRY_CONFIG`
-
-## [2.14.1] - 2026-01-21
-
-### 🔧 **Bug Fixes**
-
-- **Complete Tab API Coverage**: Added missing `getTabById()` / `getTab()` method to retrieve a single tab by ID
-  - Module API: `client.fields.getTabById(id, include?)`
-  - Function API: `getTab(client, tabId, params?, context?)`
-  - Completes full CRUD coverage for tabs (get, list, create, update, delete)
-
-### 📦 **Exports**
-
-- `getTab` - Function API for retrieving a single tab by ID
-
-### 🧪 **Testing**
-
-- Added tests for `getTabById()` / `getTab()` in fields test suites
 
 ## [2.13.0] - 2026-01-20
 

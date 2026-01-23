@@ -23,7 +23,7 @@ export class ReportsModule extends BaseModule {
     }
 
     /**
-     * Get all reports
+     * Get all reports across all pages
      */
     async getAll(params?: {
         where?: Record<string, any>;
@@ -31,7 +31,29 @@ export class ReportsModule extends BaseModule {
         per_page?: number;
         page?: number;
     }): Promise<ReportsList> {
-        return this.getList<ReportResource>('/reports', params) as Promise<ReportsList>;
+        const queryParams: Record<string, any> = {};
+
+        if (params?.where) {
+            Object.entries(params.where).forEach(([key, value]) => {
+                queryParams[`where[${key}]`] = value;
+            });
+        }
+
+        if (params?.include) {
+            queryParams.include = params.include.join(',');
+        }
+
+        // Note: per_page and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
+
+        const result = await this.getAllPages<ReportResource>('/reports', queryParams);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        } as ReportsList;
     }
 
     /**

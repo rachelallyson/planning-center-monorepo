@@ -32,38 +32,33 @@ describe('NotesModule', () => {
 
   describe('getAll', () => {
     it('should fetch all notes with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
+      const mockNotes = [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }];
+      const expectedResponse = {
+        data: mockNotes,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockNotes,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/notes', {}, undefined);
     });
 
     it('should fetch notes with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockNotes = [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockNotes,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('NotesModule', () => {
 
       await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/notes',
+        { 'where[status]': 'active', include: 'note_category' },
+        undefined
+      );
     });
   });
 

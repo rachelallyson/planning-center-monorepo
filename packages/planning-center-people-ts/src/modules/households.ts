@@ -18,7 +18,7 @@ export interface HouseholdListOptions {
 
 export class HouseholdsModule extends BaseModule {
     /**
-     * Get all households
+     * Get all households across all pages
      */
     async getAll(options: HouseholdListOptions = {}): Promise<{ data: HouseholdResource[]; meta?: any; links?: any }> {
         const params: Record<string, any> = {};
@@ -33,15 +33,17 @@ export class HouseholdsModule extends BaseModule {
             params.include = options.include.join(',');
         }
 
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
+        // Note: perPage and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
 
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<HouseholdResource>('/households', params);
+        const result = await this.getAllPages<HouseholdResource>('/households', params);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        };
     }
 
     /**

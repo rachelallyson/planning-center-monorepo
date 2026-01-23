@@ -20,7 +20,7 @@ export interface NotesListOptions {
 
 export class NotesModule extends BaseModule {
     /**
-     * Get all notes
+     * Get all notes across all pages
      */
     async getAll(options: NotesListOptions = {}): Promise<{ data: NoteResource[]; meta?: any; links?: any }> {
         const params: Record<string, any> = {};
@@ -35,15 +35,17 @@ export class NotesModule extends BaseModule {
             params.include = options.include.join(',');
         }
 
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
+        // Note: perPage and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
 
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<NoteResource>('/notes', params);
+        const result = await this.getAllPages<NoteResource>('/notes', params);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        };
     }
 
     /**

@@ -21,7 +21,7 @@ export interface ListsListOptions {
 
 export class ListsModule extends BaseModule {
     /**
-     * Get all lists
+     * Get all lists across all pages
      */
     async getAll(options: ListsListOptions = {}): Promise<{ data: ListResource[]; meta?: any; links?: any }> {
         const params: Record<string, any> = {};
@@ -36,15 +36,17 @@ export class ListsModule extends BaseModule {
             params.include = options.include.join(',');
         }
 
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
+        // Note: perPage and page options are ignored when getting all pages
+        // Use getAllPagesPaginated() if you need pagination control
 
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<ListResource>('/lists', params);
+        const result = await this.getAllPages<ListResource>('/lists', params);
+        
+        // Return in the same format as before for backward compatibility
+        return {
+            data: result.data,
+            meta: { total_count: result.totalCount },
+            links: {}
+        };
     }
 
     /**

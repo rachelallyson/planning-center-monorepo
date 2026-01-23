@@ -32,38 +32,33 @@ describe('HouseholdsModule', () => {
 
   describe('getAll', () => {
     it('should fetch all households with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }],
+      const mockHouseholds = [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }];
+      const expectedResponse = {
+        data: mockHouseholds,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockHouseholds,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/households', {}, undefined);
     });
 
     it('should fetch households with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockHouseholds = [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockHouseholds,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('HouseholdsModule', () => {
 
       await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/households',
+        { 'where[status]': 'active', include: 'people' },
+        undefined
+      );
     });
   });
 

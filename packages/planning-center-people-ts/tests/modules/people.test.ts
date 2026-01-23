@@ -32,38 +32,33 @@ describe('PeopleModule', () => {
 
   describe('getAll', () => {
     it('should fetch all people with default parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }],
+      const mockPeople = [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }];
+      const expectedResponse = {
+        data: mockPeople,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockPeople,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.getAll();
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/people', {}, undefined);
     });
 
     it('should fetch people with filtering options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const mockPeople = [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }];
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockPeople,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
@@ -76,7 +71,11 @@ describe('PeopleModule', () => {
 
       await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/people',
+        { 'where[status]': 'active', include: 'emails,phone_numbers' },
+        undefined
+      );
     });
   });
 
@@ -588,47 +587,55 @@ describe('PeopleModule', () => {
 
   describe('search branch coverage', () => {
     it('should search by phone only', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }],
+      const mockPeople = [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }];
+      const expectedResponse = {
+        data: mockPeople,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockPeople,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.search({ phone: '+1234567890' });
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalledWith(
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/people',
         expect.objectContaining({
-          endpoint: expect.stringContaining('/people'),
-        })
+          'where[search_name_or_email_or_phone_number]': '+1234567890',
+        }),
+        undefined
       );
     });
 
     it('should search by name only when no email or phone', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }],
+      const mockPeople = [{ id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } }];
+      const expectedResponse = {
+        data: mockPeople,
         meta: { total_count: 1 },
         links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
+        data: mockPeople,
+        totalCount: 1,
+        pagesFetched: 1,
         duration: 100,
       });
 
       const result = await module.search({ name: 'John Doe' });
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(expectedResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
+        '/people',
+        expect.objectContaining({
+          'where[search_name]': 'John Doe',
+        }),
+        undefined
+      );
     });
   });
 
