@@ -246,6 +246,8 @@ console.log(`Success rate: ${(results.successRate * 100).toFixed(1)}%`);
 
 ### Event Monitoring
 
+The client emits events throughout its lifecycle. You can listen to these events for monitoring, logging, and debugging:
+
 ```typescript
 // Listen to request events
 client.on('request:start', (event) => {
@@ -264,6 +266,8 @@ client.on('rate:limit', (event) => {
   console.warn(`Rate limit: ${event.remaining}/${event.limit} remaining`);
 });
 ```
+
+**See [Event System Guide](./event-system.mdx) for complete documentation of all event types and advanced patterns.**
 
 ### Performance Metrics
 
@@ -334,6 +338,7 @@ main();
 
 - **[Pagination Guide](./pagination.mdx)** - Learn about pagination patterns
 - **[Error Handling Guide](./error-handling.mdx)** - Comprehensive error handling
+- **[Event System Guide](./event-system.mdx)** - Complete event monitoring and observability
 - **[Configuration Reference](../reference/config.mdx)** - All configuration options
 - **[Examples & Recipes](../recipes/examples.mdx)** - More code examples
 

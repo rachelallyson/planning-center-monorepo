@@ -275,7 +275,7 @@ const cards = await client.workflows.getPersonWorkflowCards('person-id', {
 });
 
 cards.data.forEach(card => {
-  console.log(`Card: ${card.id} in workflow ${card.relationships.workflow.data.id}`);
+  console.log(`Card: ${card.id} in workflow ${cardworkflow.data.id}`);
 });
 ```
 

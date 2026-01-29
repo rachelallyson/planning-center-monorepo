@@ -218,6 +218,8 @@ const client = new PcoClient({
 }
 ```
 
+**Note**: Config-based event handlers are converted to `client.on()` listeners internally. For more advanced event handling, multiple listeners, and complete event type documentation, see the **[Event System Guide](../guides/event-system)**.
+
 ## Base URL
 
 ```typescript
