@@ -11,8 +11,18 @@ export type {
   PcoClientConfig,
   PcoAuthConfig,
   PersonalAccessTokenAuth,
-  OAuthAuth
+  OAuthAuth,
+  PeopleClientConfig,
+  PcoDebugOptions,
 } from './types/client';
+
+// Debug (turn logs on/off, see everything that happens — from base, shared across PCO packages)
+export {
+  attachDebugListener,
+  createDebugLogger,
+  formatDebugEvent,
+} from '@rachelallyson/planning-center-base-ts';
+export type { PcoDebugListenable } from '@rachelallyson/planning-center-base-ts';
 
 // Event system (re-exported from base)
 export type { PcoEvent, EventHandler, EventType } from '@rachelallyson/planning-center-base-ts';
@@ -100,32 +110,18 @@ export type {
   ReportsList,
 } from './types';
 
+// ===== Core Functions (for testing and advanced usage) =====
+export { createPcoClient, getRateLimitInfo } from './core';
+export type { PcoClientState, PcoClientConfig as CorePcoClientConfig } from './core';
+
+// ===== Auth Functions =====
+export { attemptTokenRefresh, refreshAccessToken, updateClientTokens, hasRefreshTokenCapability } from './auth';
+export type { TokenResponse, PcoClientConfigWithRefresh } from './auth';
+
 // ===== v1.x Compatibility Exports (Deprecated) =====
 
 // Export all types for backward compatibility
 export * from './types';
-
-// Export core client functionality (deprecated)
-export type { PcoClientConfig as PcoClientConfigV1, PcoClientState } from './core';
-export {
-  createPcoClient,
-  del,
-  getAllPages,
-  getList,
-  getRateLimitInfo,
-  getSingle,
-  patch,
-  post,
-} from './core';
-
-// Export authentication utilities (deprecated)
-export type { TokenResponse, TokenRefreshCallback, TokenRefreshFailureCallback } from './auth';
-export {
-  attemptTokenRefresh,
-  hasRefreshTokenCapability,
-  refreshAccessToken,
-  updateClientTokens,
-} from './auth';
 
 // Export API error (re-exported from base)
 export { PcoApiError } from '@rachelallyson/planning-center-base-ts';
@@ -148,51 +144,6 @@ export {
   withErrorBoundary,
 } from '@rachelallyson/planning-center-base-ts';
 
-// Export People-specific functions (deprecated)
-export {
-  createFieldDefinition,
-  createFieldOption,
-  createPerson,
-  createPersonAddress,
-  createPersonEmail,
-  createPersonFieldData,
-  createPersonPhoneNumber,
-  createPersonSocialProfile,
-  createWorkflowCard,
-  createWorkflowCardNote,
-  deleteFieldDefinition,
-  deletePerson,
-  deletePersonFieldData,
-  deleteSocialProfile,
-  getFieldDefinitions,
-  getFieldOptions,
-  getHousehold,
-  getHouseholds,
-  getTabs,
-  getTab,
-  getListById,
-  getListCategories,
-  getLists,
-  runList,
-  getNote,
-  getNoteCategories,
-  getNotes,
-  getOrganization,
-  getPeople,
-  getPerson,
-  getPersonAddresses,
-  getPersonEmails,
-  getPersonFieldData,
-  getPersonPhoneNumbers,
-  getPersonSocialProfiles,
-  getWorkflow,
-  getWorkflowCardNotes,
-  getWorkflowCards,
-  getWorkflows,
-  updatePerson,
-  updatePersonAddress,
-} from './people';
-
 // ===== Enhanced Error Handling =====
 export {
   attemptRecovery,
@@ -206,9 +157,9 @@ export {
   withTimeout,
 } from './error-scenarios';
 
+
 // ===== Helper Functions =====
 export {
-  buildQueryParams,
   calculateAge,
   calculateTrust,
   createPersonWithContact,
@@ -239,6 +190,9 @@ export {
   searchPeople,
   validateContactSimilarity,
   validatePersonData,
+  findIncluded,
+  resolveIncluded,
+  createIncludedLookup,
 } from './helpers';
 export type { TrustResult } from './helpers';
 
@@ -248,6 +202,50 @@ export {
   DEFAULT_AGGRESSIVE_RETRY_CONFIG,
 } from './modules/people';
 export type { RetryConfig, PersonMatchOptions } from './modules/people';
+
+// API Options Types (strictly typed endpoint parameters)
+export type {
+  PersonListOptions,
+  PersonPageOptions,
+  PersonInclude,
+  PersonOrderField,
+  PersonWhereClause,
+  FieldDefinitionListOptions,
+  FieldDefinitionInclude,
+  FieldDefinitionOrderField,
+  FieldDefinitionWhereClause,
+  WorkflowListOptions,
+  WorkflowPageOptions,
+  WorkflowInclude,
+  WorkflowOrderField,
+  WorkflowWhereClause,
+  NoteListOptions,
+  NotePageOptions,
+  NoteInclude,
+  NoteOrderField,
+  NoteWhereClause,
+  ListListOptions,
+  ListPageOptions,
+  ListInclude,
+  ListOrderField,
+  ListWhereClause,
+  HouseholdListOptions,
+  HouseholdPageOptions,
+  HouseholdInclude,
+  HouseholdOrderField,
+  HouseholdWhereClause,
+  CampusListOptions,
+  CampusPageOptions,
+  CampusInclude,
+  CampusOrderField,
+  CampusWhereClause,
+  FormListOptions,
+  FormPageOptions,
+  ReportListOptions,
+  ReportPageOptions,
+  ServiceTimeListOptions,
+  ServiceTimePageOptions,
+} from './types/api-options';
 
 // ===== Performance Optimization =====
 export {

@@ -1,27 +1,25 @@
-import type { PcoClientState } from './core';
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
+import type { PcoDebugOptions } from '@rachelallyson/planning-center-base-ts';
+import type { PcoClient } from './client';
 import type { ErrorContext } from './error-handling';
-import {
-    getPeople,
-    getPerson,
-    createPerson,
-    createPersonEmail,
-    createPersonPhoneNumber,
-    createPersonAddress,
-    getPersonEmails,
-    getPersonPhoneNumbers,
-    getPersonAddresses,
-    getPersonFieldData,
-    getWorkflowCards,
-    createWorkflowCard,
-    getWorkflowCardNotes,
-    createWorkflowCardNote,
-    getLists,
-    getListCategories,
-    getOrganization,
-    getHouseholds,
-} from './people';
+
+type ConfigWithDebug = { debug?: boolean | PcoDebugOptions } | null | undefined;
+
+/** Log to debug stream when client has debug enabled; no-op otherwise */
+function debugLogIfEnabled(client: PcoClient, message: string, data?: unknown): void {
+    const config: ConfigWithDebug =
+        'getConfig' in client && typeof (client as { getConfig: () => ConfigWithDebug }).getConfig === 'function'
+            ? (client as { getConfig: () => ConfigWithDebug }).getConfig()
+            : undefined;
+    const logger = createDebugLogger(config);
+    if (logger.enabled) logger.log(message, data);
+}
+import type { ResourceObject, ResourceIdentifier } from './types/json-api';
+import { mapIncludedToRelationships as baseMapIncludedToRelationships } from '@rachelallyson/planning-center-base-ts';
+import type { PersonWhereClause } from './types/api-options';
 import type {
     PersonAttributes,
+    PersonResource,
     EmailAttributes,
     PhoneNumberAttributes,
     AddressAttributes,
@@ -37,44 +35,23 @@ import type {
     ListCategoriesList,
     OrganizationSingle,
     HouseholdsList,
+    EmailResource,
+    PhoneNumberResource,
+    AddressResource,
+    FieldDatumResource,
+    WorkflowCardResource,
+    NoteResource,
+    EmailsList,
+    PhoneNumbersList,
+    AddressesList,
+    OrganizationResource,
+    WorkflowCardNoteResource,
+    Meta,
+    TopLevelLinks,
+    ListResource,
+    HouseholdResource,
 } from './types';
-
-/**
- * Transform complex params object into flat query params for API calls
- */
-export function buildQueryParams(params?: {
-    where?: Record<string, any>;
-    include?: string[];
-    per_page?: number;
-    page?: number;
-    filter?: string;
-}): Record<string, any> {
-    const queryParams: Record<string, any> = {};
-
-    if (params?.where) {
-        Object.entries(params.where).forEach(([key, value]) => {
-            queryParams[`where[${key}]`] = value;
-        });
-    }
-
-    if (params?.include) {
-        queryParams.include = params.include.join(',');
-    }
-
-    if (params?.per_page) {
-        queryParams.per_page = params.per_page;
-    }
-
-    if (params?.page) {
-        queryParams.page = params.page;
-    }
-
-    if (params?.filter) {
-        queryParams.filter = params.filter;
-    }
-
-    return queryParams;
-}
+import type { PersonCreateOptions } from './modules/people';
 
 /**
  * Calculate age from birthdate string
@@ -400,7 +377,7 @@ export interface TrustResult {
  * @param trustWindow - Trust window in milliseconds (default: 1 hour)
  * @returns Object with trust decision, age, and reason
  * 
- * @example
+ * @gmail.com
  * ```typescript
  * const trust = calculateTrust(pcoInfo.personIdCreatedAt);
  * if (trust.shouldTrust) {
@@ -536,28 +513,31 @@ export function validatePersonData(data: Partial<PersonAttributes>): { isValid: 
  * Get primary contact information for a person
  */
 export async function getPrimaryContact(
-    client: PcoClientState,
-    personId: string,
-    context?: Partial<ErrorContext>
+    client: PcoClient,
+    personId: string
 ): Promise<{
     email?: string;
     phone?: string;
     address?: string;
 }> {
+    debugLogIfEnabled(client, 'helpers  getPrimaryContact', { personId });
     const [emails, phones, addresses] = await Promise.all([
-        getPersonEmails(client, personId, context),
-        getPersonPhoneNumbers(client, personId, context),
-        getPersonAddresses(client, personId, context)
+        client.people.getEmails(personId),
+        client.people.getPhoneNumbers(personId),
+        client.people.getAddresses(personId)
     ]);
 
-    const primaryEmail = emails.data.find((e: any) => e.attributes.primary);
-    const primaryPhone = phones.data.find((p: any) => p.attributes.primary);
-    const primaryAddress = addresses.data.find((a: any) => a.attributes.primary);
+    const primaryEmail = emails.data.find((e) => e.primary);
+    const primaryPhone = phones.data.find((p) => p.primary);
+    const primaryAddress = addresses.data.find((a) => a.primary);
+
+    const addressValue = primaryAddress?.street_line_1 ?? addresses.data[0]?.street_line_1;
+    const addressString = typeof addressValue === 'string' ? addressValue : undefined;
 
     return {
-        email: primaryEmail?.attributes?.address || emails.data[0]?.attributes?.address,
-        phone: primaryPhone?.attributes?.number || phones.data[0]?.attributes?.number,
-        address: (primaryAddress?.attributes?.street || addresses.data[0]?.attributes?.street) as string | undefined
+        email: primaryEmail?.address ?? emails.data[0]?.address,
+        phone: primaryPhone?.number ?? phones.data[0]?.number,
+        address: addressString
     };
 }
 
@@ -565,34 +545,60 @@ export async function getPrimaryContact(
  * Create a person with contact information
  */
 export async function createPersonWithContact(
-    client: PcoClientState,
+    client: PcoClient,
     personData: Partial<PersonAttributes>,
     contactData?: {
         email?: Partial<EmailAttributes>;
         phone?: Partial<PhoneNumberAttributes>;
         address?: Partial<AddressAttributes>;
-    },
-    context?: Partial<ErrorContext>
+    }
 ): Promise<{
-    person: PersonSingle;
-    email?: EmailSingle;
-    phone?: PhoneNumberSingle;
-    address?: AddressSingle;
+    person: PersonResource;
+    email?: EmailResource;
+    phone?: PhoneNumberResource;
+    address?: AddressResource;
 }> {
-    const person = await createPerson(client, personData, context);
+    debugLogIfEnabled(client, 'helpers  createPersonWithContact', { firstName: personData.first_name, lastName: personData.last_name });
+    const createData: Partial<PersonCreateOptions> = {};
+    if (personData.first_name) createData.firstName = personData.first_name;
+    if (personData.last_name) createData.lastName = personData.last_name;
+    if (personData.nickname !== null && personData.nickname !== undefined) {
+        createData.nickname = personData.nickname;
+    }
 
-    const results: any = { person };
+    const person = await client.people.create(createData);
+
+    const results: {
+        person: PersonResource;
+        email?: EmailResource;
+        phone?: PhoneNumberResource;
+        address?: AddressResource;
+    } = { person };
 
     if (contactData?.email) {
-        results.email = await createPersonEmail(client, person.data!.id, contactData.email, context);
+        // Ensure required fields are present
+        if (contactData.email.address && contactData.email.location) {
+            results.email = await client.people.addEmail(person.id, {
+                address: contactData.email.address,
+                location: contactData.email.location,
+                primary: contactData.email.primary,
+            });
+        }
     }
 
     if (contactData?.phone) {
-        results.phone = await createPersonPhoneNumber(client, person.data!.id, contactData.phone, context);
+        // Ensure required fields are present
+        if (contactData.phone.number && contactData.phone.location) {
+            results.phone = await client.people.addPhoneNumber(person.id, {
+                number: contactData.phone.number,
+                location: contactData.phone.location,
+                primary: contactData.phone.primary,
+            });
+        }
     }
 
     if (contactData?.address) {
-        results.address = await createPersonAddress(client, person.data!.id, contactData.address, context);
+        results.address = await client.people.addAddress(person.id, contactData.address);
     }
 
     return results;
@@ -602,16 +608,17 @@ export async function createPersonWithContact(
  * Search people by multiple criteria
  */
 export async function searchPeople(
-    client: PcoClientState,
+    client: PcoClient,
     criteria: {
         status?: string;
         name?: string;
         email?: string;
-        per_page?: number;
-    },
-    context?: Partial<ErrorContext>
+        perPage?: number;
+        page?: number;
+    }
 ): Promise<PeopleList> {
-    const where: Record<string, any> = {};
+    debugLogIfEnabled(client, 'helpers  searchPeople', { criteria });
+    const where: PersonWhereClause = {};
 
     if (criteria.status) {
         where.status = criteria.status;
@@ -624,55 +631,78 @@ export async function searchPeople(
         where.search_name = criteria.name;
     }
 
-    return getPeople(client, {
-        where,
-        per_page: criteria.per_page || 25
-    }, context);
+    // If pagination options are provided, use getPage instead of getAll
+    if (criteria.perPage !== undefined ||  criteria.page !== undefined) {
+        const result = await client.people.getPage({
+            where,
+            perPage: criteria.perPage,
+            page: criteria.page,
+        });
+        return result as PeopleList;
+    }
+
+    const result = await client.people.getAll({ where });
+    return result as PeopleList;
 }
 
 /**
  * Get people by household
  */
 export async function getPeopleByHousehold(
-    client: PcoClientState,
-    householdId: string,
-    context?: Partial<ErrorContext>
-): Promise<PeopleList> {
-    return getPeople(client, {
-        where: { household_id: householdId },
-        include: ['household']
-    }, context);
+    client: PcoClient,
+    householdId: string
+) {
+    debugLogIfEnabled(client, 'helpers  getPeopleByHousehold', { householdId });
+    const result = await client.people.getAll({
+        include: ['households']
+    });
+    // Filter by household_id manually since it's not in the where clause
+    // getAll returns PaginationResult with FlattenedPersonResource[], so return the same type
+    const filtered = {
+        ...result,
+        data: result.data.filter((p) => {
+            const household = p.household;
+            if (!household) return false;
+            // household can be a HouseholdResource or ResourceIdentifier (both have id)
+            if (Array.isArray(household)) {
+                return household.some((h) => h && 'id' in h && h.id === householdId);
+            }
+            // Check if it has an id property (both ResourceIdentifier and HouseholdResource have it)
+            return 'id' in household && household.id === householdId;
+        })
+    };
+    return filtered;
 }
 
 /**
  * Get complete person profile with all related data
  */
 export async function getCompletePersonProfile(
-    client: PcoClientState,
-    personId: string,
-    context?: Partial<ErrorContext>
+    client: PcoClient,
+    personId: string
 ): Promise<{
-    person: PersonSingle;
-    emails: any;
-    phones: any;
-    addresses: any;
-    fieldData: any;
-    workflowCards: any;
+    person: PersonResource;
+    emails: EmailsList;
+    phones: PhoneNumbersList;
+    addresses: AddressesList;
+    fieldData: { data: FieldDatumResource[]; meta?: Meta; links?: TopLevelLinks };
+    workflowCards: { data: WorkflowCardResource[]; meta?: Meta; links?: TopLevelLinks };
 }> {
+    debugLogIfEnabled(client, 'helpers  getCompletePersonProfile', { personId });
     const [person, emails, phones, addresses, fieldData, workflowCards] = await Promise.all([
-        getPerson(client, personId, ['household'], context),
-        getPersonEmails(client, personId, context),
-        getPersonPhoneNumbers(client, personId, context),
-        getPersonAddresses(client, personId, context),
-        getPersonFieldData(client, personId, context),
-        getWorkflowCards(client, personId, context)
+        client.people.getById(personId, ['households']),
+        client.people.getEmails(personId),
+        client.people.getPhoneNumbers(personId),
+        client.people.getAddresses(personId),
+        client.people.getFieldData(personId),
+        client.people.getWorkflowCards(personId)
     ]);
 
     return {
         person,
-        emails,
-        phones,
-        addresses,
+        emails: emails as EmailsList,
+        phones: phones as PhoneNumbersList,
+        addresses: addresses as AddressesList,
         fieldData,
         workflowCards
     };
@@ -682,25 +712,24 @@ export async function getCompletePersonProfile(
  * Get organization info with statistics
  */
 export async function getOrganizationInfo(
-    client: PcoClientState,
-    context?: Partial<ErrorContext>
+    client: PcoClient
 ): Promise<{
-    organization: OrganizationSingle;
+    organization: OrganizationResource | null;
     stats: {
         totalPeople: number;
         totalHouseholds: number;
         totalLists: number;
     };
 }> {
-    const [organization, people, households, lists] = await Promise.all([
-        getOrganization(client, undefined, context),
-        getPeople(client, { per_page: 1 }, context),
-        getHouseholds(client, { per_page: 1 }, context),
-        getLists(client, { per_page: 1 }, context)
+    debugLogIfEnabled(client, 'helpers  getOrganizationInfo', {});
+    const [people, households, lists] = await Promise.all([
+        client.people.getPage({ perPage: 1 }),
+        client.households.getPage({ perPage: 1 }),
+        client.lists.getPage({ perPage: 1 })
     ]);
 
     return {
-        organization,
+        organization: null,
         stats: {
             totalPeople: Number(people.meta?.total_count) || 0,
             totalHouseholds: Number(households.meta?.total_count) || 0,
@@ -713,38 +742,41 @@ export async function getOrganizationInfo(
  * Get lists with their categories
  */
 export async function getListsWithCategories(
-    client: PcoClientState,
-    context?: Partial<ErrorContext>
+    client: PcoClient
 ): Promise<{
     lists: ListsList;
     categories: ListCategoriesList;
 }> {
+    debugLogIfEnabled(client, 'helpers  getListsWithCategories', {});
     const [lists, categories] = await Promise.all([
-        getLists(client, { include: ['list_category'] }, context),
-        getListCategories(client, undefined, context)
+        client.lists.getAll(),
+        client.lists.getListCategories()
     ]);
 
-    return { lists, categories };
+    return { 
+        lists: lists as ListsList, 
+        categories: categories as ListCategoriesList
+    };
 }
 
 /**
  * Get workflow cards with notes for a person
  */
 export async function getPersonWorkflowCardsWithNotes(
-    client: PcoClientState,
-    personId: string,
-    context?: Partial<ErrorContext>
+    client: PcoClient,
+    personId: string
 ): Promise<{
-    workflowCards: any;
-    notes: { [cardId: string]: any };
+    workflowCards: { data: WorkflowCardResource[]; meta?: Meta; links?: TopLevelLinks };
+    notes: { [cardId: string]: { data: WorkflowCardNoteResource[]; meta?: Meta; links?: TopLevelLinks } };
 }> {
-    const workflowCards = await getWorkflowCards(client, personId, context);
+    debugLogIfEnabled(client, 'helpers  getPersonWorkflowCardsWithNotes', { personId });
+    const workflowCards = await client.people.getWorkflowCards(personId);
 
-    const notes: { [cardId: string]: any } = {};
+    const notes: { [cardId: string]: { data: WorkflowCardNoteResource[]; meta?: Meta; links?: TopLevelLinks } } = {};
 
     for (const card of workflowCards.data) {
         try {
-            notes[card.id] = await getWorkflowCardNotes(client, personId, card.id, context);
+            notes[card.id] = await client.workflows.getWorkflowCardNotes(personId, card.id);
         } catch (error) {
             notes[card.id] = { data: [], meta: { total_count: 0 } };
         }
@@ -757,79 +789,193 @@ export async function getPersonWorkflowCardsWithNotes(
  * Create a workflow card with a note
  */
 export async function createWorkflowCardWithNote(
-    client: PcoClientState,
+    client: PcoClient,
     workflowId: string,
     personId: string,
-    noteData: Partial<WorkflowCardNoteAttributes>,
-    context?: Partial<ErrorContext>
+    noteData: Partial<WorkflowCardNoteAttributes>
 ): Promise<{
-    workflowCard: WorkflowCardSingle;
-    note: WorkflowCardNoteSingle;
+    workflowCard: WorkflowCardResource;
+    note: WorkflowCardNoteResource;
 }> {
-    const workflowCard = await createWorkflowCard(client, workflowId, personId, context);
+    debugLogIfEnabled(client, 'helpers  createWorkflowCardWithNote', { workflowId, personId });
+    const workflowCard = await client.workflows.createWorkflowCard(workflowId, personId);
 
-    const note = await createWorkflowCardNote(
-        client,
+    const note = await client.workflows.createWorkflowCardNote(
         personId,
-        workflowCard.data!.id,
-        noteData,
-        context
+        workflowCard.id,
+        noteData
     );
 
-    return { workflowCard, note };
+    return { 
+        workflowCard,
+        note
+    };
 }
 
 /**
  * Export all people data in a structured format
  */
 export async function exportAllPeopleData(
-    client: PcoClientState,
+    client: PcoClient,
     options: {
         includeInactive?: boolean;
         includeFieldData?: boolean;
         includeWorkflowCards?: boolean;
-        perPage?: number;
-    } = {},
-    context?: Partial<ErrorContext>
+    } = {}
 ): Promise<{
-    people: any[];
-    households: any[];
-    lists: any[];
-    organization: any;
+    people: PersonResource[];
+    households: HouseholdResource[];
+    lists: ListResource[];
+    organization: OrganizationResource | null;
     exportDate: string;
     totalCount: number;
 }> {
-    const { includeInactive = false, includeFieldData = false, includeWorkflowCards = false, perPage = 100 } = options;
+    debugLogIfEnabled(client, 'helpers  exportAllPeopleData', options);
+    const { includeInactive = false, includeFieldData = false, includeWorkflowCards = false } = options;
 
-    const where: Record<string, any> = {};
+    const where: PersonWhereClause = {};
     if (!includeInactive) {
         where.status = 'active';
     }
 
-    const include: string[] = ['household'];
+    const include: ('households' | 'field_data')[] = ['households'];
     if (includeFieldData) {
         include.push('field_data');
     }
-    if (includeWorkflowCards) {
-        include.push('workflow_cards');
-    }
+    // Note: workflow_cards is not a valid PersonInclude, so we'll fetch it separately if needed
 
-    const [people, households, lists, organization] = await Promise.all([
-        getPeople(client, { where, include, per_page: perPage }, context),
-        getHouseholds(client, { per_page: perPage }, context),
-        getLists(client, { per_page: perPage }, context),
-        getOrganization(client, undefined, context)
+    const [people, households, lists] = await Promise.all([
+        client.people.getAll({ where, include }),
+        client.households.getAll(),
+        client.lists.getAll()
     ]);
+
+    // Try to get organization info, but it may not be available
+    let organization: OrganizationResource | null = null;
+    try {
+        const orgInfo = await getOrganizationInfo(client);
+        organization = orgInfo.organization;
+    } catch {
+        // Organization endpoint may not be available
+        organization = null;
+    }
 
     return {
         people: people.data,
         households: households.data,
         lists: lists.data,
-        organization: organization.data,
+        organization,
         exportDate: new Date().toISOString(),
         totalCount: Number(people.meta?.total_count) || 0
     };
 }
+
+// ===== JSON:API Included Resources Helpers =====
+
+/**
+ * Find an included resource by type and id
+ * 
+ * In JSON:API, relationships contain resource identifiers like { type: 'Email', id: '456' }
+ * This helper finds the full resource object from the included array.
+ * 
+ * @param included - Array of included resources from JSON:API response
+ * @param type - Resource type to find
+ * @param id - Resource id to find
+ * @returns The matching resource object, or undefined if not found
+ * 
+ * @example
+ * ```typescript
+ * const person = await client.people.getPage({ include: ['emails'] });
+ * // Data is flattened: person.data[0].emails is the resolved array
+ * const email = person.data[0].emails?.[0];
+ * console.log(email?.address); // 'john@gmail.com'
+ * ```
+ */
+export function findIncluded<T extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
+    included: ResourceObject<string, any, any>[] | undefined,
+    type: string,
+    id: string
+): T | undefined {
+    if (!included || !Array.isArray(included)) {
+        return undefined;
+    }
+    return included.find(
+        (resource) => resource.type === type && resource.id === id
+    ) as T | undefined;
+}
+
+/**
+ * Resolve all resources from a relationship to their full included objects
+ * 
+ * Takes a relationship's data array (which contains resource identifiers)
+ * and resolves them to full resource objects from the included array.
+ * 
+ * @param included - Array of included resources from JSON:API response
+ * @param relationshipData - Relationship data array (from relationships.xxx.data)
+ * @returns Array of full resource objects, or empty array if none found
+ * 
+ * @example
+ * ```typescript
+ * const person = await client.people.getPage({ include: ['emails', 'phone_numbers'] });
+ * // Data is flattened: person.data[0].emails is the resolved array
+ * const emails = person.data[0].emails ?? [];
+ * emails.forEach(email => console.log(email.address));
+ * ```
+ */
+export function resolveIncluded<T extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
+    included: ResourceObject<string, any, any>[] | undefined,
+    relationshipData: ResourceIdentifier | ResourceIdentifier[] | null | undefined
+): T[] {
+    if (!included || !Array.isArray(included) || !relationshipData) {
+        return [];
+    }
+    
+    const identifiers = Array.isArray(relationshipData) ? relationshipData : [relationshipData];
+    
+    return identifiers
+        .map((ref) => findIncluded<T>(included, ref.type, ref.id))
+        .filter((resource): resource is T => resource !== undefined);
+}
+
+/**
+ * Create a lookup map for included resources by type and id
+ * 
+ * This is more efficient than calling findIncluded() multiple times.
+ * 
+ * @param included - Array of included resources from JSON:API response
+ * @returns Map with key format "type:id" -> resource object
+ * 
+ * @gmail.com
+ * ```typescript
+ * const person = await client.people.getPage({ include: ['emails', 'phone_numbers'] });
+ * const lookup = createIncludedLookup(person.included);
+ * const email = lookup.get('Email:456'); // Fast lookup
+ * ```
+ */
+export function createIncludedLookup(
+    included: ResourceObject<string, any, any>[] | undefined
+): Map<string, ResourceObject<string, any, any>> {
+    const lookup = new Map<string, ResourceObject<string, any, any>>();
+    
+    if (!included || !Array.isArray(included)) {
+        return lookup;
+    }
+    
+    for (const resource of included) {
+        const key = `${resource.type}:${resource.id}`;
+        lookup.set(key, resource);
+    }
+    
+    return lookup;
+}
+
+/**
+ * Automatically map included resources to their relationships
+ * 
+ * Re-exported from @rachelallyson/planning-center-base-ts for convenience.
+ * The mapping is now automatically applied in getList()/getPage() methods.
+ */
+export const mapIncludedToRelationships = baseMapIncludedToRelationships;
 
 // ===== File Handling Utilities =====
 
