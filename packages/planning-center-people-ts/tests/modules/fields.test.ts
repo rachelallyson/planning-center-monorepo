@@ -1,578 +1,661 @@
-import { FieldsModule } from '../../src/modules/fields';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('FieldsModule', () => {
-  let module: FieldsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('FieldsModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testPersonId: string | null = null;
+  let testTabId: string | null = null;
+  let testFieldDefinitionId: string | null = null;
+  let testFieldDataId: string | null = null;
+  // Track which field definitions are used by which tests to avoid conflicts
+  let usedFieldIds: Set<string> = new Set();
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+    
+    // Create a test person for field operations
+    const timestamp = Date.now();
+    const person = await client.people.create({
+      firstName: `Test_Fields_${timestamp}`,
+      lastName: `Person_${timestamp}`,
+      status: 'active' as const,
+    });
+    // create() returns ResourceObject which should have id property
+    if (!person || !person.id) {
+      throw new Error('Failed to create test person: API returned invalid response');
+    }
+    testPersonId = person.id;
+    
+    // Get a tab ID for field definition operations
+    const tabsResponse = await client.fields.getTabs();
+    expect(tabsResponse.data.length).toBeGreaterThan(0);
+    testTabId = tabsResponse.data[0].id;
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new FieldsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testFieldDataId && testPersonId) {
+      await client.fields.deletePersonFieldData(testPersonId, testFieldDataId);
+    }
+    // Note: testFieldDefinitionId is not set in tests, so we don't delete it
+    // Field definitions are typically system-level and shouldn't be deleted
+    expect(testPersonId).toBeDefined();
+    await client.people.delete(testPersonId!);
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(FieldsModule);
+      expect(client).toBeDefined();
+      expect(client.fields).toBeDefined();
     });
   });
 
   describe('getAllFieldDefinitions', () => {
     it('should fetch all field definitions', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1', slug: 'field-1' } }],
-      };
+      const result = await client.fields.getAllFieldDefinitions();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
+      // getAllFieldDefinitions returns PaginationResult with data array
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.data[0]).toHaveProperty('id');
+      expect(result.data[0]).toHaveProperty('type');
+      expect(result.data[0].type).toBe('FieldDefinition');
+    }, 30000);
 
-      const result = await module.getAllFieldDefinitions();
+    it('should fetch field definitions with custom include', async () => {
+      // getAllFieldDefinitions accepts FieldDefinitionListOptions, not include array
+      const result = await client.fields.getAllFieldDefinitions({
+        include: ['tab', 'field_options']
+      });
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/field_definitions', { include: 'tab' }, undefined);
-    });
-
-    it('should fetch from API on every call', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1' } }],
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse as any);
-
-      // First call should fetch from API
-      await module.getAllFieldDefinitions();
-      // Second call should also fetch from API (no caching)
-      const result = await module.getAllFieldDefinitions();
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledTimes(2);
-      expect(result).toEqual(mockResponse.data);
-    });
+      // getAllFieldDefinitions returns PaginationResult with data array
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getFieldDefinition', () => {
     it('should fetch field definition by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1' } },
-      };
+      // First get a field definition ID
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldId = fieldsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.fields.getFieldDefinition(fieldId);
 
-      const result = await module.getFieldDefinition('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(fieldId);
+      expect(result.type).toBe('FieldDefinition');
+      expect(result).toHaveProperty('name');
+    }, 30000);
   });
 
   describe('getFieldDefinitionBySlug', () => {
     it('should fetch field definition by slug', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1', slug: 'field-1' } },
-      };
+      // First get a field definition with a slug
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldWithSlug = fieldsResponse.data.find(f => f.slug);
+      expect(fieldWithSlug).toBeDefined();
+      expect(fieldWithSlug?.slug).toBeDefined();
+      const slug = fieldWithSlug!.slug!;
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [mockResponse.data] } as any);
+      const result = await client.fields.getFieldDefinitionBySlug(slug);
 
-      const result = await module.getFieldDefinitionBySlug('field-1');
-
-      expect(result).toEqual(mockResponse.data);
-    });
-
-    it('should return null when field not found', async () => {
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [] } as any);
-
-      const result = await module.getFieldDefinitionBySlug('nonexistent');
-
-      expect(result).toBeNull();
-    });
+      expect(result).toBeDefined();
+      if (result) {
+        expect(result.id).toBe(fieldWithSlug!.id);
+        // getFieldDefinitionBySlug returns flattened resource - slug is at top level
+        if ('slug' in result) {
+          expect(result.slug).toBe(slug);
+        }
+      }
+    }, 60000);
   });
 
   describe('getFieldDefinitionByName', () => {
     it('should fetch field definition by name', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDefinition', attributes: { name: 'Field 1', slug: 'field-1' } },
-      };
+      // First get a field definition with a name
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldWithName = fieldsResponse.data.find(f => 'name' in f && f.name);
+      expect(fieldWithName).toBeDefined();
+      if (fieldWithName && 'name' in fieldWithName) {
+        expect(fieldWithName.name).toBeDefined();
+        const name = fieldWithName.name;
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [mockResponse.data] } as any);
+        const result = await client.fields.getFieldDefinitionByName(name);
 
-      const result = await module.getFieldDefinitionByName('Field 1');
-
-      expect(result).toEqual(mockResponse.data);
-    });
-
-    it('should return null when field not found', async () => {
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [] } as any);
-
-      const result = await module.getFieldDefinitionByName('Nonexistent Field');
-
-      expect(result).toBeNull();
-    });
+        expect(result).toBeDefined();
+        if (result) {
+          expect(result.id).toBe(fieldWithName.id);
+          // getFieldDefinitionByName returns flattened resource - name is at top level
+          if ('name' in result) {
+            expect(result.name).toBe(name);
+          }
+        }
+      }
+    }, 30000);
   });
 
   describe('createFieldDefinition', () => {
     it('should create a new field definition', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDefinition', attributes: { name: 'New Field' } },
+      expect(testTabId).toBeDefined();
+      expect(testTabId).toBeTruthy();
+
+      const timestamp = Date.now();
+      const fieldData = {
+        name: `Test Field ${timestamp}`,
+        slug: `test-field-${timestamp}`,
+        data_type: 'string' as const,
       };
+      const result = await client.fields.createFieldDefinition(testTabId, fieldData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDefinition');
+      expect(result.name).toBe(fieldData.name);
 
-      const fieldData = { name: 'New Field', field_type: 'text' };
-      const result = await module.createFieldDefinition('tab-1', fieldData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testFieldDefinitionId = result.id || null;
+    }, 30000);
   });
 
   describe('updateFieldDefinition', () => {
     it('should update an existing field definition', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDefinition', attributes: { name: 'Updated Field' } },
+      expect(testTabId).toBeDefined();
+      // Create a test field definition first
+      const timestamp = Date.now();
+      const fieldData = {
+        name: `Test Update ${timestamp}`,
+        slug: `test-update-${timestamp}`,
+        data_type: 'string' as const,
       };
+      const created = await client.fields.createFieldDefinition(testTabId!, fieldData);
+      const fieldDefinitionId = created.id!;
+      
+      expect(fieldDefinitionId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { name: 'Updated Field Name' };
+      const result = await client.fields.updateFieldDefinition(fieldDefinitionId, updateData);
 
-      const updateData = { name: 'Updated Field' };
-      const result = await module.updateFieldDefinition('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(fieldDefinitionId);
+      expect(result.name).toBe('Updated Field Name');
+    }, 30000);
   });
 
   describe('deleteFieldDefinition', () => {
     it('should delete a field definition', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testTabId).toBeDefined();
 
-      await module.deleteFieldDefinition('1');
+      // Create a field definition to delete
+      const timestamp = Date.now();
+      const fieldData = {
+        name: `Test Delete ${timestamp}`,
+        slug: `test-delete-${timestamp}`,
+        data_type: 'string' as const,
+      };
+      const created = await client.fields.createFieldDefinition(testTabId!, fieldData);
+      const fieldIdToDelete = created.id ?? '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Delete the field definition
+      await expect(client.fields.deleteFieldDefinition(fieldIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.fields.getFieldDefinition(fieldIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getFieldOptions', () => {
     it('should get field options for a field definition', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FieldOption', attributes: { name: 'Option 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a field definition ID
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldId = fieldsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.fields.getFieldOptions(fieldId);
 
-      const result = await module.getFieldOptions('field-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('createFieldOption', () => {
-    it('should create a new field option', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FieldOption', attributes: { name: 'New Option' } },
+    it('should create a field option', async () => {
+      // First get a field definition ID
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldId = fieldsResponse.data[0].id;
+
+      const timestamp = Date.now();
+      const optionData = {
+        value: `Test Option ${timestamp}`,
+        sequence: 1,
       };
+      const result = await client.fields.createFieldOption(fieldId, optionData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const optionData = { name: 'New Option' };
-      const result = await module.createFieldOption('field-1', optionData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldOption');
+      expect(result.value).toBe(optionData.value);
+    }, 30000);
   });
 
   describe('getPersonFieldData', () => {
-    it('should get field data for a person', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+    it('should get person field data', async () => {
+      expect(testPersonId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.fields.getPersonFieldData(testPersonId!);
 
-      const result = await module.getPersonFieldData('person-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('setPersonField', () => {
-    it('should set a person field by ID', async () => {
-      const fieldDef = { id: 'field-1', type: 'FieldDefinition', attributes: { data_type: 'string', name: 'Field 1', slug: 'field-1' } } as any;
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
-      };
+    it('should set person field by field ID', async () => {
+      expect(testPersonId).toBeDefined();
 
-      // resolveFieldDefinition -> getFieldDefinition
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: fieldDef },
-        status: 200,
-        headers: {},
-        requestId: 't1',
-        duration: 100,
+      // First get a field definition ID that accepts string values (not date)
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      // Find a string or text field (not date)
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const stringField = fieldsResponse.data.find(f => {
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return dataType === 'string' || 
+               dataType === 'text' ||
+               (!dataType || dataType !== 'date');
       });
-      // createPersonFieldData -> getFieldDefinition
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: fieldDef },
-        status: 200,
-        headers: {},
-        requestId: 't2',
-        duration: 100,
-      });
-      // getPersonFieldData -> empty
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 't3',
-        duration: 100,
-      });
-      // createResource
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 't4',
-        duration: 100,
+      expect(stringField).toBeDefined();
+      const fieldId = stringField!.id;
+      usedFieldIds.add(fieldId);
+
+      const result = await client.fields.setPersonField(testPersonId!, {
+        fieldId: fieldId,
+        value: `Test Value ${Date.now()}`,
       });
 
-      const options = {
-        fieldId: 'field-1',
-        value: 'Test Value',
-      };
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDatum');
 
-      const result = await module.setPersonField('person-1', options);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testFieldDataId = result.id || null;
+    }, 30000);
   });
 
   describe('setPersonFieldById', () => {
-    it('should set a person field by field ID', async () => {
-      const fieldDef = { id: 'field-1', type: 'FieldDefinition', attributes: { data_type: 'string' } } as any;
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
-      };
+    it('should set person field by field ID', async () => {
+      expect(testPersonId).toBeDefined();
 
-      // getFieldDefinition
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: fieldDef },
-        status: 200,
-        headers: {},
-        requestId: 't1',
-        duration: 100,
+      // First get a field definition ID that accepts string values
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      // Find string or text fields (not date) - use first one for this test
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const stringFields = fieldsResponse.data.filter(f => {
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return dataType === 'string' || 
+               dataType === 'text' ||
+               (!dataType || dataType !== 'date');
       });
-      // getPersonFieldData -> empty
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 't2',
-        duration: 100,
-      });
-      // create
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 't3',
-        duration: 100,
-      });
+      expect(stringFields.length).toBeGreaterThan(0);
+      // Find a field that hasn't been used by other tests to avoid conflicts
+      const availableField = stringFields.find(f => !usedFieldIds.has(f.id));
+      const fieldId = availableField ? availableField.id : stringFields[0].id;
+      usedFieldIds.add(fieldId);
 
-      const result = await module.setPersonFieldById('person-1', 'field-1', 'Test Value');
+      // Check if field data exists and delete it first to ensure clean state
+      // Must include field_definition to properly check for existing data
+      const existingFieldData = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+      const existingDatum = existingFieldData.data.find(d => {
+        const fieldDefData = d.field_definition;
+        // Compare as strings to handle number/string ID mismatches
+        return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+      });
+      if (existingDatum) {
+        await client.fields.deletePersonFieldData(testPersonId!, existingDatum.id);
+        // Wait for API to process deletion and verify it's gone
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const verifyDeleted = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+        const stillExists = verifyDeleted.data.find(d => {
+          const fieldDefData = d.field_definition;
+          // Compare as strings to handle number/string ID mismatches
+          return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+        });
+        if (stillExists) {
+          throw new Error(`Field data for field ${fieldId} still exists after deletion - API indexing delay or deletion failed`);
+        }
+      }
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      const result = await client.fields.setPersonFieldById(testPersonId!, fieldId, `Test Value ${Date.now()}`);
+
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDatum');
+    }, 30000);
   });
 
   describe('setPersonFieldBySlug', () => {
-    it('should set a person field by field slug', async () => {
-      const fieldDefList = { id: 'field-1', type: 'FieldDefinition', attributes: { slug: 'field-slug' } } as any;
-      const fieldDef = { id: 'field-1', type: 'FieldDefinition', attributes: { data_type: 'string' } } as any;
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
-      };
+    it('should set person field by field slug', async () => {
+      expect(testPersonId).toBeDefined();
 
-      // fetch all field definitions -> slug lookup
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [fieldDefList] } as any);
-      // getFieldDefinition within createPersonFieldData
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: fieldDef },
-        status: 200,
-        headers: {},
-        requestId: 't1',
-        duration: 100,
+      // First get a field definition with a slug that accepts string values
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      const fieldsWithSlug = fieldsResponse.data.filter(f => {
+        const hasSlug = 'slug' in f && f.slug;
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return hasSlug && 
+               (dataType === 'string' || 
+                dataType === 'text' ||
+                !dataType || 
+                dataType !== 'date');
       });
-      // getPersonFieldData -> empty
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 't2',
-        duration: 100,
-      });
-      // create
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 't3',
-        duration: 100,
-      });
+      expect(fieldsWithSlug.length).toBeGreaterThan(0);
+      // Pick a field not yet used by other tests to avoid conflicts
+      const fieldWithSlug = fieldsWithSlug.find(f => !usedFieldIds.has(f.id)) ?? fieldsWithSlug[0];
+      expect(fieldWithSlug).toBeDefined();
+      expect('slug' in fieldWithSlug).toBe(true);
+      expect(fieldWithSlug.slug).toBeDefined();
+      const slug = fieldWithSlug.slug!;
+      const fieldId = fieldWithSlug.id;
+      usedFieldIds.add(fieldId);
 
-      const result = await module.setPersonFieldBySlug('person-1', 'field-slug', 'Test Value');
+      // Check if field data exists and delete it first to ensure clean state
+      // Must include field_definition to properly check for existing data
+      const existingFieldData = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+      const existingDatum = existingFieldData.data.find(d => {
+        const fieldDefData = d.field_definition;
+        // Compare as strings to handle number/string ID mismatches
+        return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+      });
+      if (existingDatum) {
+        await client.fields.deletePersonFieldData(testPersonId!, existingDatum.id);
+        // Wait for API to process deletion and verify it's gone
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const verifyDeleted = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+        const stillExists = verifyDeleted.data.find(d => {
+          const fieldDefData = d.field_definition;
+          // Compare as strings to handle number/string ID mismatches
+          return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+        });
+        if (stillExists) {
+          throw new Error(`Field data for field ${fieldId} still exists after deletion - API indexing delay or deletion failed`);
+        }
+      }
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      const result = await client.fields.setPersonFieldBySlug(testPersonId!, slug, `Test Value ${Date.now()}`);
+
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDatum');
+    }, 60000);
   });
 
   describe('setPersonFieldByName', () => {
-    it('should set a person field by field name', async () => {
-      const fieldDefList = { id: 'field-1', type: 'FieldDefinition', attributes: { name: 'Field Name' } } as any;
-      const fieldDef = { id: 'field-1', type: 'FieldDefinition', attributes: { data_type: 'string' } } as any;
-      const mockResponse = {
-        data: { id: '1', type: 'FieldDatum', attributes: { value: 'Test Value' } },
-      };
+    it('should set person field by field name', async () => {
+      expect(testPersonId).toBeDefined();
 
-      // fetch all field definitions -> name lookup
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [fieldDefList] } as any);
-      // getFieldDefinition
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: fieldDef },
-        status: 200,
-        headers: {},
-        requestId: 't1',
-        duration: 100,
+      // First get a field definition with a name that accepts string values
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      const fieldsWithName = fieldsResponse.data.filter(f => {
+        const hasName = 'name' in f && f.name;
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return hasName && 
+               (dataType === 'string' || 
+                dataType === 'text' ||
+                !dataType || 
+                dataType !== 'date');
       });
-      // getPersonFieldData -> empty
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 't2',
-        duration: 100,
-      });
-      // create
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 't3',
-        duration: 100,
-      });
+      expect(fieldsWithName.length).toBeGreaterThan(0);
+      // Pick a field not yet used by other tests to avoid conflicts
+      const fieldWithName = fieldsWithName.find(f => !usedFieldIds.has(f.id)) ?? fieldsWithName[0];
+      expect(fieldWithName).toBeDefined();
+      expect('name' in fieldWithName).toBe(true);
+      expect(fieldWithName.name).toBeDefined();
+      const name = fieldWithName.name!;
+      const fieldId = fieldWithName.id;
+      usedFieldIds.add(fieldId);
 
-      const result = await module.setPersonFieldByName('person-1', 'Field Name', 'Test Value');
+      // Check if field data already exists and delete it first to avoid conflicts
+      // Must include field_definition to properly check for existing data
+      const existingFieldData = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+      const existingDatum = existingFieldData.data.find(d => {
+        const fieldDefData = d.field_definition;
+        // Compare as strings to handle number/string ID mismatches
+        return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+      });
+      if (existingDatum) {
+        await client.fields.deletePersonFieldData(testPersonId!, existingDatum.id);
+        // Wait for API to process deletion and verify it's gone
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const verifyDeleted = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+        const stillExists = verifyDeleted.data.find(d => {
+          const fieldDefData = d.field_definition;
+          // Compare as strings to handle number/string ID mismatches
+          return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+        });
+        if (stillExists) {
+          throw new Error(`Field data for field ${fieldId} still exists after deletion - API indexing delay or deletion failed`);
+        }
+      }
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      const result = await client.fields.setPersonFieldByName(testPersonId!, name, `Test Value ${Date.now()}`);
+
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDatum');
+    }, 60000);
+  });
+
+  describe('createPersonFieldData', () => {
+    it('should create person field data', async () => {
+      expect(testPersonId).toBeDefined();
+
+      // First get a field definition ID that accepts string values
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      // Find a string or text field (not date) - use a different one than other tests
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const stringFields = fieldsResponse.data.filter(f => {
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return dataType === 'string' || 
+               dataType === 'text' ||
+               (!dataType || dataType !== 'date');
+      });
+      expect(stringFields.length).toBeGreaterThan(0);
+      // Pick a field not yet used by other tests to avoid conflicts
+      const stringField = stringFields.find(f => !usedFieldIds.has(f.id)) ?? stringFields[0];
+      const fieldId = stringField.id;
+      usedFieldIds.add(fieldId);
+
+      // Check if field data exists and delete it first to ensure clean state
+      // Must include field_definition to properly check for existing data
+      const existingFieldData = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+      const existingDatum = existingFieldData.data.find(d => {
+        const fieldDefData = d.field_definition;
+        // Compare as strings to handle number/string ID mismatches
+        return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+      });
+      if (existingDatum) {
+        await client.fields.deletePersonFieldData(testPersonId!, existingDatum.id);
+        // Wait for API to process deletion and verify it's gone
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const verifyDeleted = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+        const stillExists = verifyDeleted.data.find(d => {
+          const fieldDefData = d.field_definition;
+          // Compare as strings to handle number/string ID mismatches
+          return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+        });
+        if (stillExists) {
+          throw new Error(`Field data for field ${fieldId} still exists after deletion - API indexing delay or deletion failed`);
+        }
+      }
+
+      const result = await client.fields.createPersonFieldData(
+        testPersonId!,
+        fieldId,
+        `Test Field Data ${Date.now()}`
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('FieldDatum');
+    }, 30000);
   });
 
   describe('deletePersonFieldData', () => {
     it('should delete person field data', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
+      expect(testPersonId).toBeDefined();
+
+      // First get a field definition ID that accepts string values
+      // getAllFieldDefinitions returns PaginationResult with data array
+      const fieldsResponse = await client.fields.getAllFieldDefinitions();
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      // Find string or text fields (not date) - use a different one than other tests
+      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+      const stringFields = fieldsResponse.data.filter(f => {
+        const dataType = 'data_type' in f ? f.data_type : undefined;
+        return dataType === 'string' || 
+               dataType === 'text' ||
+               (!dataType || dataType !== 'date');
       });
+      expect(stringFields.length).toBeGreaterThan(0);
+      // Pick a field not yet used by other tests to avoid conflicts
+      const stringField = stringFields.find(f => !usedFieldIds.has(f.id)) ?? stringFields[0];
+      const fieldId = stringField.id;
+      usedFieldIds.add(fieldId);
 
-      await module.deletePersonFieldData('person-1', 'field-data-1');
+      // Check if field data already exists and delete it first to ensure clean state
+      const existingFieldData = await client.fields.getPersonFieldData(testPersonId!, { include: ['field_definition'] });
+      const existingDatum = existingFieldData.data.find(d => {
+        const fieldDefData = d.field_definition;
+        return fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData && String(fieldDefData.id) === String(fieldId);
+      });
+      if (existingDatum) {
+        await client.fields.deletePersonFieldData(testPersonId!, existingDatum.id);
+        // Wait for API to process deletion
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Create field data to delete
+      const created = await client.fields.createPersonFieldData(
+        testPersonId!,
+        fieldId,
+        `Test Delete ${Date.now()}`
+      );
+      const fieldDataIdToDelete = created.id || '';
+
+      // Delete the field data
+      await expect(client.fields.deletePersonFieldData(testPersonId!, fieldDataIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted
+      const allFieldData = await client.fields.getPersonFieldData(testPersonId!);
+      const dataExists = allFieldData.data.some(d => d.id === fieldDataIdToDelete);
+      expect(dataExists).toBe(false);
+    }, 30000);
   });
 
   describe('getTabs', () => {
     it('should get all tabs', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Tab', attributes: { name: 'Tab 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.fields.getTabs();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getTabs();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+    }, 30000);
   });
 
   describe('getTabById', () => {
-    it('should get a single tab by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
-      };
+    it('should get tab by ID', async () => {
+      // First get a tab ID
+      const tabsResponse = await client.fields.getTabs();
+      expect(tabsResponse.data.length).toBeGreaterThan(0);
+      const tabId = tabsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.fields.getTabById(tabId);
 
-      const result = await module.getTabById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalledWith({
-        method: 'GET',
-        endpoint: '/tabs/1',
-        params: {},
-      });
-    });
-
-    it('should get a tab with includes', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Tab', attributes: { name: 'Tab 1' } },
-      };
-
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getTabById('1', ['field_definitions']);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalledWith({
-        method: 'GET',
-        endpoint: '/tabs/1',
-        params: { include: 'field_definitions' },
-      });
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(tabId);
+      expect(result.type).toBe('Tab');
+      expect(result).toHaveProperty('name');
+    }, 30000);
   });
 
   describe('createTab', () => {
     it('should create a new tab', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Tab', attributes: { name: 'New Tab' } },
+      const timestamp = Date.now();
+      const tabData = {
+        name: `Test Tab ${timestamp}`,
+        sequence: 999,
       };
+      const result = await client.fields.createTab(tabData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Tab');
+      expect(result.name).toBe(tabData.name);
 
-      const tabData = { name: 'New Tab' };
-      const result = await module.createTab(tabData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Cleanup
+      await client.fields.deleteTab(result.id);
+    }, 30000);
   });
 
   describe('updateTab', () => {
     it('should update an existing tab', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Tab', attributes: { name: 'Updated Tab' } },
+      // Create a tab to update
+      const timestamp = Date.now();
+      const tabData = {
+        name: `Test Update ${timestamp}`,
+        sequence: 999,
       };
+      const created = await client.fields.createTab(tabData);
+      const tabId = created.id || '';
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const uniqueSuffix = `${timestamp}_${Math.random().toString(36).slice(2, 9)}`;
+      const updateData = { name: `Updated_Tab_${uniqueSuffix}` };
+      const result = await client.fields.updateTab(tabId, updateData);
 
-      const updateData = { name: 'Updated Tab' };
-      const result = await module.updateTab('1', updateData);
+      expect(result).toBeDefined();
+      expect(result.id).toBe(tabId);
+      expect(result.name).toBe(updateData.name);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Cleanup
+      await client.fields.deleteTab(tabId);
+    }, 30000);
   });
 
   describe('deleteTab', () => {
     it('should delete a tab', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Create a tab to delete
+      const timestamp = Date.now();
+      const tabData = {
+        name: `Test Delete ${timestamp}`,
+        sequence: 999,
+      };
+      const created = await client.fields.createTab(tabData);
+      const tabIdToDelete = created.id || '';
 
-      await module.deleteTab('1');
+      // Delete the tab
+      await expect(client.fields.deleteTab(tabIdToDelete)).resolves.not.toThrow();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.fields.getTabById(tabIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 });

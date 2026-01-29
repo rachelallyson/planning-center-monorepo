@@ -22,7 +22,7 @@ describe('Person Matching v2.0.0', () => {
             const client = createTestClient({
                 people: {
                     search: (criteria: any) => {
-                        if (criteria.email === 'john@example.com') {
+                        if (criteria.email === 'john@gmail.com') {
                             return Promise.resolve({
                                 data: [existingPerson],
                                 meta: { total_count: 1 },
@@ -46,13 +46,13 @@ describe('Person Matching v2.0.0', () => {
             const result = await client.people.findOrCreate({
                 firstName: 'John',
                 lastName: 'Doe',
-                email: 'john@example.com',
+                email: 'john@gmail.com',
                 matchStrategy: 'exact',
             });
 
             expect(result.id).toBe('existing_person_123');
-            expect(result.attributes.first_name).toBe('John');
-            expect(result.attributes.last_name).toBe('Doe');
+            expect(result.first_name).toBe('John');
+            expect(result.last_name).toBe('Doe');
         });
 
         it('should create new person when no match found', async () => {
@@ -82,13 +82,13 @@ describe('Person Matching v2.0.0', () => {
             const result = await client.people.findOrCreate({
                 firstName: 'Jane',
                 lastName: 'Smith',
-                email: 'jane@example.com',
+                email: 'jane@gmail.com',
                 createIfNotFound: true,
             });
 
             expect(result.id).toBe('new_person_456');
-            expect(result.attributes.first_name).toBe('Jane');
-            expect(result.attributes.last_name).toBe('Smith');
+            expect(result.first_name).toBe('Jane');
+            expect(result.last_name).toBe('Smith');
         });
     });
 
@@ -169,7 +169,7 @@ describe('Person Matching v2.0.0', () => {
             const client = createTestClient({
                 people: {
                     search: (criteria: any) => {
-                        if (criteria.email === 'test@example.com') {
+                        if (criteria.email === 'test@gmail.com') {
                             return Promise.resolve({
                                 data: [MockResponseBuilder.person({ id: 'email_match_123' })],
                                 meta: { total_count: 1 },
@@ -190,7 +190,7 @@ describe('Person Matching v2.0.0', () => {
             });
 
             const result = await client.people.findOrCreate({
-                email: 'test@example.com',
+                email: 'test@gmail.com',
                 matchStrategy: 'exact',
             });
 
@@ -268,8 +268,8 @@ describe('Person Matching v2.0.0', () => {
             });
 
             expect(result.id).toBe('name_match_123');
-            expect(result.attributes.first_name).toBe('John');
-            expect(result.attributes.last_name).toBe('Doe');
+            expect(result.first_name).toBe('John');
+            expect(result.last_name).toBe('Doe');
         });
 
         it('should only match exact names, not similar ones', async () => {
@@ -316,8 +316,8 @@ describe('Person Matching v2.0.0', () => {
             });
 
             expect(result.id).toBe('exact_match_123');
-            expect(result.attributes.first_name).toBe('John');
-            expect(result.attributes.last_name).toBe('Doe');
+            expect(result.first_name).toBe('John');
+            expect(result.last_name).toBe('Doe');
         });
     });
 
@@ -331,7 +331,7 @@ describe('Person Matching v2.0.0', () => {
 
             const newEmail = MockResponseBuilder.email({
                 id: 'new_email_123',
-                address: 'john@example.com',
+                address: 'john@gmail.com',
                 primary: true,
             });
 
@@ -351,12 +351,12 @@ describe('Person Matching v2.0.0', () => {
 
             const result = await client.people.createWithContacts(
                 { firstName: 'John', lastName: 'Doe' },
-                { email: { address: 'john@example.com', primary: true } }
+                { email: { address: 'john@gmail.com', primary: true } }
             );
 
             expect(result.person.id).toBe('new_person_with_email');
             expect(result.email.id).toBe('new_email_123');
-            expect(result.email.attributes.address).toBe('john@example.com');
+            expect(result.email.address).toBe('john@gmail.com');
         });
 
         it('should create person with multiple contacts', async () => {
@@ -368,7 +368,7 @@ describe('Person Matching v2.0.0', () => {
 
             const newEmail = MockResponseBuilder.email({
                 id: 'new_email_456',
-                address: 'jane@example.com',
+                address: 'jane@gmail.com',
                 primary: true,
             });
 
@@ -397,7 +397,7 @@ describe('Person Matching v2.0.0', () => {
             const result = await client.people.createWithContacts(
                 { firstName: 'Jane', lastName: 'Smith' },
                 {
-                    email: { address: 'jane@example.com', primary: true },
+                    email: { address: 'jane@gmail.com', primary: true },
                     phone: { number: '555-5678', primary: true },
                 }
             );
@@ -708,7 +708,7 @@ describe('Person Matching v2.0.0', () => {
             const client = createTestClient({
                 people: {
                     search: (criteria: any) => {
-                        if (criteria.email === 'david@example.com') {
+                        if (criteria.email === 'david@gmail.com') {
                             return Promise.resolve({
                                 data: [matchingPerson],
                                 meta: { total_count: 1 },
@@ -723,7 +723,7 @@ describe('Person Matching v2.0.0', () => {
                     },
 
                     findOrCreate: (options: any) => {
-                        expect(options.email).toBe('david@example.com');
+                        expect(options.email).toBe('david@gmail.com');
                         expect(options.agePreference).toBe('adults');
                         expect(options.minAge).toBe(25);
                         expect(options.maxAge).toBe(35);
@@ -735,7 +735,7 @@ describe('Person Matching v2.0.0', () => {
             const result = await client.people.findOrCreate({
                 firstName: 'David',
                 lastName: 'Wilson',
-                email: 'david@example.com',
+                email: 'david@gmail.com',
                 agePreference: 'adults',
                 minAge: 25,
                 maxAge: 35,

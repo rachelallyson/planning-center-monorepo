@@ -9,6 +9,59 @@ import { PcoClient } from '../src';
 // Mock fetch for testing
 global.fetch = jest.fn();
 
+// Helper function to access private httpClient property without type assertion
+function getHttpClient(client: PcoClient): { attemptTokenRefresh?: () => Promise<void> } | undefined {
+  // Use Object.getOwnPropertyDescriptor to access private property without type assertions
+  const descriptor = Object.getOwnPropertyDescriptor(client, 'httpClient');
+  if (descriptor && descriptor.value && typeof descriptor.value === 'object') {
+    const httpClient = descriptor.value;
+    // Type guard to check if it has attemptTokenRefresh method
+    if ('attemptTokenRefresh' in httpClient && typeof httpClient.attemptTokenRefresh === 'function') {
+      // Bind the method to preserve 'this' context
+      return { attemptTokenRefresh: httpClient.attemptTokenRefresh.bind(httpClient) };
+    }
+  }
+  return undefined;
+}
+
+// Helper function to create mock Response objects without type assertions
+function createMockResponse(partial: { ok: boolean; json?: () => Promise<unknown>; headers?: Map<string, string> | Headers }): Response {
+  // Create a Response object using Object.create to avoid type assertions
+  const response = Object.create(Response.prototype);
+  Object.defineProperty(response, 'ok', { value: partial.ok, writable: false, configurable: true });
+  Object.defineProperty(response, 'status', { value: partial.ok ? 200 : 400, writable: false, configurable: true });
+  Object.defineProperty(response, 'statusText', { value: partial.ok ? 'OK' : 'Bad Request', writable: false, configurable: true });
+  Object.defineProperty(response, 'type', { value: 'default', writable: false, configurable: true });
+  Object.defineProperty(response, 'redirected', { value: false, writable: false, configurable: true });
+  Object.defineProperty(response, 'url', { value: '', writable: false, configurable: true });
+  if (partial.json) {
+    Object.defineProperty(response, 'json', { value: partial.json, writable: false, configurable: true });
+  }
+  if (partial.headers) {
+    // Convert Map to Headers if needed, or use Headers directly
+    let headersObj: Headers;
+    if (partial.headers instanceof Headers) {
+      headersObj = partial.headers;
+    } else {
+      // Create Headers from Map
+      headersObj = new Headers();
+      partial.headers.forEach((value, key) => {
+        headersObj.set(key, value);
+      });
+    }
+    Object.defineProperty(response, 'headers', { value: headersObj, writable: false, configurable: true });
+  }
+  // Add other required Response properties with defaults
+  Object.defineProperty(response, 'body', { value: null, writable: false, configurable: true });
+  Object.defineProperty(response, 'bodyUsed', { value: false, writable: false, configurable: true });
+  Object.defineProperty(response, 'clone', { value: () => response, writable: false, configurable: true });
+  Object.defineProperty(response, 'arrayBuffer', { value: async () => new ArrayBuffer(0), writable: false, configurable: true });
+  Object.defineProperty(response, 'blob', { value: async () => new Blob(), writable: false, configurable: true });
+  Object.defineProperty(response, 'formData', { value: async () => new FormData(), writable: false, configurable: true });
+  Object.defineProperty(response, 'text', { value: async () => '', writable: false, configurable: true });
+  return response;
+}
+
 describe('v2.0.0 Token Refresh', () => {
     let mockFetch: jest.MockedFunction<typeof fetch>;
 
@@ -55,10 +108,10 @@ describe('v2.0.0 Token Refresh', () => {
             
             // Check that the token refresh request includes client credentials
             const tokenRefreshCall = mockFetch.mock.calls.find(call => 
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
             
-            if (tokenRefreshCall) {
+            if (tokenRefreshCall && tokenRefreshCall[1]) {
                 const requestBody = tokenRefreshCall[1].body;
                 expect(requestBody).toContain('client_id=test-client-id');
                 expect(requestBody).toContain('client_secret=test-client-secret');
@@ -102,10 +155,10 @@ describe('v2.0.0 Token Refresh', () => {
 
             // Verify that fetch was called with client credentials from environment
             const tokenRefreshCall = mockFetch.mock.calls.find(call => 
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
             
-            if (tokenRefreshCall) {
+            if (tokenRefreshCall && tokenRefreshCall[1]) {
                 const requestBody = tokenRefreshCall[1].body;
                 expect(requestBody).toContain('client_id=env-client-id');
                 expect(requestBody).toContain('client_secret=env-client-secret');
@@ -152,10 +205,10 @@ describe('v2.0.0 Token Refresh', () => {
 
             // Verify that config credentials are used, not environment variables
             const tokenRefreshCall = mockFetch.mock.calls.find(call => 
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
             
-            if (tokenRefreshCall) {
+            if (tokenRefreshCall && tokenRefreshCall[1]) {
                 const requestBody = tokenRefreshCall[1].body;
                 expect(requestBody).toContain('client_id=config-client-id');
                 expect(requestBody).toContain('client_secret=config-client-secret');
@@ -194,15 +247,21 @@ describe('v2.0.0 Token Refresh', () => {
             });
 
             // Test the token refresh directly - it should throw an error
+            // Access private httpClient for testing - check if property exists at runtime
             let errorThrown = false;
             try {
-                const httpClient = (client as any).httpClient;
+                // Access private httpClient using helper function
+                const httpClient = getHttpClient(client);
+                if (!httpClient || typeof httpClient.attemptTokenRefresh !== 'function') {
+                    throw new Error('httpClient not accessible');
+                }
                 await httpClient.attemptTokenRefresh();
             } catch (error) {
                 errorThrown = true;
+                expect(error).toBeInstanceOf(Error);
                 // Verify the error message includes 401 details
-                expect(error.message).toContain('Token refresh failed');
-                expect(error.message).toContain('401');
+                expect((error as Error).message).toContain('Token refresh failed');
+                expect((error as Error).message).toContain('401');
             }
 
             // Verify that an error was thrown
@@ -211,7 +270,7 @@ describe('v2.0.0 Token Refresh', () => {
 
         it('should handle missing client credentials gracefully', async () => {
             // Mock successful token refresh response (some APIs work without client credentials)
-            mockFetch.mockResolvedValueOnce({
+            mockFetch.mockResolvedValueOnce(createMockResponse({
                 ok: true,
                 json: async () => ({
                     access_token: 'new-access-token',
@@ -219,7 +278,7 @@ describe('v2.0.0 Token Refresh', () => {
                     token_type: 'Bearer',
                     expires_in: 3600,
                 }),
-            } as Response);
+            }));
 
             const client = new PcoClient({
                 auth: {
@@ -240,10 +299,10 @@ describe('v2.0.0 Token Refresh', () => {
 
             // Verify that fetch was called without client credentials
             const tokenRefreshCall = mockFetch.mock.calls.find(call => 
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
             
-            if (tokenRefreshCall) {
+            if (tokenRefreshCall && tokenRefreshCall[1]) {
                 const requestBody = tokenRefreshCall[1].body;
                 expect(requestBody).toContain('grant_type=refresh_token');
                 expect(requestBody).toContain('refresh_token=valid-refresh-token');
@@ -264,17 +323,17 @@ describe('v2.0.0 Token Refresh', () => {
             });
 
             // Mock a successful response with proper headers
-            mockFetch.mockResolvedValueOnce({
+            mockFetch.mockResolvedValueOnce(createMockResponse({
                 ok: true,
                 headers: new Map([['content-type', 'application/json']]),
                 json: async () => ({ data: [] }),
-            } as any);
+            }));
 
             await client.people.getAll();
 
             // Verify that no token refresh was attempted
             const tokenRefreshCall = mockFetch.mock.calls.find(call => 
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
             
             expect(tokenRefreshCall).toBeUndefined();
@@ -296,17 +355,17 @@ describe('v2.0.0 Token Refresh', () => {
             });
 
             // Mock a successful response with proper headers
-            mockFetch.mockResolvedValueOnce({
+            mockFetch.mockResolvedValueOnce(createMockResponse({
                 ok: true,
                 headers: new Map([['content-type', 'application/json']]),
                 json: async () => ({ data: [] }),
-            } as any);
+            }));
 
             await client.people.getAll();
 
             // Verify that no token refresh was attempted
             const tokenRefreshCall = mockFetch.mock.calls.find(call =>
-                call[0].includes('/oauth/token')
+                call[0] && typeof call[0] === 'string' && call[0].includes('/oauth/token')
             );
 
             expect(tokenRefreshCall).toBeUndefined();
@@ -334,14 +393,20 @@ describe('v2.0.0 Token Refresh', () => {
             });
 
             // Test the token refresh directly - it should throw an error
+            // Access private httpClient for testing - check if property exists at runtime
             let errorThrown = false;
             try {
-                const httpClient = (client as any).httpClient;
+                // Access private httpClient using helper function
+                const httpClient = getHttpClient(client);
+                if (!httpClient || typeof httpClient.attemptTokenRefresh !== 'function') {
+                    throw new Error('httpClient not accessible');
+                }
                 await httpClient.attemptTokenRefresh();
             } catch (error) {
                 errorThrown = true;
+                expect(error).toBeInstanceOf(Error);
                 // Verify the error is a network error
-                expect(error.message).toContain('Network error');
+                expect((error as Error).message).toContain('Network error');
             }
 
             // Verify that an error was thrown
@@ -350,12 +415,12 @@ describe('v2.0.0 Token Refresh', () => {
 
         it('should handle malformed token refresh response', async () => {
             // Mock malformed response for token refresh
-            mockFetch.mockResolvedValueOnce({
+            mockFetch.mockResolvedValueOnce(createMockResponse({
                 ok: true,
                 json: async () => {
                     throw new Error('Invalid JSON');
                 },
-            } as Response);
+            }));
 
             const client = new PcoClient({
                 auth: {
@@ -370,14 +435,20 @@ describe('v2.0.0 Token Refresh', () => {
             });
 
             // Test the token refresh directly - it should throw an error
+            // Access private httpClient for testing - check if property exists at runtime
             let errorThrown = false;
             try {
-                const httpClient = (client as any).httpClient;
+                // Access private httpClient using helper function
+                const httpClient = getHttpClient(client);
+                if (!httpClient || typeof httpClient.attemptTokenRefresh !== 'function') {
+                    throw new Error('httpClient not accessible');
+                }
                 await httpClient.attemptTokenRefresh();
             } catch (error) {
+                expect(error).toBeInstanceOf(Error);
                 errorThrown = true;
                 // Verify the error is a JSON parsing error
-                expect(error.message).toContain('Invalid JSON');
+                expect((error as Error).message).toContain('Invalid JSON');
             }
 
             // Verify that an error was thrown

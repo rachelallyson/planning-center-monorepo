@@ -1,227 +1,165 @@
-import { ServiceTimeModule } from '../../src/modules/service-time';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('ServiceTimeModule', () => {
-  let module: ServiceTimeModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('ServiceTimeModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testCampusId: string | null = null;
+  let testServiceTimeId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
+    const campusesResponse = await client.campus.getPage({ perPage: 1 });
+    expect(campusesResponse.data.length).toBeGreaterThan(0);
+    testCampusId = campusesResponse.data[0].id;
 
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
+    const serviceTimeData = {
+      description: `Test service time ${Date.now()}`,
+      start_time: 540,
+      day: 0,
+    };
+    const created = await client.serviceTime.create(testCampusId!, serviceTimeData);
+    testServiceTimeId = created.id ?? null;
+    expect(testServiceTimeId).toBeTruthy();
+  }, 30000);
 
-    module = new ServiceTimeModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    if (testServiceTimeId && testCampusId) {
+      await client.serviceTime.delete(testCampusId!, testServiceTimeId!);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(ServiceTimeModule);
+      expect(client).toBeDefined();
+      expect(client.serviceTime).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all service times for a campus with default parameters', async () => {
-      const mockServiceTimes = [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }];
-      const expectedResponse = {
-        data: mockServiceTimes,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      expect(testCampusId).toBeDefined();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockServiceTimes,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
+      const result = await client.serviceTime.getAll(testCampusId!);
 
-      const result = await module.getAll('campus-1');
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses/campus-1/service_times', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
 
     it('should fetch service times for a campus with filtering options', async () => {
-      const mockServiceTimes = [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }];
+      expect(testCampusId).toBeDefined();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockServiceTimes,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.serviceTime.getAll(testCampusId!, {
+        include: ['campus'],
       });
 
-      const params = {
-        where: { status: 'active' },
-        include: ['campus'],
-        per_page: 10,
-        page: 1,
-      };
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
+  });
 
-      await module.getAll('campus-1', params);
+  describe('getPage', () => {
+    it('should fetch a single page of service times', async () => {
+      expect(testCampusId).toBeDefined();
 
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/campuses/campus-1/service_times',
-        { 'where[status]': 'active', include: 'campus' },
-        undefined
-      );
-    });
+      const result = await client.serviceTime.getPage(testCampusId!, { perPage: 25, page: 1 });
+
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch service time by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } },
-      };
+      expect(testCampusId).toBeDefined();
+      expect(testServiceTimeId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.serviceTime.getById(testCampusId!, testServiceTimeId!);
 
-      const result = await module.getById('campus-1', '1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testServiceTimeId);
+      expect(result.type).toBe('ServiceTime');
+      expect(result).toHaveProperty('description');
+    }, 30000);
 
     it('should fetch service time by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } },
-      };
+      expect(testCampusId).toBeDefined();
+      expect(testServiceTimeId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.serviceTime.getById(testCampusId!, testServiceTimeId!, ['campus']);
 
-      await module.getById('campus-1', '1', ['campus']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testServiceTimeId);
+      expect(result.type).toBe('ServiceTime');
+    }, 30000);
   });
 
   describe('create', () => {
     it('should create a new service time for a campus', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ServiceTime', attributes: { name: 'New Service' } },
+      expect(testCampusId).toBeDefined();
+
+      const timestamp = Date.now();
+      const serviceTimeData = {
+        start_time: 540, // 9:00 AM as minutes from midnight
+        day: 0, // Sunday
+        description: `Test Service Time ${timestamp}`,
       };
+      const result = await client.serviceTime.create(testCampusId!, serviceTimeData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const serviceTimeData = { name: 'New Service' };
-      const result = await module.create('campus-1', serviceTimeData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('ServiceTime');
+      expect(result.description).toBe(serviceTimeData.description);
+    }, 30000);
   });
 
   describe('update', () => {
     it('should update an existing service time for a campus', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ServiceTime', attributes: { name: 'Updated Service' } },
+      expect(testCampusId).toBeDefined();
+
+      // Create a test service time first
+      const timestamp = Date.now();
+      const serviceTimeData = {
+        start_time: 540,
+        day: 0,
+        description: `Test Update ${timestamp}`,
       };
+      const created = await client.serviceTime.create(testCampusId!, serviceTimeData);
+      const serviceTimeId = created.id!;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { description: 'Updated Service Time Name', start_time: 630 };
+      const result = await client.serviceTime.update(testCampusId!, serviceTimeId, updateData);
 
-      const updateData = { name: 'Updated Service' };
-      const result = await module.update('campus-1', '1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(serviceTimeId);
+      expect(result.description).toBe('Updated Service Time Name');
+    }, 30000);
   });
 
   describe('delete', () => {
     it('should delete a service time for a campus', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testCampusId).toBeDefined();
 
-      await module.delete('campus-1', '1');
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
-  });
-
-  describe('getAllPagesPaginated', () => {
-    it('should get all service times for a campus with pagination', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }],
-        meta: { total_count: 1 },
-        links: {},
+      // Create a service time to delete
+      const timestamp = Date.now();
+      const serviceTimeData = {
+        start_time: 540,
+        day: 0,
+        description: `Test Delete ${timestamp}`,
       };
+      const created = await client.serviceTime.create(testCampusId!, serviceTimeData);
+      const serviceTimeIdToDelete = created.id || '';
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
+      // Delete the service time
+      await expect(client.serviceTime.delete(testCampusId!, serviceTimeIdToDelete)).resolves.not.toThrow();
 
-      const result = await module.getAllPagesPaginated('campus-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses/campus-1/service_times', {}, undefined);
-    });
-
-    it('should get all service times for a campus with filtering and pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const params = {
-        where: { status: 'active' },
-        include: ['campus'],
-        per_page: 10,
-        page: 1,
-      };
-
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      await module.getAllPagesPaginated('campus-1', params, paginationOptions);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses/campus-1/service_times', {
-        'where[status]': 'active',
-        include: 'campus',
-        per_page: 10,
-      }, paginationOptions);
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.serviceTime.getById(testCampusId!, serviceTimeIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 });

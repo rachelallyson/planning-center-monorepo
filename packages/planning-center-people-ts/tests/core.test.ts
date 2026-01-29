@@ -12,7 +12,11 @@ import {
 import { PcoRateLimiter } from '@rachelallyson/planning-center-base-ts';
 import { PcoError } from '../src/error-handling';
 
-// Mock fetch
+// Mock fetch - ensure it's mocked for these unit tests
+// Note: setup.ts may not mock fetch if credentials are available, so we need to mock it here
+if (!(global.fetch as any)?.mock) {
+  global.fetch = jest.fn();
+}
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
 describe('createPcoClient', () => {

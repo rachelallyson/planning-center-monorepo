@@ -1,13 +1,17 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import { MatchScorer } from '../../src/matching/scoring';
 import type { PeopleModule } from '../../src/modules/people';
+import type { FlattenedPersonResource, PersonAttributes } from '../../src/types';
 
-function mkPerson(id: string, attrs: any = {}) {
-  return { id, type: 'Person', attributes: attrs } as any;
+function mkPerson(id: string, attrs: Partial<PersonAttributes> = {}): FlattenedPersonResource {
+  return {
+    id,
+    type: 'Person',
+    ...attrs,
+  };
 }
 
 describe('PersonMatcher edge cases', () => {
-  let people: jest.Mocked<PeopleModule>;
+  let people: jest.Mocked<Pick<PeopleModule, 'search' | 'getById' | 'getEmails' | 'getPhoneNumbers' | 'addEmail' | 'addPhoneNumber' | 'create' | 'setPrimaryCampus'>>;
 
   beforeEach(() => {
     people = {
@@ -19,31 +23,40 @@ describe('PersonMatcher edge cases', () => {
       addPhoneNumber: jest.fn(),
       create: jest.fn(),
       setPrimaryCampus: jest.fn(),
-    } as unknown as jest.Mocked<PeopleModule>;
+    };
   });
 
   it('returns null for exact strategy when no verified contact match', async () => {
-    const matcher = new PersonMatcher(people as any);
-    people.search.mockResolvedValueOnce({ data: [mkPerson('1')] } as any);
+    const matcher = new PersonMatcher(people);
+    people.search.mockResolvedValueOnce({ data: [mkPerson('1')] });
     // No emails/phones verified
-    people.getEmails.mockResolvedValue({ data: [] } as any);
-    people.getPhoneNumbers.mockResolvedValue({ data: [] } as any);
+    people.getEmails.mockResolvedValue({ data: [] });
+    people.getPhoneNumbers.mockResolvedValue({ data: [] });
 
     const res = await matcher.findMatch({ matchStrategy: 'exact', email: 'a@b.com' });
     expect(res).toBeNull();
   });
 
   it('prefers verified contact matches over name-only matches', async () => {
-    const matcher = new PersonMatcher(people as any);
+    const matcher = new PersonMatcher(people);
     // Email search finds two candidates
     people.search
-      .mockResolvedValueOnce({ data: [mkPerson('1'), mkPerson('2')] } as any) // email search
-      .mockResolvedValueOnce({ data: [mkPerson('3')] } as any); // name search
+      .mockResolvedValueOnce({ data: [mkPerson('1'), mkPerson('2')] }) // email search
+      .mockResolvedValueOnce({ data: [mkPerson('3')] }); // name search
 
     // Verify only person 2 matches by email
-    people.getEmails.mockImplementation(async (id: any) =>
-      id === '2' ? ({ data: [{ attributes: { address: 'x@y.com' } }] } as any) : ({ data: [] } as any)
+    people.getEmails.mockImplementation(async (id: string) =>
+      id === '2' ? ({ 
+        data: [{ 
+          id: 'e1', 
+          type: 'Email', 
+          address: 'x@y.com',
+          location: 'Home',
+          primary: true,
+        }] 
+      }) : ({ data: [] })
     );
+    people.getPhoneNumbers.mockResolvedValue({ data: [] });
 
     const res = await matcher.findMatch({ email: 'x@y.com', firstName: 'A', lastName: 'B', matchStrategy: 'fuzzy' });
     expect(res?.person.id).toBe('2');
@@ -51,8 +64,10 @@ describe('PersonMatcher edge cases', () => {
   });
 
   it('filters by age preferences and returns null if none match', async () => {
-    const matcher = new PersonMatcher(people as any);
-    people.search.mockResolvedValue({ data: [mkPerson('1', { birthdate: '2015-01-01' })] } as any);
+    const matcher = new PersonMatcher(people);
+    people.search.mockResolvedValue({ data: [mkPerson('1', { birthdate: '2015-01-01' })] });
+    people.getEmails.mockResolvedValue({ data: [] });
+    people.getPhoneNumbers.mockResolvedValue({ data: [] });
     // Verified by skipping contact verification (no email/phone provided)
     const res = await matcher.findMatch({ agePreference: 'adults' });
     expect(res).toBeNull();

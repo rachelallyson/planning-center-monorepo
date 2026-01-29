@@ -3,7 +3,8 @@
  */
 
 import { PcoClientManager } from '../src/client-manager';
-import type { PcoClientConfig, ClientConfigResolver } from '../src/client-manager';
+import type { ClientConfigResolver } from '../src/client-manager';
+import type { PcoClientConfig } from '../src/types/client';
 import type { PcoClient } from '../src/client';
 
 // Mock PcoClient
@@ -337,6 +338,9 @@ describe('PcoClientManager', () => {
         auth: {
           type: 'oauth',
           accessToken: 'oauth-token',
+          refreshToken: 'oauth-refresh-token',
+          onRefresh: async () => {},
+          onRefreshFailure: async () => {},
         },
         baseURL: 'https://api.planningcenteronline.com/test/v2',
       };
@@ -353,6 +357,8 @@ describe('PcoClientManager', () => {
           type: 'oauth',
           accessToken: 'token1',
           refreshToken: 'refresh1',
+          onRefresh: async () => {},
+          onRefreshFailure: async () => {},
         },
         baseURL: 'https://api.planningcenteronline.com/test/v2',
       };
@@ -361,7 +367,9 @@ describe('PcoClientManager', () => {
         auth: {
           type: 'oauth',
           accessToken: 'token2',
-          refreshToken: 'refresh1',
+          refreshToken: 'refresh2',
+          onRefresh: async () => {},
+          onRefreshFailure: async () => {},
         },
         baseURL: 'https://api.planningcenteronline.com/test/v2',
       };

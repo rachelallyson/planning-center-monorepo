@@ -13,6 +13,9 @@ describe('PcoClient v2.0.0', () => {
             auth: {
                 type: 'oauth',
                 accessToken: 'test-token',
+                refreshToken: 'test-refresh-token',
+                onRefresh: async () => {},
+                onRefreshFailure: async () => {},
             },
         });
 
@@ -22,8 +25,11 @@ describe('PcoClient v2.0.0', () => {
     describe('Client Creation', () => {
         it('should create a client with OAuth configuration', () => {
             expect(client).toBeDefined();
-            expect(client.getConfig().auth.type).toBe('oauth');
-            expect(client.getConfig().auth.accessToken).toBe('test-token');
+            const config = client.getConfig();
+            expect(config.auth.type).toBe('oauth');
+            if (config.auth.type === 'oauth') {
+                expect(config.auth.accessToken).toBe('test-token');
+            }
         });
 
         it('should create a client with basic auth configuration', () => {
@@ -35,8 +41,11 @@ describe('PcoClient v2.0.0', () => {
                 },
             });
 
-            expect(basicClient.getConfig().auth.type).toBe('basic');
-            expect(basicClient.getConfig().auth.appId).toBe('test-app-id');
+            const config = basicClient.getConfig();
+            expect(config.auth.type).toBe('basic');
+            if (config.auth.type === 'basic') {
+                expect(config.auth.appId).toBe('test-app-id');
+            }
         });
     });
 
@@ -117,14 +126,20 @@ describe('PcoClient v2.0.0', () => {
                 auth: {
                     type: 'oauth' as const,
                     accessToken: 'new-token',
+                    refreshToken: 'test-refresh-token',
+                    onRefresh: async () => {},
+                    onRefreshFailure: async () => {},
                 },
                 timeout: 60000,
             };
 
             client.updateConfig(newConfig);
 
-            expect(client.getConfig().auth.accessToken).toBe('new-token');
-            expect(client.getConfig().timeout).toBe(60000);
+            const config = client.getConfig();
+            if (config.auth.type === 'oauth') {
+                expect(config.auth.accessToken).toBe('new-token');
+            }
+            expect(config.timeout).toBe(60000);
         });
     });
 });
@@ -161,7 +176,7 @@ describe('Mock Client', () => {
             const options = {
                 firstName: 'Jane',
                 lastName: 'Smith',
-                email: 'jane@example.com',
+                email: 'jane@gmail.com',
             };
 
             const result = await mockClient.people.findOrCreate(options);
@@ -246,20 +261,20 @@ describe('MockResponseBuilder', () => {
         });
 
         expect(person.type).toBe('Person');
-        expect(person.attributes.first_name).toBe('Test');
-        expect(person.attributes.last_name).toBe('Person');
-        expect(person.relationships).toBeDefined();
+        expect(person.first_name).toBe('Test');
+        expect(person.last_name).toBe('Person');
+        expect(person.emails).toBeDefined();
     });
 
     it('should build an email resource', () => {
         const email = MockResponseBuilder.email({
-            address: 'test@example.com',
+            address: 'test@gmail.com',
             primary: true,
         });
 
         expect(email.type).toBe('Email');
-        expect(email.attributes.address).toBe('test@example.com');
-        expect(email.attributes.primary).toBe(true);
+        expect(email.address).toBe('test@gmail.com');
+        expect(email.primary).toBe(true);
     });
 
     it('should build a workflow resource', () => {
@@ -269,8 +284,8 @@ describe('MockResponseBuilder', () => {
         });
 
         expect(workflow.type).toBe('Workflow');
-        expect(workflow.attributes.name).toBe('Test Workflow');
-        expect(workflow.attributes.description).toBe('A test workflow');
+        expect(workflow.name).toBe('Test Workflow');
+        expect(workflow.description).toBe('A test workflow');
     });
 
     it('should build a paginated response', () => {

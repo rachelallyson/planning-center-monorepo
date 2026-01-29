@@ -8,7 +8,7 @@ describe('helpers: validation and formatting', () => {
   });
 
   it('validatePersonData passes valid inputs', () => {
-    const result = validatePersonData({ email: 'good@example.com', phone: '+15551234567', birthdate: '2000-01-01' } as any);
+    const result = validatePersonData({ email: 'good@gmail.com', phone: '+15551234567', birthdate: '2000-01-01' } as any);
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
   });

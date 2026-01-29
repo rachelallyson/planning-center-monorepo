@@ -1,8 +1,9 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import { PeopleModule } from '../../src/modules/people';
+import type { PeopleModule } from '../../src/modules/people';
+import type { PersonResource, PersonAttributes } from '../../src/types';
 
 // Mock the PeopleModule
-const mockPeopleModule = {
+const mockPeopleModule: jest.Mocked<Pick<PeopleModule, 'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'>> = {
   search: jest.fn(),
   getEmails: jest.fn(),
   getPhoneNumbers: jest.fn(),
@@ -11,7 +12,7 @@ const mockPeopleModule = {
   addPhoneNumber: jest.fn(),
   setPrimaryCampus: jest.fn(),
   getById: jest.fn(),
-} as unknown as PeopleModule;
+};
 
 describe('PersonMatcher', () => {
   let matcher: PersonMatcher;
@@ -29,39 +30,46 @@ describe('PersonMatcher', () => {
 
   describe('findOrCreate', () => {
     it('should create a person when no match is found', async () => {
-      const mockPerson = {
+      const mockPerson: PersonResource = {
         id: '1',
         type: 'Person',
         attributes: {
           first_name: 'John',
           last_name: 'Doe',
         },
-      } as any;
+        relationships: {},
+      };
 
-      (mockPeopleModule.search as any).mockResolvedValue({ data: [] });
-      (mockPeopleModule.getEmails as any).mockResolvedValue({ data: [] });
-      (mockPeopleModule.getPhoneNumbers as any).mockResolvedValue({ data: [] });
-      (mockPeopleModule.create as any).mockResolvedValueOnce(mockPerson);
+      mockPeopleModule.search.mockResolvedValue({ data: [] });
+      mockPeopleModule.getEmails.mockResolvedValue({ data: [] });
+      mockPeopleModule.getPhoneNumbers.mockResolvedValue({ data: [] });
+      mockPeopleModule.create.mockResolvedValueOnce(mockPerson);
+      mockPeopleModule.getById.mockResolvedValue({
+        id: '1',
+        type: 'Person',
+        first_name: 'John',
+        last_name: 'Doe',
+      });
 
       const result = await matcher.findOrCreate({
         firstName: 'John',
         lastName: 'Doe',
-      } as any);
+      });
 
       expect(mockPeopleModule.create).toHaveBeenCalled();
-      expect(result).toEqual(mockPerson);
+      expect(result.id).toBe('1');
     });
   });
 
   describe('findMatch', () => {
     it('should return null when no candidates match', async () => {
-      (mockPeopleModule.search as any).mockResolvedValue({ data: [] });
-      (mockPeopleModule.getEmails as any).mockResolvedValue({ data: [] });
-      (mockPeopleModule.getPhoneNumbers as any).mockResolvedValue({ data: [] });
+      mockPeopleModule.search.mockResolvedValue({ data: [] });
+      mockPeopleModule.getEmails.mockResolvedValue({ data: [] });
+      mockPeopleModule.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-      const result = await matcher.findMatch({ firstName: 'No', lastName: 'Match' } as any);
+      const result = await matcher.findMatch({ firstName: 'No', lastName: 'Match' });
 
-      expect(result === null || result?.person).toBeTruthy();
+      expect(result).toBeNull();
     });
   });
 });

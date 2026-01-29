@@ -1,226 +1,190 @@
-import { HouseholdsModule } from '../../src/modules/households';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('HouseholdsModule', () => {
-  let module: HouseholdsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('HouseholdsModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testHouseholdId: string | null = null;
+  let testPersonId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new HouseholdsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testHouseholdId) {
+      await client.households.delete(testHouseholdId);
+    }
+    if (testPersonId) {
+      await client.people.delete(testPersonId);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(HouseholdsModule);
+      expect(client).toBeDefined();
+      expect(client.households).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all households with default parameters', async () => {
-      const mockHouseholds = [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }];
-      const expectedResponse = {
-        data: mockHouseholds,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.households.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockHouseholds,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/households', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.meta?.total_count).toBeGreaterThan(0);
+    }, 30000);
 
     it('should fetch households with filtering options', async () => {
-      const mockHouseholds = [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockHouseholds,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.households.getPage({
+        include: ['people'],
+        perPage: 10,
+        page: 1,
       });
 
-      const options = {
-        where: { status: 'active' },
-        include: ['people'],
-        perPage: 10,
-        page: 1,
-      };
-
-      await module.getAll(options);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/households',
-        { 'where[status]': 'active', include: 'people' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
-  describe('getAllPagesPaginated', () => {
-    it('should get all households with pagination', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+  describe('getPage', () => {
+    it('should fetch a single page of households', async () => {
+      const result = await client.households.getPage({ perPage: 25, page: 1 });
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
 
-      const result = await module.getAllPagesPaginated();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/households', {}, undefined);
-    });
-
-    it('should get all households with filtering and pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Household', attributes: { name: 'Household 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const options = {
-        where: { status: 'active' },
+    it('should fetch a page with filtering options', async () => {
+      const result = await client.households.getPage({
         include: ['people'],
         perPage: 10,
         page: 1,
-      };
+      });
 
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      await module.getAllPagesPaginated(options, paginationOptions);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/households', {
-        'where[status]': 'active',
-        include: 'people',
-      }, paginationOptions);
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch household by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Household', attributes: { name: 'Household 1' } },
-      };
+      // First get a household ID
+      const householdsResponse = await client.households.getPage({ perPage: 1 });
+      expect(householdsResponse.data.length).toBeGreaterThan(0);
+      const householdId = householdsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.households.getById(householdId);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(householdId);
+      expect(result.type).toBe('Household');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('name');
+    }, 30000);
 
     it('should fetch household by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Household', attributes: { name: 'Household 1' } },
-      };
+      // First get a household ID
+      const householdsResponse = await client.households.getPage({ perPage: 1 });
+      expect(householdsResponse.data.length).toBeGreaterThan(0);
+      const householdId = householdsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.households.getById(householdId, ['people']);
 
-      await module.getById('1', ['people']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(householdId);
+      expect(result.type).toBe('Household');
+    }, 30000);
   });
 
   describe('create', () => {
     it('should create a new household', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Household', attributes: { name: 'New Household' } },
-      };
-
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
+      // Create a person first (households typically need at least one person)
+      const timestamp = Date.now();
+      const person = await client.people.create({
+        firstName: `Test_Household_${timestamp}`,
+        lastName: `Person_${timestamp}`,
+        status: 'active' as const,
       });
+      // create() returns ResourceObject which should have id property
+      if (!person || !person.id) {
+        throw new Error('Failed to create test person: API returned invalid response');
+      }
+      testPersonId = person.id;
 
-      const householdData = { name: 'New Household' };
-      const result = await module.create(householdData);
+      const householdData = {
+        name: `Test Household ${timestamp}`,
+        relationships: {
+          people: {
+            data: [{ type: 'Person', id: person.id }]
+          }
+        }
+      } as any;
+      
+      const result = await client.households.create(householdData);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Household');
+      expect(result.name).toBe(householdData.name);
+
+      testHouseholdId = result.id || null;
+    }, 30000);
   });
 
   describe('update', () => {
     it('should update an existing household', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Household', attributes: { name: 'Updated Household' } },
-      };
+      expect(testHouseholdId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { name: 'Updated Household Name' };
+      const result = await client.households.update(testHouseholdId!, updateData);
 
-      const updateData = { name: 'Updated Household' };
-      const result = await module.update('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testHouseholdId);
+      expect(result.name).toBe('Updated Household Name');
+    }, 30000);
   });
 
   describe('delete', () => {
     it('should delete a household', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
+      // Create a person and household to delete
+      const timestamp = Date.now();
+      const person = await client.people.create({
+        firstName: `Test_Delete_${timestamp}`,
+        lastName: `Person_${timestamp}`,
+        status: 'active' as const,
       });
+      // create() returns ResourceObject which should have id property
+      if (!person || !person.id) {
+        throw new Error('Failed to create test person: API returned invalid response');
+      }
+      
+      const householdData = {
+        name: `Test Delete ${timestamp}`,
+        relationships: {
+          people: {
+            data: [{ type: 'Person', id: person.id }]
+          }
+        }
+      } as any;
+      const created = await client.households.create(householdData);
+      const householdIdToDelete = created.id || '';
 
-      await module.delete('1');
+      // Delete the household
+      await expect(client.households.delete(householdIdToDelete)).resolves.not.toThrow();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.households.getById(householdIdToDelete)).rejects.toThrow();
+      
+      // Cleanup person
+      await client.people.delete(person.id);
+    }, 30000);
   });
 });

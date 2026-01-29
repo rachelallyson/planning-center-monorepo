@@ -6,15 +6,6 @@ import {
     isFileUrl,
     processFileValue,
 } from '../src/helpers';
-import { createPersonFieldData } from '../src/people';
-import { createPcoClient } from '../src/core';
-
-// Mock the people module
-jest.mock('../src/people', () => ({
-    getFieldDefinitions: jest.fn(),
-    createPersonFieldData: jest.fn(),
-    createPersonFileFieldData: jest.fn(),
-}));
 
 describe('File Upload Helper Functions', () => {
     describe('extractFileUrl', () => {

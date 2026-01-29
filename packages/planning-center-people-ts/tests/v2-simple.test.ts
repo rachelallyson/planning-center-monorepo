@@ -2,7 +2,7 @@
  * v2.0.0 Simple API Tests
  */
 
-import { PcoClient } from '../src';
+import { PcoClient, type PcoClientConfig } from '../src';
 
 describe('PcoClient v2.0.0 Simple Tests', () => {
     let client: PcoClient;
@@ -12,6 +12,9 @@ describe('PcoClient v2.0.0 Simple Tests', () => {
             auth: {
                 type: 'oauth',
                 accessToken: 'test-token',
+                refreshToken: 'test-refresh-token',
+                onRefresh: async () => {},
+                onRefreshFailure: async () => {},
             },
         });
     });
@@ -20,7 +23,10 @@ describe('PcoClient v2.0.0 Simple Tests', () => {
         it('should create a client with OAuth configuration', () => {
             expect(client).toBeDefined();
             expect(client.getConfig().auth.type).toBe('oauth');
-            expect(client.getConfig().auth.accessToken).toBe('test-token');
+            const auth = client.getConfig().auth;
+            if (auth.type === 'oauth') {
+                expect(auth.accessToken).toBe('test-token');
+            }
         });
 
         it('should create a client with basic auth configuration', () => {
@@ -33,7 +39,10 @@ describe('PcoClient v2.0.0 Simple Tests', () => {
             });
 
             expect(basicClient.getConfig().auth.type).toBe('basic');
-            expect(basicClient.getConfig().auth.appId).toBe('test-app-id');
+            const auth = basicClient.getConfig().auth;
+            if (auth.type === 'basic') {
+                expect(auth.appId).toBe('test-app-id');
+            }
         });
     });
 
@@ -91,17 +100,23 @@ describe('PcoClient v2.0.0 Simple Tests', () => {
 
     describe('Configuration Updates', () => {
         it('should update configuration', () => {
-            const newConfig = {
+            const newConfig: Partial<PcoClientConfig> = {
                 auth: {
-                    type: 'oauth' as const,
+                    type: 'oauth',
                     accessToken: 'new-token',
+                    refreshToken: 'test-refresh-token',
+                    onRefresh: async () => {},
+                    onRefreshFailure: async () => {},
                 },
                 timeout: 60000,
             };
 
             client.updateConfig(newConfig);
 
-            expect(client.getConfig().auth.accessToken).toBe('new-token');
+            const auth = client.getConfig().auth;
+            if (auth.type === 'oauth') {
+                expect(auth.accessToken).toBe('new-token');
+            }
             expect(client.getConfig().timeout).toBe(60000);
         });
     });

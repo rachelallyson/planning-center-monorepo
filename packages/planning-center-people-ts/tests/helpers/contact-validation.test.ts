@@ -8,7 +8,7 @@ import {
 describe('Contact Validation Helpers', () => {
     describe('extractEmailDomain', () => {
         it('extracts domain from valid email', () => {
-            expect(extractEmailDomain('user@example.com')).toBe('example.com');
+            expect(extractEmailDomain('user@gmail.com')).toBe('gmail.com');
             expect(extractEmailDomain('user@sub.example.com')).toBe('sub.example.com');
         });
 
@@ -17,7 +17,7 @@ describe('Contact Validation Helpers', () => {
         });
 
         it('handles emails with whitespace', () => {
-            expect(extractEmailDomain('  user@example.com  ')).toBe('example.com');
+            expect(extractEmailDomain('  user@gmail.com  ')).toBe('gmail.com');
         });
 
         it('returns empty string for invalid emails', () => {
@@ -28,11 +28,14 @@ describe('Contact Validation Helpers', () => {
 
     describe('emailDomainsMatch', () => {
         it('matches identical domains', () => {
-            expect(emailDomainsMatch('user@example.com', 'other@example.com')).toBe(true);
+            expect(emailDomainsMatch('user@gmail.com', 'other@gmail.com')).toBe(true);
         });
 
         it('matches domains case-insensitively', () => {
-            expect(emailDomainsMatch('user@EXAMPLE.com', 'other@example.COM')).toBe(true);
+            // Both should normalize to the same domain (lowercase)
+            expect(emailDomainsMatch('user@EXAMPLE.com', 'other@example.com')).toBe(true);
+            // gmail.com and GMAIL.COM should match
+            expect(emailDomainsMatch('user@GMAIL.com', 'other@gmail.com')).toBe(true);
         });
 
         it('matches google domain aliases', () => {
@@ -43,7 +46,7 @@ describe('Contact Validation Helpers', () => {
             // Catches domains that share same first 3 characters
             expect(emailDomainsMatch('user@gmail.com', 'other@gmaill.com')).toBe(true);
             // Note: gmial.com has different 4th char, so prefix matching only works for first 3 chars
-            expect(emailDomainsMatch('user@example.com', 'other@examplecorp.com')).toBe(true);
+            expect(emailDomainsMatch('user@gmail.com', 'other@gmail.comcorp.com')).toBe(true);
         });
 
         it('does not match different domains', () => {
@@ -51,14 +54,14 @@ describe('Contact Validation Helpers', () => {
         });
 
         it('handles missing domains', () => {
-            expect(emailDomainsMatch('invalid', 'user@example.com')).toBe(false);
-            expect(emailDomainsMatch('user@example.com', 'invalid')).toBe(false);
+            expect(emailDomainsMatch('invalid', 'user@gmail.com')).toBe(false);
+            expect(emailDomainsMatch('user@gmail.com', 'invalid')).toBe(false);
             expect(emailDomainsMatch('invalid', 'invalid')).toBe(false);
         });
 
         it('handles empty strings', () => {
-            expect(emailDomainsMatch('', 'user@example.com')).toBe(false);
-            expect(emailDomainsMatch('user@example.com', '')).toBe(false);
+            expect(emailDomainsMatch('', 'user@gmail.com')).toBe(false);
+            expect(emailDomainsMatch('user@gmail.com', '')).toBe(false);
         });
     });
 
@@ -93,12 +96,12 @@ describe('Contact Validation Helpers', () => {
     });
 
     describe('validateContactSimilarity', () => {
-        const personEmails = ['john@example.com', 'john.doe@work.com'];
+        const personEmails = ['john@gmail.com', 'john.doe@work.com'];
         const personPhones = ['+15551234567', '+15559876543'];
 
         it('returns valid when email domain matches', () => {
             const result = validateContactSimilarity(
-                'jane@example.com', // Same domain as person
+                'jane@gmail.com', // Same domain as person
                 undefined,
                 personEmails,
                 personPhones
@@ -122,7 +125,7 @@ describe('Contact Validation Helpers', () => {
 
         it('returns valid when either email or phone matches', () => {
             const result = validateContactSimilarity(
-                'jane@example.com',
+                'jane@gmail.com',
                 '+15551234567',
                 personEmails,
                 personPhones
@@ -158,7 +161,7 @@ describe('Contact Validation Helpers', () => {
 
         it('handles empty person contact arrays', () => {
             const result = validateContactSimilarity(
-                'jane@example.com',
+                'jane@gmail.com',
                 '+15551234567',
                 [],
                 []

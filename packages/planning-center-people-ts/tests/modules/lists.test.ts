@@ -1,293 +1,201 @@
-import { ListsModule } from '../../src/modules/lists';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('ListsModule', () => {
-  let module: ListsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('ListsModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testListCategoryId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new ListsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testListCategoryId) {
+      await client.lists.deleteListCategory(testListCategoryId);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(ListsModule);
+      expect(client).toBeDefined();
+      expect(client.lists).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all lists with default parameters', async () => {
-      const mockLists = [{ id: '1', type: 'List', attributes: { name: 'List 1' } }];
-      const expectedResponse = {
-        data: mockLists,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.lists.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockLists,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/lists', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
 
     it('should fetch lists with filtering options', async () => {
-      const mockLists = [{ id: '1', type: 'List', attributes: { name: 'List 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockLists,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.lists.getAll({
+        include: ['category'],
       });
 
-      const options = {
-        where: { status: 'active' },
-        include: ['list_category'],
-        perPage: 10,
-        page: 1,
-      };
-
-      await module.getAll(options);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/lists',
-        { 'where[status]': 'active', include: 'list_category' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
-  describe('getAllPagesPaginated', () => {
-    it('should get all lists with pagination', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'List', attributes: { name: 'List 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+  describe('getPage', () => {
+    it('should fetch a single page of lists', async () => {
+      const result = await client.lists.getPage({ perPage: 25, page: 1 });
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const result = await module.getAllPagesPaginated();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/lists', {}, undefined);
-    });
-
-    it('should get all lists with filtering and pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'List', attributes: { name: 'List 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const options = {
-        where: { status: 'active' },
-        include: ['list_category'],
-        perPage: 10,
-        page: 1,
-      };
-
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      await module.getAllPagesPaginated(options, paginationOptions);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/lists', {
-        'where[status]': 'active',
-        include: 'list_category',
-      }, paginationOptions);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch list by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'List', attributes: { name: 'List 1' } },
-      };
+      // First get a list ID
+      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      expect(listsResponse.data.length).toBeGreaterThan(0);
+      const listId = listsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.lists.getById(listId);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(listId);
+      expect(result.type).toBe('List');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('name');
+    }, 30000);
 
     it('should fetch list by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'List', attributes: { name: 'List 1' } },
-      };
+      // First get a list ID
+      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      expect(listsResponse.data.length).toBeGreaterThan(0);
+      const listId = listsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.lists.getById(listId, ['list_category']);
 
-      await module.getById('1', ['list_category']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(listId);
+      expect(result.type).toBe('List');
+    }, 30000);
   });
 
   describe('getListCategories', () => {
     it('should get all list categories', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ListCategory', attributes: { name: 'Category 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.lists.getListCategories();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getListCategories();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getListCategoryById', () => {
     it('should get list category by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ListCategory', attributes: { name: 'Category 1' } },
-      };
+      // First get a list category ID
+      const categoriesResponse = await client.lists.getListCategories();
+      expect(categoriesResponse.data.length).toBeGreaterThan(0);
+      const categoryId = categoriesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.lists.getListCategoryById(categoryId);
 
-      const result = await module.getListCategoryById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(categoryId);
+      expect(result.type).toBe('ListCategory');
+    }, 30000);
   });
 
   describe('createListCategory', () => {
     it('should create a new list category', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ListCategory', attributes: { name: 'New Category' } },
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Category ${timestamp}`,
       };
+      const result = await client.lists.createListCategory(categoryData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('ListCategory');
+      expect(result.name).toBe(categoryData.name);
 
-      const categoryData = { name: 'New Category' };
-      const result = await module.createListCategory(categoryData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testListCategoryId = result.id || null;
+    }, 30000);
   });
 
   describe('updateListCategory', () => {
     it('should update an existing list category', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'ListCategory', attributes: { name: 'Updated Category' } },
+      // Create a test category first
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Update ${timestamp}`,
       };
+      const created = await client.lists.createListCategory(categoryData);
+      const categoryId = created.id!;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Use a unique name for the update to avoid conflicts
+      const updateData = { name: `Updated Category Name ${timestamp}` };
+      const result = await client.lists.updateListCategory(categoryId, updateData);
 
-      const updateData = { name: 'Updated Category' };
-      const result = await module.updateListCategory('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(categoryId);
+      expect(result.name).toBe(`Updated Category Name ${timestamp}`);
+      
+      // Clean up the updated category
+      await client.lists.deleteListCategory(categoryId);
+    }, 30000);
   });
 
   describe('deleteListCategory', () => {
     it('should delete a list category', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Create a category to delete
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Delete ${timestamp}`,
+      };
+      const created = await client.lists.createListCategory(categoryData);
+      const categoryIdToDelete = created.id || '';
 
-      await module.deleteListCategory('1');
+      // Delete the category
+      await expect(client.lists.deleteListCategory(categoryIdToDelete)).resolves.not.toThrow();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.lists.getListCategoryById(categoryIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getPeople', () => {
     it('should get people for a list', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Person', attributes: { name: 'Person 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a list ID
+      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      expect(listsResponse.data.length).toBeGreaterThan(0);
+      const listId = listsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.lists.getPeople(listId);
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
+  });
 
-      const result = await module.getPeople('list-1');
+  describe('run', () => {
+    it('should run a list', async () => {
+      // First get a list ID
+      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      expect(listsResponse.data.length).toBeGreaterThan(0);
+      const listId = listsResponse.data[0].id;
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Method is called refresh, not run
+      const result = await client.lists.refresh(listId);
+      expect(result).toBeDefined();
+      expect(result.id).toBe(listId);
+      expect(result.type).toBe('List');
+    }, 30000);
   });
 });

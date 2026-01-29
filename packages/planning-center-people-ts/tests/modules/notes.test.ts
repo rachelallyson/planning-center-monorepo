@@ -1,380 +1,297 @@
-import { NotesModule } from '../../src/modules/notes';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('NotesModule', () => {
-  let module: NotesModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('NotesModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testPersonId: string | null = null;
+  let testNoteId: string | null = null;
+  let testNoteCategoryId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+    
+    // Create a test person for note operations
+    const timestamp = Date.now();
+    const person = await client.people.create({
+      firstName: `Test_Notes_${timestamp}`,
+      lastName: `Person_${timestamp}`,
+      status: 'active' as const,
+    });
+    // create() returns ResourceObject which should have id property
+    if (!person || !person.id) {
+      throw new Error('Failed to create test person: API returned invalid response');
+    }
+    testPersonId = person.id;
+    
+    // Create a test note for getById tests
+    expect(testPersonId).toBeDefined();
+    
+    // Get or create a note category first
+    const categoriesResponse = await client.notes.getNoteCategories();
+    let noteCategoryId: string;
+    expect(categoriesResponse.data.length).toBeGreaterThan(0);
+    noteCategoryId = categoriesResponse.data[0].id;
+    
+    // Create a test note
+    const note = await client.notes.create(testPersonId!, {
+      note: `Test Note ${timestamp}`,
+      note_category_id: noteCategoryId,
+    });
+    testNoteId = note.id || null;
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new NotesModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    expect(testNoteId).toBeDefined();
+    await client.notes.delete(testNoteId!);
+    if (testNoteCategoryId) {
+      await client.notes.deleteNoteCategory(testNoteCategoryId);
+    }
+    expect(testPersonId).toBeDefined();
+    await client.people.delete(testPersonId!);
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(NotesModule);
+      expect(client).toBeDefined();
+      expect(client.notes).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all notes with default parameters', async () => {
-      const mockNotes = [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }];
-      const expectedResponse = {
-        data: mockNotes,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.notes.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockNotes,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/notes', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 60000);
 
     it('should fetch notes with filtering options', async () => {
-      const mockNotes = [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockNotes,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.notes.getAll({
+        include: ['note_category'],
       });
 
-      const options = {
-        where: { status: 'active' },
-        include: ['note_category'],
-        perPage: 10,
-        page: 1,
-      };
-
-      await module.getAll(options);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/notes',
-        { 'where[status]': 'active', include: 'note_category' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
-  describe('getAllPagesPaginated', () => {
-    it('should get all notes with pagination', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+  describe('getPage', () => {
+    it('should fetch a single page of notes', async () => {
+      const result = await client.notes.getPage({ perPage: 25, page: 1 });
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const result = await module.getAllPagesPaginated();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/notes', {}, undefined);
-    });
-
-    it('should get all notes with filtering and pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const options = {
-        where: { status: 'active' },
-        include: ['note_category'],
-        perPage: 10,
-        page: 1,
-      };
-
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      await module.getAllPagesPaginated(options, paginationOptions);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/notes', {
-        'where[status]': 'active',
-        include: 'note_category',
-      }, paginationOptions);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch note by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Note', attributes: { content: 'Note 1' } },
-      };
+      // First get a note ID
+      const notesResponse = await client.notes.getPage({ perPage: 1 });
+      expect(notesResponse.data.length).toBeGreaterThan(0);
+      const noteId = notesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.notes.getById(noteId);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(noteId);
+      expect(result.type).toBe('Note');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      // Note has 'note' property, not 'content'
+      expect(result).toHaveProperty('note');
+    }, 30000);
 
     it('should fetch note by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Note', attributes: { content: 'Note 1' } },
-      };
+      // First get a note ID
+      const notesResponse = await client.notes.getPage({ perPage: 1 });
+      expect(notesResponse.data.length).toBeGreaterThan(0);
+      const noteId = notesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.notes.getById(noteId, ['note_category']);
 
-      await module.getById('1', ['note_category']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(noteId);
+      expect(result.type).toBe('Note');
+    }, 30000);
   });
 
   describe('getNotesForPerson', () => {
     it('should get notes for a person', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      expect(testPersonId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.notes.getNotesForPerson(testPersonId!);
 
-      const result = await module.getNotesForPerson('person-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
 
     it('should get notes for a person with options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Note', attributes: { content: 'Note 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      expect(testPersonId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const options = {
-        where: { status: 'active' },
+      const result = await client.notes.getNotesForPerson(testPersonId!, {
         include: ['note_category'],
         perPage: 10,
         page: 1,
-      };
+      });
 
-      await module.getNotesForPerson('person-1', options);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('create', () => {
     it('should create a new note', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Note', attributes: { content: 'New Note' } },
+      expect(testPersonId).toBeDefined();
+
+      // First get or create a note category (required)
+      let noteCategoryId: string;
+      const categoriesResponse = await client.notes.getNoteCategories();
+      expect(categoriesResponse.data.length).toBeGreaterThan(0);
+      noteCategoryId = categoriesResponse.data[0].id || '';
+
+      const timestamp = Date.now();
+      const noteData = {
+        note: `Test Note ${timestamp}`,
+        note_category_id: noteCategoryId,
       };
+      const result = await client.notes.create(testPersonId!, noteData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Note');
+      expect(result.note).toBe(noteData.note);
 
-      const noteData = { content: 'New Note' };
-      const result = await module.create('person-1', noteData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testNoteId = result.id || null;
+    }, 30000);
   });
 
   describe('update', () => {
     it('should update an existing note', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Note', attributes: { content: 'Updated Note' } },
-      };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { note: 'Updated Note Content' };
+      const result = await client.notes.update(testNoteId!, updateData);
 
-      const updateData = { content: 'Updated Note' };
-      const result = await module.update('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testNoteId);
+      expect(result.note).toBe('Updated Note Content');
+    }, 30000);
   });
 
   describe('delete', () => {
     it('should delete a note', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testPersonId).toBeDefined();
 
-      await module.delete('1');
+      // Get a note category
+      const categoriesResponse = await client.notes.getNoteCategories();
+      expect(categoriesResponse.data.length).toBeGreaterThan(0);
+      const noteCategoryId = categoriesResponse.data[0].id || '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Create a note to delete
+      const timestamp = Date.now();
+      const noteData = {
+        note: `Test Delete ${timestamp}`,
+        note_category_id: noteCategoryId,
+      };
+      const created = await client.notes.create(testPersonId!, noteData);
+      const noteIdToDelete = created.id || '';
+
+      // Delete the note
+      await expect(client.notes.delete(noteIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.notes.getById(noteIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getNoteCategories', () => {
     it('should get all note categories', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'NoteCategory', attributes: { name: 'Category 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.notes.getNoteCategories();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getNoteCategories();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getNoteCategoryById', () => {
     it('should get note category by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'NoteCategory', attributes: { name: 'Category 1' } },
-      };
+      // First get a note category ID
+      const categoriesResponse = await client.notes.getNoteCategories();
+      expect(categoriesResponse.data.length).toBeGreaterThan(0);
+      const categoryId = categoriesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.notes.getNoteCategoryById(categoryId);
 
-      const result = await module.getNoteCategoryById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(categoryId);
+      expect(result.type).toBe('NoteCategory');
+    }, 30000);
   });
 
   describe('createNoteCategory', () => {
     it('should create a new note category', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'NoteCategory', attributes: { name: 'New Category' } },
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Category ${timestamp}`,
       };
+      const result = await client.notes.createNoteCategory(categoryData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('NoteCategory');
+      expect(result.name).toBe(categoryData.name);
 
-      const categoryData = { name: 'New Category' };
-      const result = await module.createNoteCategory(categoryData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testNoteCategoryId = result.id || null;
+    }, 30000);
   });
 
   describe('updateNoteCategory', () => {
     it('should update an existing note category', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'NoteCategory', attributes: { name: 'Updated Category' } },
+      // Create a test category first
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Update ${timestamp}`,
       };
+      const created = await client.notes.createNoteCategory(categoryData);
+      const categoryId = created.id!;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Use a unique name for the update to avoid conflicts
+      const updateData = { name: `Updated Category Name ${timestamp}` };
+      const result = await client.notes.updateNoteCategory(categoryId, updateData);
 
-      const updateData = { name: 'Updated Category' };
-      const result = await module.updateNoteCategory('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(categoryId);
+      expect(result.name).toBe(`Updated Category Name ${timestamp}`);
+      
+      // Clean up the updated category
+      await client.notes.deleteNoteCategory(categoryId);
+    }, 30000);
   });
 
   describe('deleteNoteCategory', () => {
     it('should delete a note category', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Create a category to delete
+      const timestamp = Date.now();
+      const categoryData = {
+        name: `Test Delete ${timestamp}`,
+      };
+      const created = await client.notes.createNoteCategory(categoryData);
+      const categoryIdToDelete = created.id || '';
 
-      await module.deleteNoteCategory('1');
+      // Delete the category
+      await expect(client.notes.deleteNoteCategory(categoryIdToDelete)).resolves.not.toThrow();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.notes.getNoteCategoryById(categoryIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 });

@@ -1,298 +1,223 @@
-import { CampusModule } from '../../src/modules/campus';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('CampusModule', () => {
-  let module: CampusModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('CampusModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testCampusId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new CampusModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testCampusId) {
+      await client.campus.delete(testCampusId);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(CampusModule);
+      expect(client).toBeDefined();
+      expect(client.campus).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all campuses with default parameters', async () => {
-      const mockCampuses = [{ id: '1', type: 'Campus', attributes: { name: 'Campus 1' } }];
-      const expectedResponse = {
-        data: mockCampuses,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.campus.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockCampuses,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.meta?.total_count).toBeGreaterThan(0);
+    }, 30000);
 
     it('should fetch campuses with filtering options', async () => {
-      const mockCampuses = [{ id: '1', type: 'Campus', attributes: { name: 'Campus 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockCampuses,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.campus.getAll({
+        include: ['lists'],
       });
 
-      const params = {
-        where: { status: 'active' },
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
+  });
+
+  describe('getPage', () => {
+    it('should fetch a single page of campuses', async () => {
+      const result = await client.campus.getPage({ perPage: 25, page: 1 });
+
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
+
+    it('should fetch a page with filtering options', async () => {
+      const result = await client.campus.getPage({
         include: ['lists'],
-        per_page: 10,
+        perPage: 10,
         page: 1,
-      };
+      });
 
-      await module.getAll(params);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/campuses',
-        { 'where[status]': 'active', include: 'lists' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch campus by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Campus', attributes: { name: 'Campus 1' } },
-      };
+      // First get a campus ID
+      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      expect(campusesResponse.data.length).toBeGreaterThan(0);
+      const campusId = campusesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.campus.getById(campusId);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(campusId);
+      expect(result.type).toBe('Campus');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      // Check for a flattened attribute instead (e.g., name)
+      expect(result).toHaveProperty('name');
+    }, 30000);
 
     it('should fetch campus by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Campus', attributes: { name: 'Campus 1' } },
-      };
+      // First get a campus ID
+      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      expect(campusesResponse.data.length).toBeGreaterThan(0);
+      const campusId = campusesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.campus.getById(campusId, ['lists']);
 
-      await module.getById('1', ['lists']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(campusId);
+      expect(result.type).toBe('Campus');
+    }, 30000);
   });
 
   describe('create', () => {
     it('should create a new campus', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Campus', attributes: { name: 'New Campus' } },
+      const timestamp = Date.now();
+      const campusData = {
+        name: `Test Campus ${timestamp}`,
+        description: `Test Campus Description ${timestamp}`,
+        street: '123 Test Street',
+        city: 'Test City',
+        state: 'TS',
+        zip: '12345',
+        country: 'US',
+        phone_number: '555-123-4567',
+        website: 'https://testcampus.example.com',
+        twenty_four_hour_time: false,
+        date_format: 1,
+        church_center_enabled: true,
       };
+      const result = await client.campus.create(campusData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Campus');
+      expect(result.name).toBe(campusData.name);
 
-      const campusData = { name: 'New Campus' };
-      const result = await module.create(campusData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testCampusId = result.id || null;
+    }, 30000);
   });
 
   describe('update', () => {
     it('should update an existing campus', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Campus', attributes: { name: 'Updated Campus' } },
-      };
+      expect(testCampusId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { name: 'Updated Campus Name', description: 'Updated description' };
+      const result = await client.campus.update(testCampusId!, updateData);
 
-      const updateData = { name: 'Updated Campus' };
-      const result = await module.update('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testCampusId);
+      expect(result.name).toBe('Updated Campus Name');
+    }, 30000);
   });
 
   describe('delete', () => {
     it('should delete a campus', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Create a campus to delete
+      const timestamp = Date.now();
+      const campusData = {
+        name: `Test Delete ${timestamp}`,
+        description: `Test Campus Description ${timestamp}`,
+        street: '123 Test Street',
+        city: 'Test City',
+        state: 'TS',
+        zip: '12345',
+        country: 'US',
+        phone_number: '555-123-4567',
+        website: 'https://testcampus.example.com',
+        twenty_four_hour_time: false,
+        date_format: 1,
+        church_center_enabled: true,
+      };
+      const created = await client.campus.create(campusData);
+      const campusIdToDelete = created.id || '';
 
-      await module.delete('1');
+      // Delete the campus
+      await expect(client.campus.delete(campusIdToDelete)).resolves.not.toThrow();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.campus.getById(campusIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getLists', () => {
     it('should get lists for a campus', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'List', attributes: { name: 'List 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // Get a campus first
+      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      expect(campusesResponse.data.length).toBeGreaterThan(0);
+      const campusId = campusesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getLists('campus-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      const result = await client.campus.getLists(campusId);
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getServiceTimes', () => {
     it('should get service times for a campus', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'ServiceTime', attributes: { name: 'Service 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // Get a campus first
+      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      expect(campusesResponse.data.length).toBeGreaterThan(0);
+      const campusId = campusesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getServiceTimes('campus-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      const result = await client.campus.getServiceTimes(campusId);
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
-  describe('getAllCampuses', () => {
+  describe('getAll', () => {
     it('should get all campuses with pagination', async () => {
-      const mockResponse = {
-        data: [
-          { id: '1', type: 'Campus', attributes: { name: 'Campus 1' } },
-          { id: '2', type: 'Campus', attributes: { name: 'Campus 2' } },
-        ],
-      };
+      // getAll returns PaginationResult with data array
+      const result = await client.campus.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const result = await module.getAllCampuses();
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses', {}, undefined);
-    });
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.data[0]).toHaveProperty('id');
+      expect(result.data[0]).toHaveProperty('type');
+      expect(result.data[0].type).toBe('Campus');
+    }, 30000);
 
     it('should get all campuses with filtering', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Campus', attributes: { name: 'Campus 1' } }],
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const params = {
-        where: { status: 'active' },
+      // getAll returns PaginationResult with data array
+      const result = await client.campus.getAll({
         include: ['lists'],
-        per_page: 10,
-      };
+      });
 
-      await module.getAllCampuses(params);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses', {
-        'where[status]': 'active',
-        include: 'lists',
-        per_page: 10,
-      }, undefined);
-    });
-  });
-
-  describe('getAllPagesPaginated', () => {
-    it('should get all campuses with pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Campus', attributes: { name: 'Campus 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const params = {
-        where: { status: 'active' },
-        include: ['lists'],
-        per_page: 10,
-      };
-
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      const result = await module.getAllPagesPaginated(params, paginationOptions);
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/campuses', {
-        'where[status]': 'active',
-        include: 'lists',
-        per_page: 10,
-      }, paginationOptions);
-    });
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 });

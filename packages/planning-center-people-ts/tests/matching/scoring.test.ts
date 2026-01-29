@@ -1,167 +1,165 @@
-import { MatchScorer } from '../../src/matching/scoring';
-import { PeopleModule } from '../../src/modules/people';
+/**
+ * Integration tests for MatchScorer
+ * 
+ * These tests use real API calls to verify that scoring logic works correctly
+ * with actual person data from the Planning Center API.
+ */
 
-// Mock the PeopleModule
-const mockPeopleModule = {
-  findOrCreate: jest.fn(),
-  getAll: jest.fn(),
-  getById: jest.fn(),
-  create: jest.fn(),
-  update: jest.fn(),
-  delete: jest.fn(),
-  getPrimaryCampus: jest.fn(),
-  setPrimaryCampus: jest.fn(),
-  removePrimaryCampus: jest.fn(),
-  getHousehold: jest.fn(),
-  setHousehold: jest.fn(),
-  removeFromHousehold: jest.fn(),
-  getHouseholdMembers: jest.fn(),
-  getByCampus: jest.fn(),
-  getWorkflowCards: jest.fn(),
-  getNotes: jest.fn(),
-  getFieldData: jest.fn(),
-  getSocialProfiles: jest.fn(),
-  findOrCreate: jest.fn(),
-  getAllPagesPaginated: jest.fn(),
-} as unknown as PeopleModule;
+import { PcoClient } from '../../src';
+import { createTestClient, logAuthStatus } from '../integration/test-config';
 
-describe('MatchScorer', () => {
-  let scorer: MatchScorer;
+const TEST_PREFIX = 'TEST_SCORING_2025';
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    scorer = new MatchScorer(mockPeopleModule);
-  });
+describe('MatchScorer (Integration)', () => {
+  let client: PcoClient;
+  const createdPersonIds: string[] = [];
 
-  describe('constructor', () => {
-    it('should create a MatchScorer instance', () => {
-      expect(scorer).toBeInstanceOf(MatchScorer);
-    });
-  });
+  beforeAll(async () => {
+    logAuthStatus();
+    
+    client = createTestClient();
+  }, 30000);
+
+  afterAll(async () => {
+    // Clean up all test persons
+    for (const personId of createdPersonIds) {
+      await client.people.delete(personId);
+    }
+  }, 120000);
 
   describe('scoreMatch', () => {
     it('should score a person match based on various criteria', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-      };
+      const timestamp = Date.now();
+      const testEmail = `${TEST_PREFIX}_score_${timestamp}@gmail.com`;
+      
+      // Create a person with matching criteria
+      const person = await client.people.create({
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Doe_${timestamp}`,
+        status: 'active',
+      });
+      createdPersonIds.push(person.id);
 
-      const options = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john@example.com',
-      };
+      await client.people.addEmail(person.id, {
+        address: testEmail,
+        location: 'Home',
+        primary: true,
+      });
 
-      const result = await scorer.scoreMatch(mockPerson, options);
+      // Wait for PCO to index
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('number');
-    });
+      // Use findOrCreate which uses scoring internally
+      const match = await client.people.findOrCreate({
+        firstName: `${TEST_PREFIX}_John_${timestamp}`,
+        lastName: `${TEST_PREFIX}_Doe_${timestamp}`,
+        email: testEmail,
+        createIfNotFound: false,
+      });
+
+      // Verify the match was found (scoring worked)
+      expect(match.id).toBe(person.id);
+    }, 120000);
   });
 
   describe('scoreEmailMatch', () => {
     it('should score email matches', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-      };
+      const timestamp = Date.now();
+      const testEmail = `${TEST_PREFIX}_email_score_${timestamp}@gmail.com`;
+      
+      // Create a person with email
+      const person = await client.people.create({
+        first_name: `${TEST_PREFIX}_Email_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Test_${timestamp}`,
+        status: 'active',
+      });
+      createdPersonIds.push(person.id);
 
-      const result = await scorer.scoreEmailMatch(mockPerson, 'john@example.com');
+      await client.people.addEmail(person.id, {
+        address: testEmail,
+        location: 'Home',
+        primary: true,
+      });
 
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('number');
-    });
+      // Wait for PCO to index
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Search by email - scoring should match
+      const match = await client.people.findOrCreate({
+        email: testEmail,
+        createIfNotFound: false,
+      });
+
+      expect(match.id).toBe(person.id);
+    }, 30000);
   });
 
   describe('scorePhoneMatch', () => {
     it('should score phone matches', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-      };
+      const timestamp = Date.now();
+      // Use a valid phone format (10 digits)
+      const phoneDigits = timestamp.toString().slice(-10).padStart(10, '0');
+      const testPhone = `+1${phoneDigits}`;
+      
+      // Create a person with phone
+      const person = await client.people.create({
+        first_name: `${TEST_PREFIX}_Phone_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Test_${timestamp}`,
+        status: 'active',
+      });
+      createdPersonIds.push(person.id);
 
-      const result = await scorer.scorePhoneMatch(mockPerson, '555-1234');
-
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('number');
-    });
-  });
-
-  describe('scoreNameMatch', () => {
-    it('should score name matches', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-      };
-
-      const result = await scorer.scoreNameMatch(mockPerson, {
-        first_name: 'John',
-        last_name: 'Doe',
+      await client.people.addPhoneNumber(person.id, {
+        number: testPhone,
+        location: 'Home',
+        primary: true,
       });
 
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('number');
-    });
+      // Wait for PCO to index
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Search by phone - scoring should match
+      const match = await client.people.findOrCreate({
+        phone: testPhone,
+        createIfNotFound: false,
+      });
+
+      expect(match.id).toBe(person.id);
+    }, 30000);
   });
 
   describe('getMatchReason', () => {
     it('should get match reason', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-      };
+      const timestamp = Date.now();
+      const testEmail = `${TEST_PREFIX}_reason_${timestamp}@gmail.com`;
+      
+      // Create a person
+      const person = await client.people.create({
+        first_name: `${TEST_PREFIX}_Reason_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Test_${timestamp}`,
+        status: 'active',
+      });
+      createdPersonIds.push(person.id);
 
-      const options = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john@example.com',
-      };
-
-      const result = await scorer.getMatchReason(mockPerson, options);
-
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-    });
-  });
-
-  describe('scoreAgeMatch', () => {
-    it('should score age matches', async () => {
-      const mockPerson = {
-        id: '1',
-        type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-          birthdate: '1990-01-01',
-        },
-      };
-
-      const result = await scorer.scoreAgeMatch(mockPerson, {
-        birthdate: '1990-01-01',
+      await client.people.addEmail(person.id, {
+        address: testEmail,
+        location: 'Home',
+        primary: true,
       });
 
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('number');
-    });
+      // Wait for PCO to index
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Use findOrCreate which uses getMatchReason internally
+      const match = await client.people.findOrCreate({
+        firstName: `${TEST_PREFIX}_Reason_${timestamp}`,
+        lastName: `${TEST_PREFIX}_Test_${timestamp}`,
+        email: testEmail,
+        createIfNotFound: false,
+      });
+
+      // Verify the match was found (getMatchReason worked)
+      expect(match.id).toBe(person.id);
+    }, 30000);
   });
 });

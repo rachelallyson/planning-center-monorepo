@@ -37,12 +37,8 @@ describe('Authentication Configuration v2.0.0', () => {
                     type: 'oauth',
                     accessToken: 'access-token',
                     refreshToken: 'refresh-token',
-                    onRefresh: async (tokens) => {
-                        console.log('Tokens refreshed:', tokens);
-                    },
-                    onRefreshFailure: async (error) => {
-                        console.error('Refresh failed:', error);
-                    }
+                    onRefresh: async () => {},
+                    onRefreshFailure: async () => {}
                 }
             };
 
@@ -108,13 +104,11 @@ describe('Authentication Configuration v2.0.0', () => {
                 type: 'oauth',
                 accessToken: 'access-token',
                 refreshToken: 'refresh-token',
-                onRefresh: async (tokens) => {
-                    // Save tokens to database
-                    console.log('Saving tokens:', tokens);
+                onRefresh: async () => {
+                    // Save tokens to database (stub for test)
                 },
-                onRefreshFailure: async (error) => {
-                    // Handle refresh failure
-                    console.error('Token refresh failed:', error.message);
+                onRefreshFailure: async () => {
+                    // Handle refresh failure (stub for test)
                 }
             };
 

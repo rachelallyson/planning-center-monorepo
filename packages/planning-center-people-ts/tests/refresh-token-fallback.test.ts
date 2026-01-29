@@ -173,8 +173,9 @@ describe('Refresh Token Fallback Behavior', () => {
                 await attemptTokenRefresh(client, mockOriginalRequest);
             } catch (error) {
                 expect(error).toBeInstanceOf(Error);
-                expect(error.message).toContain('Token refresh failed');
-                expect(error.message).toContain('invalid_grant');
+                expect(error).toBeInstanceOf(Error);
+                expect((error as Error).message).toContain('Token refresh failed');
+                expect((error as Error).message).toContain('invalid_grant');
             }
         });
     });

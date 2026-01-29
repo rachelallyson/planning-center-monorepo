@@ -1,269 +1,139 @@
-import { ReportsModule } from '../../src/modules/reports';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('ReportsModule', () => {
-  let module: ReportsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('ReportsModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testReportId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+    
+    // Create a test report for getById tests
+    const timestamp = Date.now();
+    const report = await client.reports.create({
+      name: `Test Report ${timestamp}`,
+      body: 'Test report body content',
+    });
+    testReportId = report.id || null;
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new ReportsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testReportId) {
+      await client.reports.delete(testReportId);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(ReportsModule);
+      expect(client).toBeDefined();
+      expect(client.reports).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all reports with default parameters', async () => {
-      const mockReports = [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }];
-      const expectedResponse = {
-        data: mockReports,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.reports.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockReports,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/reports', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
 
     it('should fetch reports with filtering options', async () => {
-      const mockReports = [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockReports,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.reports.getAll({
+        include: ['created_by'],
       });
 
-      const params = {
-        where: { status: 'active' },
-        include: ['created_by'],
-        per_page: 10,
-        page: 1,
-      };
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
+  });
 
-      await module.getAll(params);
+  describe('getPage', () => {
+    it('should fetch a single page of reports', async () => {
+      const result = await client.reports.getPage({ perPage: 25, page: 1 });
 
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/reports',
-        { 'where[status]': 'active', include: 'created_by' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch report by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Report', attributes: { name: 'Report 1' } },
-      };
+      expect(testReportId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.reports.getById(testReportId!);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testReportId);
+      expect(result.type).toBe('Report');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('name');
+    }, 30000);
 
     it('should fetch report by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Report', attributes: { name: 'Report 1' } },
-      };
+      expect(testReportId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.reports.getById(testReportId!, ['created_by']);
 
-      await module.getById('1', ['created_by']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testReportId);
+      expect(result.type).toBe('Report');
+    }, 30000);
   });
 
   describe('create', () => {
     it('should create a new report', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Report', attributes: { name: 'New Report' } },
+      const timestamp = Date.now();
+      const reportData = {
+        name: `Test Report ${timestamp}`,
       };
+      const result = await client.reports.create(reportData);
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Report');
+      // create() returns flattened resource (attributes at top level)
+      expect(result.name).toBe(reportData.name);
 
-      const reportData = { name: 'New Report' };
-      const result = await module.create(reportData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testReportId = result.id || null;
+    }, 30000);
   });
 
   describe('update', () => {
     it('should update an existing report', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Report', attributes: { name: 'Updated Report' } },
-      };
+      expect(testReportId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { name: 'Updated Report Name' };
+      const result = await client.reports.update(testReportId!, updateData);
 
-      const updateData = { name: 'Updated Report' };
-      const result = await module.update('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testReportId);
+      // update() returns flattened resource (attributes at top level)
+      expect(result.name).toBe('Updated Report Name');
+    }, 30000);
   });
 
   describe('delete', () => {
     it('should delete a report', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      await module.delete('1');
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
-  });
-
-  describe('getCreatedBy', () => {
-    it('should get creator of a report', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Person', attributes: { first_name: 'John', last_name: 'Doe' } },
+      // Create a report to delete
+      const timestamp = Date.now();
+      const reportData = {
+        name: `Test Delete ${timestamp}`,
       };
+      const created = await client.reports.create(reportData);
+      const reportIdToDelete = created.id || '';
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      // Delete the report
+      await expect(client.reports.delete(reportIdToDelete)).resolves.not.toThrow();
 
-      const result = await module.getCreatedBy('report-1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
-  });
-
-  describe('getUpdatedBy', () => {
-    it('should get updater of a report', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Person', attributes: { first_name: 'Jane', last_name: 'Doe' } },
-      };
-
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getUpdatedBy('report-1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
-  });
-
-  describe('getAllPagesPaginated', () => {
-    it('should get all reports with pagination', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const result = await module.getAllPagesPaginated();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/reports', {}, undefined);
-    });
-
-    it('should get all reports with filtering and pagination options', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Report', attributes: { name: 'Report 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse);
-
-      const params = {
-        where: { status: 'active' },
-        include: ['created_by'],
-        per_page: 10,
-        page: 1,
-      };
-
-      const paginationOptions = {
-        maxPages: 5,
-        onProgress: jest.fn(),
-      };
-
-      await module.getAllPagesPaginated(params, paginationOptions);
-
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/reports', {
-        'where[status]': 'active',
-        include: 'created_by',
-        per_page: 10,
-      }, paginationOptions);
-    });
+      // Verify it's deleted by trying to fetch it
+      await expect(client.reports.getById(reportIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 });

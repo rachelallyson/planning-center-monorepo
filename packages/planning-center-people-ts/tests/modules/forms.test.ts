@@ -1,368 +1,276 @@
-import { FormsModule } from '../../src/modules/forms';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('FormsModule', () => {
-  let module: FormsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('FormsModule - Real Integration Tests', () => {
+  let client: PcoClient;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
-
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new FormsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  beforeAll(async () => {
+    client = createTestClient();
+  }, 30000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(FormsModule);
+      expect(client).toBeDefined();
+      expect(client.forms).toBeDefined();
     });
   });
 
   describe('getAll', () => {
     it('should fetch all forms with default parameters', async () => {
-      const mockForms = [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }];
-      const expectedResponse = {
-        data: mockForms,
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.forms.getAll();
 
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockForms,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
-      });
-
-      const result = await module.getAll();
-
-      expect(result).toEqual(expectedResponse);
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/forms', {}, undefined);
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
 
     it('should fetch forms with filtering options', async () => {
-      const mockForms = [{ id: '1', type: 'Form', attributes: { name: 'Form 1' } }];
-
-      mockPaginationHelper.getAllPages.mockResolvedValueOnce({
-        data: mockForms,
-        totalCount: 1,
-        pagesFetched: 1,
-        duration: 100,
+      const result = await client.forms.getAll({
+        include: ['form_category'],
       });
 
-      const params = {
-        where: { status: 'active' },
-        include: ['form_category'],
-        per_page: 10,
-        page: 1,
-      };
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
+  });
 
-      await module.getAll(params);
+  describe('getPage', () => {
+    it('should fetch a single page of forms', async () => {
+      const result = await client.forms.getPage({ perPage: 25, page: 1 });
 
-      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith(
-        '/forms',
-        { 'where[status]': 'active', include: 'form_category' },
-        undefined
-      );
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeLessThanOrEqual(25);
+    }, 30000);
   });
 
   describe('getById', () => {
     it('should fetch form by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Form', attributes: { name: 'Form 1' } },
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.forms.getById(formId);
 
-      const result = await module.getById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(formId);
+      expect(result.type).toBe('Form');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      // Check for a flattened attribute instead (e.g., name)
+      expect(result).toHaveProperty('name');
+    }, 30000);
 
     it('should fetch form by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Form', attributes: { name: 'Form 1' } },
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.forms.getById(formId, ['form_category']);
 
-      await module.getById('1', ['form_category']);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(formId);
+      expect(result.type).toBe('Form');
+    }, 30000);
   });
 
   describe('getFormCategory', () => {
     it('should get form category for a form', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FormCategory', attributes: { name: 'Category 1' } },
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.forms.getFormCategory(formId);
 
-      const result = await module.getFormCategory('form-1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.type).toBe('FormCategory');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('name');
+    }, 30000);
   });
 
   describe('getFormFields', () => {
     it('should get form fields for a form', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormField', attributes: { name: 'Field 1' } }],
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.forms.getFormFields(formId);
 
-      const result = await module.getFormFields('form-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormFields returns { data } only, not { data, meta, links }
+    }, 90000);
 
     it('should get form fields with parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormField', attributes: { name: 'Field 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
+      const result = await client.forms.getFormFields(formId, {
+        include: ['form_field_options'],
+        perPage: 10,
+        page: 1,
       });
 
-      const params = {
-        where: { field_type: 'text' },
-        include: ['form_field_options'],
-        per_page: 10,
-        page: 1,
-      };
-
-      await module.getFormFields('form-1', params);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 60000);
   });
 
   describe('getFormFieldOptions', () => {
     it('should get form field options for a form field', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormFieldOption', attributes: { name: 'Option 1' } }],
-      };
+      // First get a form ID and field ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const fieldsResponse = await client.forms.getFormFields(formId);
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldId = fieldsResponse.data[0].id;
 
-      const result = await module.getFormFieldOptions('form-1', 'field-1');
+      const result = await client.forms.getFormFieldOptions(formId, fieldId);
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormFieldOptions returns { data } only, not { data, meta, links }
+    }, 30000);
 
     it('should get form field options with parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormFieldOption', attributes: { name: 'Option 1' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a form ID and field ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
+      const fieldsResponse = await client.forms.getFormFields(formId);
+      expect(fieldsResponse.data.length).toBeGreaterThan(0);
+      const fieldId = fieldsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const params = {
+      const result = await client.forms.getFormFieldOptions(formId, fieldId, {
         per_page: 10,
         page: 1,
-      };
+      });
 
-      await module.getFormFieldOptions('form-1', 'field-1', params);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormFieldOptions returns { data } only
+    }, 30000);
   });
 
   describe('getFormSubmissions', () => {
     it('should get form submissions for a form', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormSubmission', attributes: { submitted_at: '2020-01-01' } }],
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.forms.getFormSubmissions(formId);
 
-      const result = await module.getFormSubmissions('form-1');
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormSubmissions returns { data } only, not { data, meta, links }
+    }, 30000);
 
     it('should get form submissions with parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormSubmission', attributes: { submitted_at: '2023-01-01T10:00:00Z' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a form ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const params = {
-        where: { status: 'completed' },
+      const result = await client.forms.getFormSubmissions(formId, {
         include: ['form_submission_values'],
         per_page: 10,
         page: 1,
-      };
+      });
 
-      await module.getFormSubmissions('form-1', params);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormSubmissions returns { data } only
+      // Note: getFormSubmissions returns { data } only
+    }, 30000);
   });
 
   describe('getFormSubmissionById', () => {
     it('should get form submission by ID without include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FormSubmission', attributes: { submitted_at: '2023-01-01T10:00:00Z' } },
-      };
+      // First get a form ID and submission ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const submissionsResponse = await client.forms.getFormSubmissions(formId);
+      expect(submissionsResponse.data.length).toBeGreaterThan(0);
+      const submissionId = submissionsResponse.data[0].id;
 
-      const result = await module.getFormSubmissionById('form-1', 'submission-1');
+      const result = await client.forms.getFormSubmissionById(formId, submissionId);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(submissionId);
+      expect(result.type).toBe('FormSubmission');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      // FormSubmission may not have 'submitted_at' - check for a property that exists
+      expect(result).toHaveProperty('created_at');
+    }, 30000);
 
     it('should get form submission by ID with include', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'FormSubmission', attributes: { submitted_at: '2023-01-01T10:00:00Z' } },
-      };
+      // First get a form ID and submission ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const submissionsResponse = await client.forms.getFormSubmissions(formId);
+      expect(submissionsResponse.data.length).toBeGreaterThan(0);
+      const submissionId = submissionsResponse.data[0].id;
 
-      await module.getFormSubmissionById('form-1', 'submission-1', ['form_submission_values']);
+      const result = await client.forms.getFormSubmissionById(formId, submissionId, ['form_submission_values']);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(submissionId);
+      expect(result.type).toBe('FormSubmission');
+    }, 30000);
   });
 
   describe('getFormSubmissionValues', () => {
     it('should get form submission values for a form submission', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormSubmissionValue', attributes: { value: 'X' } }],
-      };
+      // First get a form ID and submission ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const submissionsResponse = await client.forms.getFormSubmissions(formId);
+      expect(submissionsResponse.data.length).toBeGreaterThan(0);
+      const submissionId = submissionsResponse.data[0].id;
 
-      const result = await module.getFormSubmissionValues('form-1', 'submission-1');
+      const result = await client.forms.getFormSubmissionValues(formId, submissionId);
 
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormSubmissionValues returns { data } only, not { data, meta, links }
+    }, 30000);
 
     it('should get form submission values with parameters', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'FormSubmissionValue', attributes: { value: 'Test Value' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      // First get a form ID and submission ID
+      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      expect(formsResponse.data.length).toBeGreaterThan(0);
+      const formId = formsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const submissionsResponse = await client.forms.getFormSubmissions(formId);
+      expect(submissionsResponse.data.length).toBeGreaterThan(0);
+      const submissionId = submissionsResponse.data[0].id;
 
-      const params = {
+      const result = await client.forms.getFormSubmissionValues(formId, submissionId, {
         per_page: 10,
         page: 1,
-      };
+      });
 
-      await module.getFormSubmissionValues('form-1', 'submission-1', params);
-
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(Array.isArray(result.data)).toBe(true);
+      // Note: getFormSubmissionValues returns { data } only
+    }, 30000);
   });
 });

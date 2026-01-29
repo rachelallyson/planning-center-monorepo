@@ -34,8 +34,8 @@ describe('helpers: age and file utilities', () => {
   });
 
   it('validates email and phone', () => {
-    expect(isValidEmail('test@example.com')).toBe(true);
-    expect(isValidEmail('bad@@example')).toBe(false);
+    expect(isValidEmail('test@gmail.com')).toBe(true);
+    expect(isValidEmail('bad@@gmail.com')).toBe(false);
 
     expect(isValidPhone('+15551234567')).toBe(true);
     expect(isValidPhone('abc')).toBe(false);

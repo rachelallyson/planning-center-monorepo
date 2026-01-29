@@ -1,449 +1,398 @@
-import { ContactsModule } from '../../src/modules/contacts';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { PcoClient } from '../../src';
+import { createTestClient } from '../integration/test-config';
 
-describe('ContactsModule', () => {
-  let module: ContactsModule;
-  let mockHttpClient: jest.Mocked<PcoHttpClient>;
-  let mockPaginationHelper: jest.Mocked<PaginationHelper>;
-  let mockEventEmitter: jest.Mocked<PcoEventEmitter>;
+describe('ContactsModule - Real Integration Tests', () => {
+  let client: PcoClient;
+  let testPersonId: string | null = null;
+  let testEmailId: string | null = null;
+  let testPhoneId: string | null = null;
+  let testAddressId: string | null = null;
+  let testSocialProfileId: string | null = null;
 
-  beforeEach(() => {
-    mockHttpClient = {
-      request: jest.fn(),
-    } as any;
+  beforeAll(async () => {
+    client = createTestClient();
+    
+    // Create a test person for contact operations
+    const timestamp = Date.now();
+    const person = await client.people.create({
+      firstName: `Test_Contacts_${timestamp}`,
+      lastName: `Person_${timestamp}`,
+      status: 'active' as const,
+    });
+    // create() returns ResourceObject which should have id property
+    if (!person || !person.id) {
+      throw new Error('Failed to create test person: API returned invalid response');
+    }
+    testPersonId = person.id;
+  }, 30000);
 
-    mockPaginationHelper = {
-      getAllPages: jest.fn(),
-      getPage: jest.fn(),
-    } as any;
-
-    mockEventEmitter = {
-      emit: jest.fn(),
-    } as any;
-
-    module = new ContactsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
-  });
+  afterAll(async () => {
+    // Clean up test data
+    if (testEmailId) {
+      await client.contacts.deleteEmail(testEmailId);
+    }
+    if (testPhoneId) {
+      await client.contacts.deletePhoneNumber(testPhoneId);
+    }
+    if (testAddressId) {
+      await client.contacts.deleteAddress(testAddressId);
+    }
+    if (testSocialProfileId) {
+      await client.contacts.deleteSocialProfile(testSocialProfileId);
+    }
+    if (testPersonId) {
+      await client.people.delete(testPersonId);
+    }
+  }, 120000);
 
   describe('constructor', () => {
     it('should initialize with dependencies', () => {
-      expect(module).toBeInstanceOf(ContactsModule);
+      expect(client).toBeDefined();
+      expect(client.contacts).toBeDefined();
     });
   });
 
   describe('getAllEmails', () => {
     it('should fetch all emails', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Email', attributes: { address: 'test@example.com' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.contacts.getAllEmails();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getAllEmails();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getEmailById', () => {
     it('should fetch email by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Email', attributes: { address: 'test@example.com' } },
-      };
+      // First get an email ID
+      const emailsResponse = await client.contacts.getAllEmails();
+      expect(emailsResponse.data.length).toBeGreaterThan(0);
+      const emailId = emailsResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.getEmailById(emailId);
 
-      const result = await module.getEmailById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(emailId);
+      expect(result.type).toBe('Email');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('address');
+    }, 30000);
   });
 
   describe('createEmail', () => {
     it('should create a new email', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Email', attributes: { address: 'new@example.com' } },
+      expect(testPersonId).toBeDefined();
+
+      const timestamp = Date.now();
+      const emailData = {
+        address: `testemail${timestamp}@gmail.com`,
+        location: 'Home',
+        primary: false,
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.createEmail(testPersonId!, emailData);
 
-      const emailData = { address: 'new@example.com' };
-      const result = await module.createEmail(emailData);
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Email');
+      expect(result.address).toBe(emailData.address);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testEmailId = result.id || null;
+    }, 30000);
   });
 
   describe('updateEmail', () => {
     it('should update an existing email', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Email', attributes: { address: 'updated@example.com' } },
-      };
+      expect(testEmailId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { address: `updated${Date.now()}@gmail.com` };
+      const result = await client.contacts.updateEmail(testEmailId!, updateData);
 
-      const updateData = { address: 'updated@example.com' };
-      const result = await module.updateEmail('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testEmailId);
+      expect(result.address).toContain('@gmail.com');
+    }, 30000);
   });
 
   describe('deleteEmail', () => {
     it('should delete an email', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testPersonId).toBeDefined();
 
-      await module.deleteEmail('1');
+      // Create an email to delete using PeopleModule (which works)
+      const timestamp = Date.now();
+      const emailData = {
+        address: `testdelete${timestamp}@gmail.com`,
+        location: 'Home',
+        primary: false,
+      };
+      const created = await client.people.addEmail(testPersonId!, emailData);
+      const emailIdToDelete = created.id ?? '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Delete using ContactsModule
+      await expect(client.contacts.deleteEmail(emailIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.contacts.getEmailById(emailIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getAllPhoneNumbers', () => {
     it('should fetch all phone numbers', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'PhoneNumber', attributes: { number: '555-1234' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.contacts.getAllPhoneNumbers();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getAllPhoneNumbers();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getPhoneNumberById', () => {
     it('should fetch phone number by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'PhoneNumber', attributes: { number: '555-1234' } },
-      };
+      // First get a phone number ID
+      const phonesResponse = await client.contacts.getAllPhoneNumbers();
+      expect(phonesResponse.data.length).toBeGreaterThan(0);
+      const phoneId = phonesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.getPhoneNumberById(phoneId);
 
-      const result = await module.getPhoneNumberById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(phoneId);
+      expect(result.type).toBe('PhoneNumber');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('number');
+    }, 30000);
   });
 
   describe('createPhoneNumber', () => {
     it('should create a new phone number', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'PhoneNumber', attributes: { number: '555-5678' } },
+      expect(testPersonId).toBeDefined();
+
+      const timestamp = Date.now();
+      const phoneData = {
+        number: `+1555${timestamp.toString().slice(-7)}`,
+        location: 'Home',
+        primary: false,
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.createPhoneNumber(testPersonId!, phoneData);
 
-      const phoneData = { number: '555-5678' };
-      const result = await module.createPhoneNumber(phoneData);
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('PhoneNumber');
+      expect(result.number).toBe(phoneData.number);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testPhoneId = result.id || null;
+    }, 30000);
   });
 
   describe('updatePhoneNumber', () => {
     it('should update an existing phone number', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'PhoneNumber', attributes: { number: '555-9999' } },
-      };
+      expect(testPhoneId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { number: `+1556${Date.now().toString().slice(-7)}` };
+      const result = await client.contacts.updatePhoneNumber(testPhoneId!, updateData);
 
-      const updateData = { number: '555-9999' };
-      const result = await module.updatePhoneNumber('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testPhoneId);
+      expect(result.number).toMatch(/^\+1556/);
+    }, 30000);
   });
 
   describe('deletePhoneNumber', () => {
     it('should delete a phone number', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testPersonId).toBeDefined();
 
-      await module.deletePhoneNumber('1');
+      // Create a phone number to delete using PeopleModule (which works)
+      const timestamp = Date.now();
+      const phoneData = {
+        number: `+1555${timestamp.toString().slice(-7)}`,
+        location: 'Home',
+        primary: false,
+      };
+      const created = await client.people.addPhoneNumber(testPersonId!, phoneData);
+      const phoneIdToDelete = created.id ?? '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Delete using ContactsModule
+      await expect(client.contacts.deletePhoneNumber(phoneIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.contacts.getPhoneNumberById(phoneIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getAllAddresses', () => {
     it('should fetch all addresses', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'Address', attributes: { street: '123 Main St' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.contacts.getAllAddresses();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getAllAddresses();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getAddressById', () => {
     it('should fetch address by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Address', attributes: { street: '123 Main St' } },
-      };
+      // First get an address ID
+      const addressesResponse = await client.contacts.getAllAddresses();
+      expect(addressesResponse.data.length).toBeGreaterThan(0);
+      const addressId = addressesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.getAddressById(addressId);
 
-      const result = await module.getAddressById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(addressId);
+      expect(result.type).toBe('Address');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      // Address has 'street_line_1' or 'location', not 'street'
+      expect(result).toHaveProperty('location');
+    }, 30000);
   });
 
   describe('createAddress', () => {
     it('should create a new address', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Address', attributes: { street: '456 Oak Ave' } },
+      expect(testPersonId).toBeDefined();
+
+      const timestamp = Date.now();
+      const addressData = {
+        street_line_1: `123 Test St ${timestamp}`,
+        city: 'Test City',
+        state: 'TS',
+        zip: '12345',
+        location: 'Home',
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.createAddress(testPersonId!, addressData);
 
-      const addressData = { street: '456 Oak Ave' };
-      const result = await module.createAddress(addressData);
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('Address');
+      expect(result.street_line_1).toBe(addressData.street_line_1);
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testAddressId = result.id || null;
+    }, 30000);
   });
 
   describe('updateAddress', () => {
     it('should update an existing address', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'Address', attributes: { street: '789 Pine St' } },
-      };
+      expect(testAddressId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { street_line_1: '456 Updated Ave', city: 'New City' };
+      const result = await client.contacts.updateAddress(testAddressId!, updateData);
 
-      const updateData = { street: '789 Pine St' };
-      const result = await module.updateAddress('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testAddressId);
+      expect(result.street_line_1).toBe('456 Updated Ave');
+      expect(result.city).toBe('New City');
+    }, 30000);
   });
 
   describe('deleteAddress', () => {
     it('should delete an address', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testPersonId).toBeDefined();
 
-      await module.deleteAddress('1');
+      // Create an address to delete using PeopleModule (which works)
+      const timestamp = Date.now();
+      const addressData = {
+        street_line_1: `123 Delete St ${timestamp}`,
+        city: 'Test City',
+        state: 'TS',
+        zip: '12345',
+        location: 'Home',
+      };
+      const created = await client.people.addAddress(testPersonId!, addressData);
+      const addressIdToDelete = created.id ?? '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Delete using ContactsModule
+      await expect(client.contacts.deleteAddress(addressIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.contacts.getAddressById(addressIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 
   describe('getAllSocialProfiles', () => {
     it('should fetch all social profiles', async () => {
-      const mockResponse = {
-        data: [{ id: '1', type: 'SocialProfile', attributes: { provider: 'facebook' } }],
-        meta: { total_count: 1 },
-        links: {},
-      };
+      const result = await client.contacts.getAllSocialProfiles();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
-
-      const result = await module.getAllSocialProfiles();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+    }, 30000);
   });
 
   describe('getSocialProfileById', () => {
     it('should fetch social profile by ID', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'SocialProfile', attributes: { provider: 'facebook' } },
-      };
+      // First get a social profile ID
+      const profilesResponse = await client.contacts.getAllSocialProfiles();
+      expect(profilesResponse.data.length).toBeGreaterThan(0);
+      const profileId = profilesResponse.data[0].id;
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.getSocialProfileById(profileId);
 
-      const result = await module.getSocialProfileById('1');
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(profileId);
+      expect(result.type).toBe('SocialProfile');
+      // FlattenedResource doesn't have 'attributes' - attributes are flattened to top level
+      expect(result).toHaveProperty('url');
+    }, 30000);
   });
 
   describe('createSocialProfile', () => {
     it('should create a new social profile', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'SocialProfile', attributes: { provider: 'twitter' } },
+      expect(testPersonId).toBeDefined();
+
+      const timestamp = Date.now();
+      const profileData = {
+        site: 'Facebook',
+        url: `https://facebook.com/testuser${timestamp}`,
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 201,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const result = await client.contacts.createSocialProfile(testPersonId!, profileData);
 
-      const socialProfileData = { provider: 'twitter' };
-      const result = await module.createSocialProfile(socialProfileData);
+      expect(result).toBeDefined();
+      expect(result.id).toBeTruthy();
+      expect(result.type).toBe('SocialProfile');
+      expect(result.site).toBe('Facebook');
 
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      testSocialProfileId = result.id || null;
+    }, 30000);
   });
 
   describe('updateSocialProfile', () => {
     it('should update an existing social profile', async () => {
-      const mockResponse = {
-        data: { id: '1', type: 'SocialProfile', attributes: { provider: 'instagram' } },
-      };
+      expect(testSocialProfileId).toBeDefined();
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const updateData = { url: `https://facebook.com/newuser${Date.now()}` };
+      const result = await client.contacts.updateSocialProfile(testSocialProfileId!, updateData);
 
-      const updateData = { provider: 'instagram' };
-      const result = await module.updateSocialProfile('1', updateData);
-
-      expect(result).toEqual(mockResponse.data);
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      expect(result).toBeDefined();
+      expect(result.id).toBe(testSocialProfileId);
+      expect(result.url).toContain('facebook.com');
+    }, 30000);
   });
 
   describe('deleteSocialProfile', () => {
     it('should delete a social profile', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: null,
-        status: 204,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      expect(testPersonId).toBeDefined();
 
-      await module.deleteSocialProfile('1');
+      // Create a social profile to delete using PeopleModule (which works)
+      const timestamp = Date.now();
+      const profileData = {
+        site: 'Facebook',
+        url: `https://facebook.com/deleteuser${timestamp}`,
+      };
+      const created = await client.people.addSocialProfile(testPersonId!, profileData);
+      const profileIdToDelete = created.id ?? '';
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
-    });
+      // Delete using ContactsModule
+      await expect(client.contacts.deleteSocialProfile(profileIdToDelete)).resolves.not.toThrow();
+
+      // Verify it's deleted by trying to fetch it
+      await expect(client.contacts.getSocialProfileById(profileIdToDelete)).rejects.toThrow();
+    }, 30000);
   });
 });
-

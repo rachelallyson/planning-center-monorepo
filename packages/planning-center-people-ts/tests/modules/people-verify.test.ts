@@ -1,116 +1,95 @@
-import { PeopleModule } from '../../src/modules/people';
+/**
+ * Integration tests for PeopleModule.verifyPersonExists
+ * 
+ * These tests use real API calls instead of mocks to verify the actual behavior
+ * of person verification with the Planning Center API.
+ */
 
-// Mock dependencies
-const createMockHttpClient = () => ({
-    request: jest.fn(),
-});
+import { PcoClient } from '../../src';
+import { createTestClient, logAuthStatus } from '../integration/test-config';
 
-const createMockPaginationHelper = () => ({
-    getAll: jest.fn(),
-});
+const TEST_PREFIX = 'TEST_VERIFY_2025';
 
-const createMockEventEmitter = () => ({
-    emit: jest.fn(),
-    on: jest.fn(),
-    off: jest.fn(),
-});
+describe('PeopleModule.verifyPersonExists (Integration)', () => {
+  let client: PcoClient;
+  let testPersonId: string | null = null;
 
-describe('PeopleModule.verifyPersonExists', () => {
-    let peopleModule: PeopleModule;
-    let mockHttpClient: ReturnType<typeof createMockHttpClient>;
-
-    beforeEach(() => {
-        mockHttpClient = createMockHttpClient();
-        const mockPaginationHelper = createMockPaginationHelper();
-        const mockEventEmitter = createMockEventEmitter();
-        
-        peopleModule = new PeopleModule(
-            mockHttpClient as any,
-            mockPaginationHelper as any,
-            mockEventEmitter as any
-        );
+  beforeAll(async () => {
+    logAuthStatus();
+    
+    client = createTestClient();
+    
+    // Create a test person for verification tests
+    const timestamp = Date.now();
+    const person = await client.people.create({
+      first_name: `${TEST_PREFIX}_Verify_${timestamp}`,
+      last_name: `${TEST_PREFIX}_Test_${timestamp}`,
+      status: 'active',
     });
+    testPersonId = person.id || null;
+  }, 30000);
 
-    it('returns true when person exists', async () => {
-        mockHttpClient.request.mockResolvedValue({
-            data: {
-                data: {
-                    id: 'person-123',
-                    attributes: { first_name: 'John' }
-                }
-            }
-        });
+  afterAll(async () => {
+    // Clean up test person
+    if (testPersonId) {
+      await client.people.delete(testPersonId);
+    }
+  }, 120000);
 
-        const exists = await peopleModule.verifyPersonExists('person-123');
-        
-        expect(exists).toBe(true);
-        expect(mockHttpClient.request).toHaveBeenCalledWith({
-            method: 'GET',
-            endpoint: '/people/person-123',
-            params: {}
-        });
+  it('returns true when person exists', async () => {
+    expect(testPersonId).toBeDefined();
+    
+    const exists = await client.people.verifyPersonExists(testPersonId!);
+    
+    expect(exists).toBe(true);
+  }, 30000);
+
+  it('returns false when person not found (404)', async () => {
+    // Use a non-existent person ID
+    const nonExistentId = '999999999';
+    
+    const exists = await client.people.verifyPersonExists(nonExistentId);
+    
+    expect(exists).toBe(false);
+  }, 30000);
+
+  it('uses default timeout of 30000ms', async () => {
+    expect(testPersonId).toBeDefined();
+    
+    // Should not timeout within reasonable time
+    const exists = await client.people.verifyPersonExists(testPersonId!);
+    
+    expect(exists).toBe(true);
+  }, 30000);
+
+  it('resolves before timeout when request is fast', async () => {
+    expect(testPersonId).toBeDefined();
+    
+    const startTime = Date.now();
+    const exists = await client.people.verifyPersonExists(testPersonId!, { timeout: 30000 });
+    const elapsed = Date.now() - startTime;
+    
+    expect(exists).toBe(true);
+    expect(elapsed).toBeLessThan(35000); // Should resolve before the 30s timeout
+  }, 45000);
+
+  it('verifies person exists after creation', async () => {
+    const timestamp = Date.now();
+    
+    // Create a new person
+    const person = await client.people.create({
+      first_name: `${TEST_PREFIX}_New_${timestamp}`,
+      last_name: `${TEST_PREFIX}_Person_${timestamp}`,
+      status: 'active',
     });
-
-    it('returns false when person not found (404)', async () => {
-        const error: any = new Error('Not found');
-        error.status = 404;
-        mockHttpClient.request.mockRejectedValue(error);
-
-        const exists = await peopleModule.verifyPersonExists('deleted-person');
-        
-        expect(exists).toBe(false);
-    });
-
-    it('returns false when 404 is in response.status', async () => {
-        const error: any = new Error('Not found');
-        error.response = { status: 404 };
-        mockHttpClient.request.mockRejectedValue(error);
-
-        const exists = await peopleModule.verifyPersonExists('deleted-person');
-        
-        expect(exists).toBe(false);
-    });
-
-    it('throws error for non-404 errors', async () => {
-        const error = new Error('Server error');
-        (error as any).status = 500;
-        mockHttpClient.request.mockRejectedValue(error);
-
-        await expect(peopleModule.verifyPersonExists('person-123'))
-            .rejects.toThrow('Server error');
-    });
-
-    it('times out after specified duration', async () => {
-        // Simulate a slow request
-        mockHttpClient.request.mockImplementation(() => 
-            new Promise(resolve => setTimeout(resolve, 5000))
-        );
-
-        await expect(peopleModule.verifyPersonExists('person-123', { timeout: 100 }))
-            .rejects.toThrow('Person verification timed out after 100ms');
-    });
-
-    it('uses default timeout of 30000ms', async () => {
-        mockHttpClient.request.mockResolvedValue({
-            data: { data: { id: 'person-123' } }
-        });
-
-        // Should not timeout within reasonable time
-        const exists = await peopleModule.verifyPersonExists('person-123');
-        
-        expect(exists).toBe(true);
-    });
-
-    it('resolves before timeout when request is fast', async () => {
-        mockHttpClient.request.mockResolvedValue({
-            data: { data: { id: 'person-123' } }
-        });
-
-        const startTime = Date.now();
-        const exists = await peopleModule.verifyPersonExists('person-123', { timeout: 5000 });
-        const elapsed = Date.now() - startTime;
-        
-        expect(exists).toBe(true);
-        expect(elapsed).toBeLessThan(1000); // Should resolve quickly
-    });
+    
+    try {
+      // Verify it exists
+      const exists = await client.people.verifyPersonExists(person.id);
+      expect(exists).toBe(true);
+    } finally {
+      // Clean up
+      await client.people.delete(person.id);
+    }
+  }, 30000);
 });

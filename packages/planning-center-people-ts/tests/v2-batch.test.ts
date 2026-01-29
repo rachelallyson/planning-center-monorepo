@@ -34,7 +34,7 @@ describe('Batch Operations v2.0.0', () => {
                 {
                     type: 'people.addEmail',
                     personId: '$0.id',
-                    data: { address: 'john@example.com', primary: true }
+                    data: { address: 'john@gmail.com', primary: true }
                 },
                 {
                     type: 'people.addPhone',
@@ -154,7 +154,7 @@ describe('Batch Operations v2.0.0', () => {
                 {
                     type: 'people.addEmail',
                     personId: '$0.id',
-                    data: { address: 'newmember@example.com', primary: true }
+                    data: { address: 'newmember@gmail.com', primary: true }
                 },
             ];
 

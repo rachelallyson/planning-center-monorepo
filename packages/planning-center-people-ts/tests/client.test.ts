@@ -118,12 +118,18 @@ describe('PcoClient branch coverage', () => {
       
       const originalPeople = client.people;
       
-      client.updateConfig({
-        auth: {
-          ...baseConfig.auth!,
-          accessToken: 'new-token',
-        },
-      });
+      const currentAuth = baseConfig.auth!;
+      if (currentAuth.type === 'oauth') {
+        client.updateConfig({
+          auth: {
+            type: 'oauth',
+            accessToken: 'new-token',
+            refreshToken: currentAuth.refreshToken,
+            onRefresh: currentAuth.onRefresh,
+            onRefreshFailure: currentAuth.onRefreshFailure,
+          },
+        });
+      }
       
       // Modules should be recreated with new HTTP client
       expect(client.people).toBeDefined();

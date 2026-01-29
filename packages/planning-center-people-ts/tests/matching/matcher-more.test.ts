@@ -1,9 +1,42 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import { PeopleModule } from '../../src/modules/people';
+import type { PeopleModule } from '../../src/modules/people';
+import type { FlattenedPersonResource, PersonResource, EmailResource, PhoneNumberResource, PersonAttributes } from '../../src/types';
 
-const makePerson = (id: string, attrs: any = {}) => ({ id, type: 'Person', attributes: attrs }) as any;
+const makePerson = (id: string, attrs: Partial<PersonAttributes> = {}): FlattenedPersonResource => {
+  return {
+    id,
+    type: 'Person',
+    ...attrs,
+  } as FlattenedPersonResource;
+};
 
-const pm = {
+const makePersonResource = (id: string, attrs: Partial<PersonAttributes> = {}): PersonResource => {
+  return {
+    id,
+    type: 'Person',
+    attributes: attrs as PersonAttributes,
+    relationships: {},
+  };
+};
+
+const makeEmailResource = (id: string, address: string): EmailResource => {
+  return {
+    id,
+    type: 'Email',
+    attributes: {
+      address,
+      location: 'Home',
+      primary: true,
+    },
+    relationships: {
+      person: {
+        data: { type: 'Person', id: '1' },
+      },
+    },
+  };
+};
+
+const pm: jest.Mocked<Pick<PeopleModule, 'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'>> = {
   search: jest.fn(),
   getEmails: jest.fn(),
   getPhoneNumbers: jest.fn(),
@@ -12,7 +45,7 @@ const pm = {
   addPhoneNumber: jest.fn(),
   setPrimaryCampus: jest.fn(),
   getById: jest.fn(),
-} as unknown as PeopleModule;
+};
 
 describe('PersonMatcher additional coverage', () => {
   let matcher: PersonMatcher;
@@ -25,53 +58,76 @@ describe('PersonMatcher additional coverage', () => {
   it('findMatch with name-only search when no contact info', async () => {
     const p1 = makePerson('n1', { first_name: 'Anna', last_name: 'Lee' });
     const p2 = makePerson('n2', { first_name: 'Anna', last_name: 'Li' });
-    (pm.search as any).mockResolvedValueOnce({ data: [p1, p2] });
+    pm.search.mockResolvedValueOnce({ data: [p1, p2] });
+    pm.getEmails.mockResolvedValue({ data: [] });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const result = await matcher.findMatch({ firstName: 'Anna', lastName: 'Lee' } as any);
+    const result = await matcher.findMatch({ firstName: 'Anna', lastName: 'Lee' });
 
     expect(result?.person?.id).toBeDefined();
   });
 
   it('de-duplicates candidates from multiple searches', async () => {
     const dup = makePerson('d1', { first_name: 'Dup', last_name: 'User' });
-    (pm.search as any)
+    pm.search
       .mockResolvedValueOnce({ data: [dup, dup] }) // email search returns dup twice
       .mockResolvedValue({ data: [] }); // name fallback
-    (pm.getEmails as any).mockResolvedValue({ data: [{ attributes: { address: 'dup@example.com' } }] });
+    pm.getEmails.mockResolvedValue({ 
+      data: [{ 
+        id: 'e1', 
+        type: 'Email', 
+        address: 'dup@example.com',
+        location: 'Home',
+        primary: true,
+      }] 
+    });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const result = await matcher.findMatch({ email: 'dup@example.com' } as any);
+    const result = await matcher.findMatch({ email: 'dup@example.com' });
     expect(result?.person?.id).toBe('d1');
   });
 
   it('filters out candidates not matching age criteria', async () => {
-    const tooYoung = makePerson('y1', { birthdate: new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString() });
-    (pm.search as any).mockResolvedValueOnce({ data: [tooYoung] });
-    (pm.getEmails as any).mockResolvedValue({ data: [] });
-    (pm.getPhoneNumbers as any).mockResolvedValue({ data: [] });
+    const tenYearsAgo = new Date();
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+    const tooYoung = makePerson('y1', { birthdate: tenYearsAgo.toISOString().split('T')[0] });
+    pm.search.mockResolvedValueOnce({ data: [tooYoung] });
+    pm.getEmails.mockResolvedValue({ data: [] });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const result = await matcher.findMatch({ firstName: 'Kid', lastName: 'User', minAge: 18 } as any);
+    const result = await matcher.findMatch({ firstName: 'Kid', lastName: 'User', minAge: 18 });
     expect(result).toBeNull();
   });
 
   it('addMissingContactInfo adds phone when verified email matches', async () => {
     const person = makePerson('c1', { first_name: 'Cara', last_name: 'One' });
-    (pm.search as any).mockResolvedValueOnce({ data: [person] }); // email search
-    (pm.getEmails as any).mockResolvedValue({ data: [{ attributes: { address: 'cara@x.com' } }] });
-    (pm.getPhoneNumbers as any).mockResolvedValue({ data: [] });
+    pm.search.mockResolvedValueOnce({ data: [person] }); // email search
+    pm.getEmails.mockResolvedValue({ 
+      data: [{ 
+        id: 'e1', 
+        type: 'Email', 
+        address: 'cara@x.com',
+        location: 'Home',
+        primary: true,
+      }] 
+    });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
+    pm.getById.mockResolvedValue(person);
 
-    await matcher.findOrCreate({ email: 'cara@x.com', phone: '555-222-3333', addMissingContactInfo: true } as any);
+    await matcher.findOrCreate({ email: 'cara@x.com', phone: '555-222-3333', addMissingContactInfo: true });
     expect(pm.addPhoneNumber).toHaveBeenCalledWith('c1', expect.objectContaining({ number: '555-222-3333' }));
   });
 
   it('create path sets campus when campusId provided', async () => {
-    (pm.search as any).mockResolvedValue({ data: [] });
-    (pm.getEmails as any).mockResolvedValue({ data: [] });
-    (pm.getPhoneNumbers as any).mockResolvedValue({ data: [] });
+    pm.search.mockResolvedValue({ data: [] });
+    pm.getEmails.mockResolvedValue({ data: [] });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const created = makePerson('new1', { first_name: 'New', last_name: 'User' });
-    (pm.create as any).mockResolvedValue(created);
+    const created = makePersonResource('new1', { first_name: 'New', last_name: 'User' });
+    pm.create.mockResolvedValue(created);
+    pm.getById.mockResolvedValue(makePerson('new1', { first_name: 'New', last_name: 'User' }));
 
-    await matcher.findOrCreate({ firstName: 'New', lastName: 'User', campusId: 'camp-123' } as any);
+    await matcher.findOrCreate({ firstName: 'New', lastName: 'User', campusId: 'camp-123' });
 
     expect(pm.setPrimaryCampus).toHaveBeenCalledWith('new1', 'camp-123');
   });
@@ -80,17 +136,26 @@ describe('PersonMatcher additional coverage', () => {
     const p1 = makePerson('m1', {});
     const p2 = makePerson('m2', {});
 
-    (pm.search as any)
+    pm.search
       .mockResolvedValueOnce({ data: [p1, p2] }) // email search
       .mockResolvedValue({ data: [] }); // name fallback
 
     // p1 has matching email, p2 does not
-    (pm.getEmails as any)
-      .mockResolvedValueOnce({ data: [{ attributes: { address: 'v@x.com' } }] })
+    pm.getEmails
+      .mockResolvedValueOnce({ 
+        data: [{ 
+          id: 'e1', 
+          type: 'Email', 
+          address: 'v@x.com',
+          location: 'Home',
+          primary: true,
+        }] 
+      })
       .mockResolvedValue({ data: [] });
+    pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const results = await matcher.getAllMatches({ email: 'v@x.com' } as any);
-    expect(results[0].person.id).toBe('m1');
-    expect(results[0].isVerifiedContactMatch).toBe(true);
+    const results = await matcher.getAllMatches({ email: 'v@x.com' });
+    expect(results[0]?.person.id).toBe('m1');
+    expect(results[0]?.isVerifiedContactMatch).toBe(true);
   });
 });
