@@ -2,8 +2,12 @@
  * v2.0.0 Pagination Utilities
  */
 
-import type { ResourceObject, Paginated } from './types/json-api';
+import type { PcoClientConfig } from './types/config';
+import type { ResourceObject, Paginated, Meta, TopLevelLinks } from './types/json-api';
 import type { PcoHttpClient } from './http-client';
+import { mapIncludedToRelationships } from './included-resolver';
+import type { FlattenedResource } from './types/flattened-resource';
+import { createDebugLogger } from './debug';
 
 export interface PaginationOptions {
     /** Maximum number of pages to fetch */
@@ -16,21 +20,46 @@ export interface PaginationOptions {
     delay?: number;
 }
 
-export interface PaginationResult<T> {
-    data: T[];
+export interface PaginationResult<
+    T extends ResourceObject<string, any, any>, 
+    TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
+    TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+> {
+    data: FlattenedResource<
+        T['type'],
+        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
+        TRelResourceMap
+   >[];
     totalCount: number;
     pagesFetched: number;
     duration: number;
+    /** Meta information from the API response (from last page) */
+    meta?: Meta;
+    /** Links from the API response (from last page) */
+    links?: TopLevelLinks;
 }
 
 export class PaginationHelper {
-    constructor(private httpClient: PcoHttpClient) { }
+    constructor(
+        private httpClient: PcoHttpClient,
+        private getConfig?: () => PcoClientConfig
+    ) { }
 
-    async getAllPages<T extends ResourceObject<string, any, any>>(
+    private debugLog(message: string, data?: unknown): void {
+        const logger = createDebugLogger(this.getConfig?.());
+        if (logger.enabled) logger.log(message, data);
+    }
+
+    async getAllPages<
+        T extends ResourceObject<string, any, any>, 
+        TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+    >(
         endpoint: string,
         params: Record<string, any> = {},
         options: PaginationOptions = {}
-    ): Promise<PaginationResult<T>> {
+    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap>> {
         // Ensure endpoint is a string
         if (typeof endpoint !== 'string') {
             throw new Error(`Expected endpoint to be a string, got ${typeof endpoint}`);
@@ -43,41 +72,99 @@ export class PaginationHelper {
         } = options;
 
         const startTime = Date.now();
+        this.debugLog('pagination  getAllPages start', { endpoint, maxPages, perPage });
         const allData: T[] = [];
+        // Use Map to deduplicate included resources by type+id
+        const includedMap = new Map<string, TIncluded>();
         let page = 1;
+        let offset: number | null = null;
+        let previousOffset: number | null = null;
         let hasMore = true;
         let totalCount = 0;
+        let useOffsetPagination = false;
+        // Preserve meta and links from the last page response
+        let lastPageMeta: Meta | undefined;
+        let lastPageLinks: TopLevelLinks | undefined;
 
         while (hasMore && page <= maxPages) {
-            const response = await this.httpClient.request<Paginated<T>>({
+            const requestParams: Record<string, any> = {
+                ...params,
+            };
+
+            // Use offset if detected, otherwise use page
+            if (useOffsetPagination && offset !== null) {
+                requestParams.offset = offset;
+            } else {
+                requestParams.page = page;
+            }
+            requestParams.per_page = perPage;
+
+            const response = await this.httpClient.request<Paginated<T, TIncluded>>({
                 method: 'GET',
                 endpoint,
-                params: {
-                    ...params,
-                    page,
-                    per_page: perPage,
-                },
+                params: requestParams,
             });
+
+            const pageData = Array.isArray(response.data?.data) ? response.data.data : [];
+            this.debugLog('pagination  page', { endpoint, page, count: pageData.length });
+
+            // Capture meta and links from each page (will be overwritten, keeping the last page's)
+            lastPageMeta = response.data.meta;
+            lastPageLinks = response.data.links;
 
             if (response.data.data && Array.isArray(response.data.data)) {
                 allData.push(...response.data.data);
+            }
+
+            // Collect included resources, deduplicating by type+id
+            if (response.data.included && Array.isArray(response.data.included)) {
+                for (const included of response.data.included) {
+                    const key = `${included.type}:${included.id}`;
+                    if (!includedMap.has(key)) {
+                        includedMap.set(key, included as TIncluded);
+                    }
+                }
             }
 
             if (response.data.meta?.total_count) {
                 totalCount = Number(response.data.meta.total_count) || 0;
             }
 
-            // Check if we have a next link and if it's different from current page
+            // Check if we have a next link and detect pagination type
             const nextLink = response.data.links?.next;
             hasMore = !!nextLink;
             
-            // Additional safeguard: if we're getting the same page repeatedly, break the loop
-            if (hasMore && nextLink && nextLink.includes(`page=${page}`)) {
-                console.warn(`Pagination loop detected: next link points to same page ${page}. Breaking loop.`);
+            // Detect if API uses offset-based pagination
+            if (nextLink && nextLink.includes('offset=') && !useOffsetPagination) {
+                useOffsetPagination = true;
+            }
+
+            // Extract offset from next link if using offset pagination
+            if (hasMore && useOffsetPagination && nextLink) {
+                const offsetMatch = nextLink.match(/offset=(\d+)/);
+                if (offsetMatch) {
+                    previousOffset = offset;
+                    offset = parseInt(offsetMatch[1], 10);
+                    
+                    // Loop detection: if new offset equals previous offset, we're stuck
+                    if (previousOffset !== null && offset === previousOffset) {
+                        this.debugLog('pagination  loop detected (offset not advancing)', { offset });
+                        hasMore = false;
+                    }
+                } else {
+                    hasMore = false; // No offset found, assume we're done
+                }
+            }
+            
+            // Additional safeguard for page-based pagination
+            if (hasMore && nextLink && !useOffsetPagination && nextLink.includes(`page=${page}`)) {
+                this.debugLog('pagination  loop detected (next link same page)', { page });
                 hasMore = false;
             }
             
-            page++;
+            if (!useOffsetPagination) {
+                page++;
+            }
 
             if (onProgress) {
                 onProgress(allData.length, totalCount || allData.length);
@@ -89,21 +176,32 @@ export class PaginationHelper {
             }
         }
 
+        const pagesFetched = page - 1;
+        const duration = Date.now() - startTime;
+        this.debugLog('pagination  getAllPages complete', { endpoint, pagesFetched, totalCount: allData.length, duration });
+
+        // Map included resources to relationships in all collected data
+        // Always flatten, even if no included data (to maintain consistent return type)
+        const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
+        const mappedData = mapIncludedToRelationships(allData, includedArray);
+
         return {
-            data: allData,
+            data: mappedData,
             totalCount,
-            pagesFetched: page - 1,
-            duration: Date.now() - startTime,
+            pagesFetched,
+            duration,
+            meta: lastPageMeta,
+            links: lastPageLinks,
         };
     }
 
-    async getPage<T extends ResourceObject<string, any, any>>(
+    async getPage<T extends ResourceObject<string, any, any>, TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
         endpoint: string,
         page: number = 1,
         perPage: number = 100,
         params: Record<string, any> = {}
-    ): Promise<Paginated<T>> {
-        const response = await this.httpClient.request<Paginated<T>>({
+    ): Promise<Paginated<T, TIncluded>> {
+        const response = await this.httpClient.request<Paginated<T, TIncluded>>({
             method: 'GET',
             endpoint,
             params: {
@@ -151,7 +249,7 @@ export class PaginationHelper {
             
             // Additional safeguard: if we're getting the same page repeatedly, break the loop
             if (hasMore && nextLink && nextLink.includes(`page=${page}`)) {
-                console.warn(`Pagination loop detected: next link points to same page ${page}. Breaking loop.`);
+                this.debugLog('pagination  loop detected (streamPages same page)', { page });
                 hasMore = false;
             }
             
@@ -166,11 +264,11 @@ export class PaginationHelper {
     /**
      * Get all pages with parallel processing for better performance
      */
-    async getAllPagesParallel<T extends ResourceObject<string, any, any>>(
+    async getAllPagesParallel<T extends ResourceObject<string, any, any>, TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
         endpoint: string,
         params: Record<string, any> = {},
         options: PaginationOptions & { maxConcurrency?: number } = {}
-    ): Promise<PaginationResult<T>> {
+    ): Promise<PaginationResult<T, TIncluded>> {
         const {
             maxPages = 1000,
             perPage = 100,
@@ -181,18 +279,41 @@ export class PaginationHelper {
         const startTime = Date.now();
 
         // First, get the first page to determine total count
-        const firstPage = await this.getPage<T>(endpoint, 1, perPage, params);
+        const firstPage = await this.getPage<T, TIncluded>(endpoint, 1, perPage, params);
         const totalCount = Number(firstPage.meta?.total_count) || 0;
         const totalPages = Math.min(Math.ceil(totalCount / perPage), maxPages);
 
         const allData: T[] = [...(firstPage.data || [])];
+        // Use Map to deduplicate included resources by type+id
+        const includedMap = new Map<string, TIncluded>();
+        
+        // Collect included from first page
+        if (firstPage.included && Array.isArray(firstPage.included)) {
+            for (const included of firstPage.included) {
+                const key = `${included.type}:${included.id}`;
+                if (!includedMap.has(key)) {
+                    includedMap.set(key, included as TIncluded);
+                }
+            }
+        }
+
+        // Track last page's meta and links (will be updated as we process pages)
+        let lastPageMeta: Meta | undefined = firstPage.meta;
+        let lastPageLinks: TopLevelLinks | undefined = firstPage.links;
 
         if (totalPages <= 1) {
+            // Map included resources to relationships
+            // Always flatten, even if no included data (to maintain consistent return type)
+            const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
+            const mappedData = mapIncludedToRelationships(allData, includedArray);
+            
             return {
-                data: allData,
+                data: mappedData,
                 totalCount,
                 pagesFetched: 1,
                 duration: Date.now() - startTime,
+                meta: lastPageMeta,
+                links: lastPageLinks,
             };
         }
 
@@ -203,8 +324,14 @@ export class PaginationHelper {
         const pagePromises = remainingPages.map(async (pageNum) => {
             await semaphore.acquire();
             try {
-                const page = await this.getPage<T>(endpoint, pageNum, perPage, params);
-                return page.data || [];
+                const page = await this.getPage<T, TIncluded>(endpoint, pageNum, perPage, params);
+                return {
+                    pageNum,
+                    data: page.data || [],
+                    included: page.included || [],
+                    meta: page.meta,
+                    links: page.links
+                };
             } finally {
                 semaphore.release();
             }
@@ -212,19 +339,45 @@ export class PaginationHelper {
 
         const pageResults = await Promise.all(pagePromises);
 
-        for (const pageData of pageResults) {
-            allData.push(...pageData);
+        // Sort by page number to ensure we process in order and get the actual last page
+        pageResults.sort((a, b) => a.pageNum - b.pageNum);
+
+        for (const pageResult of pageResults) {
+            allData.push(...pageResult.data);
+            
+            // Collect included resources, deduplicating by type+id
+            for (const included of pageResult.included) {
+                const key = `${included.type}:${included.id}`;
+                if (!includedMap.has(key)) {
+                    includedMap.set(key, included as TIncluded);
+                }
+            }
+
+            // Update last page meta and links (will keep the last one processed, which is the highest page number)
+            if (pageResult.meta) {
+                lastPageMeta = pageResult.meta;
+            }
+            if (pageResult.links) {
+                lastPageLinks = pageResult.links;
+            }
 
             if (onProgress) {
                 onProgress(allData.length, totalCount);
             }
         }
 
+        // Map included resources to relationships
+        // Always flatten, even if no included data (to maintain consistent return type)
+        const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
+        const mappedData = mapIncludedToRelationships(allData, includedArray);
+        
         return {
-            data: allData,
+            data: mappedData,
             totalCount,
             pagesFetched: totalPages,
             duration: Date.now() - startTime,
+            meta: lastPageMeta,
+            links: lastPageLinks,
         };
     }
 }

@@ -123,8 +123,39 @@ export type PcoEvent =
 export type EventHandler<T extends PcoEvent = PcoEvent> = (event: T) => void | Promise<void>;
 
 export interface EventEmitter {
+    // Overloads for each event type to enable proper type narrowing
+    on(eventType: 'request:start', handler: EventHandler<RequestStartEvent>): void;
+    on(eventType: 'request:complete', handler: EventHandler<RequestCompleteEvent>): void;
+    on(eventType: 'request:error', handler: EventHandler<RequestErrorEvent>): void;
+    on(eventType: 'auth:success', handler: EventHandler<AuthSuccessEvent>): void;
+    on(eventType: 'auth:failure', handler: EventHandler<AuthFailureEvent>): void;
+    on(eventType: 'auth:refresh', handler: EventHandler<AuthRefreshEvent>): void;
+    on(eventType: 'rate:limit', handler: EventHandler<RateLimitEvent>): void;
+    on(eventType: 'rate:available', handler: EventHandler<RateAvailableEvent>): void;
+    on(eventType: 'cache:hit', handler: EventHandler<CacheHitEvent>): void;
+    on(eventType: 'cache:miss', handler: EventHandler<CacheMissEvent>): void;
+    on(eventType: 'cache:set', handler: EventHandler<CacheSetEvent>): void;
+    on(eventType: 'cache:invalidate', handler: EventHandler<CacheInvalidateEvent>): void;
+    on(eventType: 'error', handler: EventHandler<ErrorEvent>): void;
+    // Fallback for dynamic event types
     on<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void;
+
+    off(eventType: 'request:start', handler: EventHandler<RequestStartEvent>): void;
+    off(eventType: 'request:complete', handler: EventHandler<RequestCompleteEvent>): void;
+    off(eventType: 'request:error', handler: EventHandler<RequestErrorEvent>): void;
+    off(eventType: 'auth:success', handler: EventHandler<AuthSuccessEvent>): void;
+    off(eventType: 'auth:failure', handler: EventHandler<AuthFailureEvent>): void;
+    off(eventType: 'auth:refresh', handler: EventHandler<AuthRefreshEvent>): void;
+    off(eventType: 'rate:limit', handler: EventHandler<RateLimitEvent>): void;
+    off(eventType: 'rate:available', handler: EventHandler<RateAvailableEvent>): void;
+    off(eventType: 'cache:hit', handler: EventHandler<CacheHitEvent>): void;
+    off(eventType: 'cache:miss', handler: EventHandler<CacheMissEvent>): void;
+    off(eventType: 'cache:set', handler: EventHandler<CacheSetEvent>): void;
+    off(eventType: 'cache:invalidate', handler: EventHandler<CacheInvalidateEvent>): void;
+    off(eventType: 'error', handler: EventHandler<ErrorEvent>): void;
+    // Fallback for dynamic event types
     off<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void;
+
     emit<T extends PcoEvent>(event: T): void;
 }
 

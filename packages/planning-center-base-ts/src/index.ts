@@ -10,6 +10,13 @@ export type { PaginationOptions, PaginationResult } from './pagination';
 
 // Base Module
 export { BaseModule } from './base-module';
+export type { QueryOptions } from './base-module';
+
+// Included Resources Resolver
+export { mapIncludedToRelationships } from './included-resolver';
+
+// Query Parameters
+export { buildQueryParams, buildIncludeParams } from './query-params';
 
 // Monitoring
 export { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from './monitoring';
@@ -31,6 +38,7 @@ export type { BatchClient } from './batch';
 export type {
   PcoClientConfig,
   PcoAuthConfig,
+  PcoDebugOptions,
   PersonalAccessTokenAuth,
   OAuthAuth,
   BasicAuth,
@@ -41,6 +49,10 @@ export type {
   RateLimitEvent,
   CacheEvent,
 } from './types/config';
+
+// Debug (turn logs on/off, see everything that happens)
+export { attachDebugListener, createDebugLogger, formatDebugEvent } from './debug';
+export type { PcoDebugListenable } from './debug';
 
 export type {
   PcoEvent,
@@ -95,4 +107,9 @@ export type {
   Paginated,
   Response,
 } from './types/json-api';
+
+export type {
+  FlattenedResource,
+  FlattenedResourceArray,
+} from './types/flattened-resource';
 

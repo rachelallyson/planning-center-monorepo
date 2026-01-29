@@ -69,6 +69,15 @@ export class MyApiModule extends BaseModule {
 }
 ```
 
+## Debug logging
+
+The base package provides a shared debug system so any PCO client (People, Check-ins, etc.) can turn logs on/off and see every event (requests, auth, rate limit, cache, errors).
+
+- **Config**: Add `debug: true` or `debug: { prefix?, includePayloads?, onLog? }` to `PcoClientConfig`.
+- **Exports**: `attachDebugListener`, `createDebugLogger`, `formatDebugEvent`, `PcoDebugOptions`, `PcoDebugListenable`.
+
+Client packages that use base should call `attachDebugListener(client, getConfig)` when `config.debug` is set, and support runtime toggling via `updateConfig({ debug: true })` / `updateConfig({ debug: false })`. See the People package for a full example.
+
 ## Monorepo
 
 This package is part of the Planning Center monorepo. For development, see the root [README.md](../../README.md).

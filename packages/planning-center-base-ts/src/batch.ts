@@ -2,11 +2,14 @@
  * v2.0.0 Batch Operations Executor
  */
 
+import type { PcoClientConfig } from './types/config';
 import type { PcoEventEmitter } from './monitoring';
 import type { BatchOperation, BatchResult, BatchOptions, BatchSummary, ResolvedBatchOperation } from './types/batch';
+import { createDebugLogger } from './debug';
 
 export interface BatchClient {
     [key: string]: any;
+    getConfig?: () => PcoClientConfig;
 }
 
 export class BatchExecutor {
@@ -14,6 +17,11 @@ export class BatchExecutor {
         private client: BatchClient,
         private eventEmitter: PcoEventEmitter
     ) { }
+
+    private debugLog(message: string, data?: unknown): void {
+        const logger = createDebugLogger(this.client.getConfig?.());
+        if (logger.enabled) logger.log(message, data);
+    }
 
     /**
      * Execute a batch of operations
@@ -31,12 +39,15 @@ export class BatchExecutor {
         } = options;
 
         const startTime = Date.now();
+        this.debugLog('batch  execute start', { operationCount: operations.length, maxConcurrency, continueOnError, enableRollback });
+
         const results: BatchResult[] = [];
         const successfulOperations: ResolvedBatchOperation[] = [];
 
         try {
             // Resolve operation dependencies and references
             const resolvedOperations = await this.resolveOperations(operations);
+            this.debugLog('batch  operations resolved', { resolvedCount: resolvedOperations.length });
 
             // Execute operations with dependency resolution
             const semaphore = new Semaphore(maxConcurrency);
@@ -80,6 +91,7 @@ export class BatchExecutor {
                     const resolvedData = await this.resolveReferences(operation.data, results);
                     const operationWithResolvedData = { ...operation, resolvedData };
                     
+                    this.debugLog('batch  operation start', { index, operationId: operation.id });
                     const result = await this.executeOperation(operationWithResolvedData, getCurrentResults);
                     const batchResult: BatchResult = {
                         index,
@@ -90,6 +102,7 @@ export class BatchExecutor {
 
                     results.push(batchResult);
                     successfulOperations.push(operation);
+                    this.debugLog('batch  operation success', { index, operationId: operation.id });
 
                     onOperationComplete?.(batchResult);
                     return batchResult;
@@ -102,6 +115,7 @@ export class BatchExecutor {
                     };
 
                     results.push(batchResult);
+                    this.debugLog('batch  operation failed', { index, operationId: operation.id, error: String(error) });
 
                     if (!continueOnError) {
                         throw error;
@@ -132,13 +146,21 @@ export class BatchExecutor {
                 results,
             };
 
+            this.debugLog('batch  execute complete', {
+                total: summary.total,
+                successful: summary.successful,
+                failed: summary.failed,
+                duration: summary.duration,
+            });
             onBatchComplete?.(summary);
             return summary;
 
         } catch (error) {
-            // Rollback successful operations if enabled
+            this.debugLog('batch  execute failed', { error: String(error) });
             if (enableRollback && successfulOperations.length > 0) {
+                this.debugLog('batch  rollback start', { operationCount: successfulOperations.length });
                 await this.rollbackOperations(successfulOperations);
+                this.debugLog('batch  rollback complete', {});
             }
             throw error;
         }
@@ -355,7 +377,7 @@ export class BatchExecutor {
             try {
                 await this.rollbackOperation(operation);
             } catch (error) {
-                console.error(`Failed to rollback operation ${operation.type}:`, error);
+                this.debugLog('batch  rollback operation failed', { type: operation.type, error: String(error) });
             }
         }
     }
@@ -381,9 +403,7 @@ export class BatchExecutor {
 
         const moduleInstance = (this.client as any)[module];
         if (moduleInstance && typeof moduleInstance[rollbackMethod] === 'function') {
-            // This is a simplified rollback - in practice, you'd need to store
-            // the created resource IDs to properly rollback
-            console.warn(`Rollback not fully implemented for ${type}`);
+            this.debugLog('batch  rollback not fully implemented', { type });
         }
     }
 }

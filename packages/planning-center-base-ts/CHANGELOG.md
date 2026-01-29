@@ -5,6 +5,27 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-28
+
+### ✨ **New Features**
+
+- **Debug Logging**: Optional debug logging when `config.debug` is set. Use `createDebugLogger(config)` or enable `debug: true` / `debug: { ... }` in client config to see rate limiter, retries, request/response, and pagination activity without changing application code.
+- **Shared Utilities**: New modules for use by base and API-specific packages:
+  - `included-resolver` – `mapIncludedToRelationships()` to resolve JSON:API `included` into relationships
+  - `query-params` – `buildQueryParams()`, `buildIncludeParams()` for building query strings
+  - `types/flattened-resource` – `FlattenedResource` and related types for flattened JSON:API resources
+- **Exports**: Debug helpers (`createDebugLogger`, `attachDebugListener`, `formatDebugEvent`), `PcoDebugOptions`, and the new utilities are exported from the package.
+
+### 🔧 **Fixed**
+
+- **HTTP Client Response Body**: Response body is now read once instead of using `response.clone()`. Uses `response.text()` when available (real `Response`) and falls back to `response.json()` for environments (e.g. Jest mocks) that only provide `.json()`, fixing "response.clone is not a function" in tests.
+- **HTTP Client Robustness**: Optional chaining on `response.headers` when reading rate-limit headers to avoid errors when `headers` is missing (e.g. in some mocks).
+
+### 🧪 **Tests**
+
+- **HTTP Client Test Isolation**: `mockFetch.mockReset()` in `beforeEach` so each test’s `mockResolvedValueOnce` / `mockRejectedValueOnce` is used and tests no longer fail due to leftover mocks from other tests.
+- **Basic Auth Test**: "Should use Basic auth for personal access token" now supplies `personalAccessTokenSecret` in the test config so the client does not throw "personalAccessTokenSecret required".
+
 ## [1.0.2] - 2026-01-20
 
 ### ✨ **New Features**

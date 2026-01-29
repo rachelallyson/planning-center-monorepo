@@ -71,6 +71,25 @@ export interface PcoClientConfig {
 
     /** Custom headers */
     headers?: Record<string, string>;
+
+    /**
+     * Enable debug logging for all events (requests, auth, rate limit, cache, errors).
+     * Can be toggled at runtime via client updateConfig. Shared across all PCO packages.
+     */
+    debug?: boolean | PcoDebugOptions;
+}
+
+/**
+ * Options for the built-in debug logger.
+ * When debug is enabled, the client subscribes to all internal events and logs them.
+ */
+export interface PcoDebugOptions {
+    /** Prefix for every log line (default: "[PCO]") */
+    prefix?: string;
+    /** Include request/response payloads in logs (default: false to avoid sensitive data) */
+    includePayloads?: boolean;
+    /** Custom log sink; if not set, uses console.log */
+    onLog?: (message: string, data?: unknown) => void;
 }
 
 export interface ErrorEvent {

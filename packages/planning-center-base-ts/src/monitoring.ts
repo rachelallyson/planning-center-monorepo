@@ -6,12 +6,39 @@ import type {
     PcoEvent,
     EventHandler,
     EventType,
-    EventEmitter
+    EventEmitter,
+    RequestStartEvent,
+    RequestCompleteEvent,
+    RequestErrorEvent,
+    AuthSuccessEvent,
+    AuthFailureEvent,
+    AuthRefreshEvent,
+    RateLimitEvent,
+    RateAvailableEvent,
+    CacheHitEvent,
+    CacheMissEvent,
+    CacheSetEvent,
+    CacheInvalidateEvent,
+    ErrorEvent,
 } from './types/events';
 
 export class PcoEventEmitter implements EventEmitter {
     private handlers = new Map<EventType, Set<EventHandler>>();
 
+    // Overloads for proper type narrowing
+    on(eventType: 'request:start', handler: EventHandler<RequestStartEvent>): void;
+    on(eventType: 'request:complete', handler: EventHandler<RequestCompleteEvent>): void;
+    on(eventType: 'request:error', handler: EventHandler<RequestErrorEvent>): void;
+    on(eventType: 'auth:success', handler: EventHandler<AuthSuccessEvent>): void;
+    on(eventType: 'auth:failure', handler: EventHandler<AuthFailureEvent>): void;
+    on(eventType: 'auth:refresh', handler: EventHandler<AuthRefreshEvent>): void;
+    on(eventType: 'rate:limit', handler: EventHandler<RateLimitEvent>): void;
+    on(eventType: 'rate:available', handler: EventHandler<RateAvailableEvent>): void;
+    on(eventType: 'cache:hit', handler: EventHandler<CacheHitEvent>): void;
+    on(eventType: 'cache:miss', handler: EventHandler<CacheMissEvent>): void;
+    on(eventType: 'cache:set', handler: EventHandler<CacheSetEvent>): void;
+    on(eventType: 'cache:invalidate', handler: EventHandler<CacheInvalidateEvent>): void;
+    on(eventType: 'error', handler: EventHandler<ErrorEvent>): void;
     on<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
         if (!this.handlers.has(eventType)) {
             this.handlers.set(eventType, new Set());
@@ -19,6 +46,20 @@ export class PcoEventEmitter implements EventEmitter {
         this.handlers.get(eventType)!.add(handler as EventHandler);
     }
 
+    // Overloads for proper type narrowing
+    off(eventType: 'request:start', handler: EventHandler<RequestStartEvent>): void;
+    off(eventType: 'request:complete', handler: EventHandler<RequestCompleteEvent>): void;
+    off(eventType: 'request:error', handler: EventHandler<RequestErrorEvent>): void;
+    off(eventType: 'auth:success', handler: EventHandler<AuthSuccessEvent>): void;
+    off(eventType: 'auth:failure', handler: EventHandler<AuthFailureEvent>): void;
+    off(eventType: 'auth:refresh', handler: EventHandler<AuthRefreshEvent>): void;
+    off(eventType: 'rate:limit', handler: EventHandler<RateLimitEvent>): void;
+    off(eventType: 'rate:available', handler: EventHandler<RateAvailableEvent>): void;
+    off(eventType: 'cache:hit', handler: EventHandler<CacheHitEvent>): void;
+    off(eventType: 'cache:miss', handler: EventHandler<CacheMissEvent>): void;
+    off(eventType: 'cache:set', handler: EventHandler<CacheSetEvent>): void;
+    off(eventType: 'cache:invalidate', handler: EventHandler<CacheInvalidateEvent>): void;
+    off(eventType: 'error', handler: EventHandler<ErrorEvent>): void;
     off<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
         const eventHandlers = this.handlers.get(eventType);
         if (eventHandlers) {

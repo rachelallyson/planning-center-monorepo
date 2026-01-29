@@ -2,11 +2,11 @@
  * v2.0.0 HTTP Client
  */
 
-
 import type { PcoClientConfig } from './types/config';
 import { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from './monitoring';
 import { PcoRateLimiter } from './rate-limiter';
 import { PcoApiError } from './errors/api-error';
+import { createDebugLogger } from './debug';
 
 export interface HttpRequestOptions {
     method: string;
@@ -44,6 +44,12 @@ export class PcoHttpClient {
         this.rateLimiter = new PcoRateLimiter(100, 20000); // 100 requests per 20 seconds
     }
 
+    /** Log only when config.debug is set; no-op otherwise */
+    private debugLog(message: string, data?: unknown): void {
+        const logger = createDebugLogger(this.config);
+        if (logger.enabled) logger.log(message, data);
+    }
+
     async request<T = any>(options: HttpRequestOptions): Promise<HttpResponse<T>> {
         const requestId = this.requestIdGenerator.generate();
         const startTime = Date.now();
@@ -58,8 +64,9 @@ export class PcoHttpClient {
         });
 
         try {
-            // Wait for rate limiter
+            this.debugLog('http  rate limiter waiting', { method: options.method, endpoint: options.endpoint });
             await this.rateLimiter.waitForAvailability();
+            this.debugLog('http  rate limiter acquired', { method: options.method, endpoint: options.endpoint });
 
             const response = await this.makeRequest<T>(options, requestId);
             const duration = Date.now() - startTime;
@@ -79,6 +86,14 @@ export class PcoHttpClient {
                 duration,
                 requestId,
                 timestamp: new Date().toISOString(),
+            });
+
+            this.debugLog('http  request complete', {
+                method: options.method,
+                endpoint: options.endpoint,
+                status: response.status,
+                duration,
+                requestId,
             });
 
             return response;
@@ -103,6 +118,9 @@ export class PcoHttpClient {
     }
 
     private async makeRequest<T>(options: HttpRequestOptions, requestId: string, retryCount: number = 0): Promise<HttpResponse<T>> {
+        if (retryCount > 0) {
+            this.debugLog('http  retry attempt', { method: options.method, endpoint: options.endpoint, retryCount });
+        }
         const baseURL = this.config.baseURL || 'https://api.planningcenteronline.com/people/v2';
         let url = options.endpoint.startsWith('http') ? options.endpoint : `${baseURL}${options.endpoint}`;
 
@@ -178,28 +196,26 @@ export class PcoHttpClient {
         }
 
         try {
-            console.log('🚀 About to call fetch...');
+            this.debugLog('http  fetch', { method: options.method, endpoint: options.endpoint, url });
             let response = await fetch(url, requestOptions);
 
-            // Fallback for broken fetch implementations
             if (!response) {
-                console.log('⚠️  Fetch returned null, using HTTPS fallback...');
+                this.debugLog('http  fetch returned null, using HTTPS fallback', { url });
                 response = await this.makeHttpsRequest(url, requestOptions);
             }
 
-            console.log('📥 Response received, status:', response?.status);
+            this.debugLog('http  response', { method: options.method, endpoint: options.endpoint, status: response?.status });
             if (!response) {
-                console.error('❌ Response is still null/undefined!');
                 throw new Error('Both fetch and HTTPS fallback returned null/undefined response');
             }
             clearTimeout(timeoutId);
 
-            // Update rate limiter from headers
+            // Update rate limiter from headers (handle case where headers might be undefined)
             const rateLimitHeaders = {
-                'Retry-After': response.headers.get('retry-after') || undefined,
-                'X-PCO-API-Request-Rate-Count': response.headers.get('x-pco-api-request-rate-count') || undefined,
-                'X-PCO-API-Request-Rate-Limit': response.headers.get('x-pco-api-request-rate-limit') || undefined,
-                'X-PCO-API-Request-Rate-Period': response.headers.get('x-pco-api-request-rate-period') || undefined,
+                'Retry-After': response.headers?.get('retry-after') || undefined,
+                'X-PCO-API-Request-Rate-Count': response.headers?.get('x-pco-api-request-rate-count') || undefined,
+                'X-PCO-API-Request-Rate-Limit': response.headers?.get('x-pco-api-request-rate-limit') || undefined,
+                'X-PCO-API-Request-Rate-Period': response.headers?.get('x-pco-api-request-rate-period') || undefined,
             };
 
             this.rateLimiter.updateFromHeaders(rateLimitHeaders);
@@ -207,6 +223,7 @@ export class PcoHttpClient {
 
             // Handle 429 responses
             if (response.status === 429) {
+                this.debugLog('http  rate limit 429', { endpoint: options.endpoint, retryCount });
                 if (retryCount >= 5) {
                     throw new Error(`Rate limit exceeded after ${retryCount} retries`);
                 }
@@ -218,15 +235,16 @@ export class PcoHttpClient {
             if (!response.ok) {
                 // Handle 401 errors with token refresh if available
                 if (response.status === 401 && this.config.auth.type === 'oauth') {
+                    this.debugLog('http  auth 401 attempting token refresh', { endpoint: options.endpoint, retryCount });
                     if (retryCount >= 3) {
                         throw new Error(`Authentication failed after ${retryCount} retries`);
                     }
                     try {
                         await this.attemptTokenRefresh();
+                        this.debugLog('http  auth 401 token refresh success', { endpoint: options.endpoint });
                         return this.makeRequest<T>(options, requestId, retryCount + 1);
                     } catch (refreshError) {
-                        console.warn('Token refresh failed:', refreshError);
-                        // Call the onRefreshFailure callback
+                        this.debugLog('http  auth 401 token refresh failed', { error: String(refreshError) });
                         await this.config.auth.onRefreshFailure(refreshError as Error);
                         throw refreshError;
                     }
@@ -253,7 +271,58 @@ export class PcoHttpClient {
                 };
             }
 
-            const data = await response.json();
+            // Handle empty responses (e.g., 204 No Content)
+            const contentType = response.headers.get('content-type') || '';
+            const contentLength = response.headers.get('content-length');
+            let data: any;
+            
+            // Check for JSON content types (including JSON:API format)
+            const isJsonContent = contentType.includes('application/json') || 
+                                  contentType.includes('application/vnd.api+json') ||
+                                  contentType.includes('application/vnd+json');
+            
+            if (response.status === 204 || contentLength === '0' || !isJsonContent) {
+                if (response.status !== 204 && contentLength !== '0') {
+                    this.debugLog('http  non-JSON response', { status: response.status, contentType, contentLength });
+                }
+                data = {};
+            } else {
+                // Read body once. Prefer response.text() when available (real Response); fall back to response.json() for mocks that only provide .json()
+                if (typeof (response as any).text === 'function') {
+                    const text = await (response as any).text();
+                    try {
+                        if (!text || (text as string).trim() === '') {
+                            this.debugLog('http  empty response body', { method: options.method, endpoint: options.endpoint });
+                            data = {};
+                        } else {
+                            data = JSON.parse(text as string);
+                            if (!data || typeof data !== 'object') {
+                                this.debugLog('http  unexpected response structure', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
+                            } else if (!data.data && options.method !== 'DELETE') {
+                                this.debugLog('http  response missing data property', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
+                            }
+                        }
+                    } catch (parseError) {
+                        this.debugLog('http  JSON parse error', { method: options.method, endpoint: options.endpoint, error: String(parseError), sample: (text as string)?.substring(0, 500) });
+                        data = {};
+                    }
+                } else if (typeof (response as any).json === 'function') {
+                    try {
+                        data = await (response as any).json();
+                        if (!data || typeof data !== 'object') {
+                            this.debugLog('http  unexpected response structure', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
+                            data = data ?? {};
+                        } else if (!data.data && options.method !== 'DELETE') {
+                            this.debugLog('http  response missing data property', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
+                        }
+                    } catch (parseError) {
+                        this.debugLog('http  JSON parse error', { method: options.method, endpoint: options.endpoint, error: String(parseError) });
+                        data = {};
+                    }
+                } else {
+                    data = {};
+                }
+            }
             return {
                 data,
                 status: response.status,
@@ -326,9 +395,42 @@ export class PcoHttpClient {
 
     private extractHeaders(response: Response): Record<string, string> {
         const headers: Record<string, string> = {};
-        response.headers.forEach((value, key) => {
-            headers[key] = value;
-        });
+        
+        // Handle case where headers might be undefined
+        if (!response.headers) {
+            return headers;
+        }
+        
+        // Handle different header structures (browser vs Node.js)
+        if (typeof response.headers.forEach === 'function') {
+            // Browser or polyfilled Headers with forEach
+            response.headers.forEach((value, key) => {
+                headers[key] = value;
+            });
+        } else {
+            // Node.js Headers - iterate using entries() with type assertion
+            // TypeScript may not recognize entries() on Headers, but it exists in Node.js
+            const headersObj = response.headers as any;
+            if (typeof headersObj.entries === 'function') {
+                for (const [key, value] of headersObj.entries()) {
+                    headers[key as string] = value as string;
+                }
+            } else if (typeof headersObj.keys === 'function') {
+                // Fallback: iterate using keys if entries() is not available
+                const headerKeys = Array.from(headersObj.keys()) as string[];
+                for (const key of headerKeys) {
+                    headers[key] = headersObj.get(key) as string;
+                }
+            } else {
+                // Last resort: try to access as object (some polyfills)
+                for (const key in headersObj) {
+                    if (headersObj.hasOwnProperty(key)) {
+                        headers[key] = headersObj[key];
+                    }
+                }
+            }
+        }
+        
         return headers;
     }
 
@@ -336,6 +438,7 @@ export class PcoHttpClient {
         if (this.config.auth.type !== 'oauth') {
             throw new Error('Token refresh is only available for OAuth authentication');
         }
+        this.debugLog('http  auth  token refresh start', {});
 
         const baseURL = this.config.baseURL || 'https://api.planningcenteronline.com/people/v2';
         const tokenUrl = baseURL.replace('/people/v2', '/oauth/token');
@@ -406,13 +509,26 @@ export class PcoHttpClient {
     }
 
     /**
-     * Get authentication header for external services (like file uploads)
+     * Get authentication header for external services (like file uploads).
+     * Uses the same auth as the main API so upload.planningcenteronline.com accepts it.
      */
     getAuthHeader(): string {
         if (this.config.auth.type === 'personal_access_token') {
-            return `Basic ${Buffer.from(this.config.auth.personalAccessToken).toString('base64')}`;
-        } else if (this.config.auth.type === 'oauth') {
+            const clientId = this.config.auth.personalAccessToken;
+            const clientSecret = this.config.auth.personalAccessTokenSecret ??
+                (typeof process !== 'undefined' && process.env && process.env.PCO_PERSONAL_ACCESS_SECRET);
+            if (!clientId || !clientSecret) {
+                return '';
+            }
+            const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+            return `Basic ${credentials}`;
+        }
+        if (this.config.auth.type === 'oauth') {
             return `Bearer ${this.config.auth.accessToken}`;
+        }
+        if (this.config.auth.type === 'basic') {
+            const credentials = Buffer.from(`${this.config.auth.appId}:${this.config.auth.appSecret}`).toString('base64');
+            return `Basic ${credentials}`;
         }
         return '';
     }
