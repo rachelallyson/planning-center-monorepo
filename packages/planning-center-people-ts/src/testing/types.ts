@@ -114,6 +114,8 @@ export interface RecordingConfig {
     filter?: (endpoint: string, method: string) => boolean;
     /** Transform recorded responses */
     transform?: (response: any) => any;
+    /** Optional getConfig for debug logging (e.g. when recording client has debug) */
+    getConfig?: () => { debug?: boolean | import('@rachelallyson/planning-center-base-ts').PcoDebugOptions };
 }
 
 export interface RecordedRequest {

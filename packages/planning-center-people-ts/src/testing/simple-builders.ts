@@ -1,86 +1,73 @@
 /**
  * Simplified Mock Response Builders for Testing
+ *
+ * Builders return flattened shape (same as API): attributes and relationships at top level.
  */
 
 export class SimpleMockResponseBuilder {
     /**
-     * Build a simple mock person resource
+     * Build a simple mock person resource (flattened shape)
      */
     static person(overrides: any = {}): any {
+        const id = overrides.id || `person_${Date.now()}`;
         return {
             type: 'Person',
-            id: overrides.id || `person_${Date.now()}`,
-            attributes: {
-                id: overrides.id || `person_${Date.now()}`,
-                first_name: overrides.first_name || 'John',
-                last_name: overrides.last_name || 'Doe',
-                status: 'active',
-                ...overrides,
-            },
-            relationships: {
-                emails: { data: [] },
-                phone_numbers: { data: [] },
-                field_data: { data: [] },
-                workflow_cards: { data: [] },
-                household: { data: null },
-            },
+            id,
+            first_name: overrides.first_name ?? 'John',
+            last_name: overrides.last_name ?? 'Doe',
+            status: 'active',
+            ...overrides,
+            emails: [],
+            phone_numbers: [],
+            field_data: [],
+            workflow_cards: [],
+            household: null,
         };
     }
 
     /**
-     * Build a simple mock email resource
+     * Build a simple mock email resource (flattened shape)
      */
     static email(overrides: any = {}): any {
+        const id = overrides.id || `email_${Date.now()}`;
         return {
             type: 'Email',
-            id: overrides.id || `email_${Date.now()}`,
-            attributes: {
-                id: overrides.id || `email_${Date.now()}`,
-                address: overrides.address || 'john@example.com',
-                location: 'Home',
-                primary: true,
-                ...overrides,
-            },
-            relationships: {
-                person: { data: { type: 'Person', id: 'person_123' } },
-            },
+            id,
+            address: overrides.address ?? 'john@gmail.com',
+            location: 'Home',
+            primary: true,
+            ...overrides,
+            person: { type: 'Person', id: 'person_123' },
         };
     }
 
     /**
-     * Build a simple mock phone number resource
+     * Build a simple mock phone number resource (flattened shape)
      */
     static phoneNumber(overrides: any = {}): any {
+        const id = overrides.id || `phone_${Date.now()}`;
         return {
             type: 'PhoneNumber',
-            id: overrides.id || `phone_${Date.now()}`,
-            attributes: {
-                id: overrides.id || `phone_${Date.now()}`,
-                number: overrides.number || '555-1234',
-                location: 'Mobile',
-                primary: true,
-                ...overrides,
-            },
-            relationships: {
-                person: { data: { type: 'Person', id: 'person_123' } },
-            },
+            id,
+            number: overrides.number ?? '555-1234',
+            location: 'Mobile',
+            primary: true,
+            ...overrides,
+            person: { type: 'Person', id: 'person_123' },
         };
     }
 
     /**
-     * Build a simple mock workflow resource
+     * Build a simple mock workflow resource (flattened shape)
      */
     static workflow(overrides: any = {}): any {
+        const id = overrides.id || `workflow_${Date.now()}`;
         return {
             type: 'Workflow',
-            id: overrides.id || `workflow_${Date.now()}`,
-            attributes: {
-                id: overrides.id || `workflow_${Date.now()}`,
-                name: overrides.name || 'New Member Workflow',
-                description: overrides.description || 'Workflow for new members',
-                ...overrides,
-            },
-            relationships: {},
+            id,
+            name: overrides.name ?? 'New Member Workflow',
+            description: overrides.description ?? 'Workflow for new members',
+            ...overrides,
         };
     }
 

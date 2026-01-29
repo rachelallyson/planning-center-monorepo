@@ -34,7 +34,7 @@ export class MockResponseBuilder {
      * Build a mock person resource
      */
     static person(overrides: Partial<PersonAttributes> = {}): PersonResource {
-        const id = overrides.id || `person_${Date.now()}`;
+        const id = String(overrides.id || `person_${Date.now()}`);
         return {
             type: 'Person',
             id,
@@ -83,13 +83,13 @@ export class MockResponseBuilder {
      * Build a mock email resource
      */
     static email(overrides: Partial<EmailAttributes> = {}): EmailResource {
-        const id = overrides.id || `email_${Date.now()}`;
+        const id = String(overrides.id || `email_${Date.now()}`);
         return {
             type: 'Email',
             id,
             attributes: {
                 id,
-                address: 'john@example.com',
+                address: 'john@gmail.com',
                 location: 'Home',
                 primary: true,
                 ...overrides,
@@ -104,7 +104,7 @@ export class MockResponseBuilder {
      * Build a mock phone number resource
      */
     static phoneNumber(overrides: Partial<PhoneNumberAttributes> = {}): PhoneNumberResource {
-        const id = overrides.id || `phone_${Date.now()}`;
+        const id = String(overrides.id || `phone_${Date.now()}`);
         return {
             type: 'PhoneNumber',
             id,
@@ -125,7 +125,7 @@ export class MockResponseBuilder {
      * Build a mock address resource
      */
     static address(overrides: Partial<AddressAttributes> = {}): AddressResource {
-        const id = overrides.id || `address_${Date.now()}`;
+        const id = String(overrides.id || `address_${Date.now()}`);
         return {
             type: 'Address',
             id,
@@ -150,7 +150,7 @@ export class MockResponseBuilder {
      * Build a mock social profile resource
      */
     static socialProfile(overrides: Partial<SocialProfileAttributes> = {}): SocialProfileResource {
-        const id = overrides.id || `social_${Date.now()}`;
+        const id = String(overrides.id || `social_${Date.now()}`);
         return {
             type: 'SocialProfile',
             id,
@@ -170,7 +170,7 @@ export class MockResponseBuilder {
      * Build a mock field definition resource
      */
     static fieldDefinition(overrides: Partial<FieldDefinitionAttributes> = {}): FieldDefinitionResource {
-        const id = overrides.id || `field_${Date.now()}`;
+        const id = String(overrides.id || `field_${Date.now()}`);
         return {
             type: 'FieldDefinition',
             id,
@@ -184,7 +184,7 @@ export class MockResponseBuilder {
                 config: null,
                 deleted_at: null,
                 sequence: 1,
-                tab_id: 'tab_123',
+                tab_id: 123,
                 ...overrides,
             },
             relationships: {
@@ -197,7 +197,7 @@ export class MockResponseBuilder {
      * Build a mock workflow resource
      */
     static workflow(overrides: Partial<WorkflowAttributes> = {}): WorkflowResource {
-        const id = overrides.id || `workflow_${Date.now()}`;
+        const id = String(overrides.id || `workflow_${Date.now()}`);
         return {
             type: 'Workflow',
             id,
@@ -215,7 +215,7 @@ export class MockResponseBuilder {
      * Build a mock workflow card resource
      */
     static workflowCard(overrides: Partial<WorkflowCardAttributes> = {}): WorkflowCardResource {
-        const id = overrides.id || `workflow_card_${Date.now()}`;
+        const id = String(overrides.id || `workflow_card_${Date.now()}`);
         return {
             type: 'WorkflowCard',
             id,
@@ -236,7 +236,7 @@ export class MockResponseBuilder {
      * Build a mock workflow card note resource
      */
     static workflowCardNote(overrides: Partial<WorkflowCardNoteAttributes> = {}): WorkflowCardNoteResource {
-        const id = overrides.id || `workflow_card_note_${Date.now()}`;
+        const id = String(overrides.id || `workflow_card_note_${Date.now()}`);
         return {
             type: 'WorkflowCardNote',
             id,
@@ -255,7 +255,7 @@ export class MockResponseBuilder {
      * Build a mock household resource
      */
     static household(overrides: Partial<HouseholdAttributes> = {}): HouseholdResource {
-        const id = overrides.id || `household_${Date.now()}`;
+        const id = String(overrides.id || `household_${Date.now()}`);
         return {
             type: 'Household',
             id,
@@ -274,7 +274,7 @@ export class MockResponseBuilder {
      * Build a mock note resource
      */
     static note(overrides: Partial<NoteAttributes> = {}): NoteResource {
-        const id = overrides.id || `note_${Date.now()}`;
+        const id = String(overrides.id || `note_${Date.now()}`);
         return {
             type: 'Note',
             id,
@@ -294,7 +294,7 @@ export class MockResponseBuilder {
      * Build a mock list resource
      */
     static list(overrides: Partial<ListAttributes> = {}): ListResource {
-        const id = overrides.id || `list_${Date.now()}`;
+        const id = String(overrides.id || `list_${Date.now()}`);
         return {
             type: 'List',
             id,

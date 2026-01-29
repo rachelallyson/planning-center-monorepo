@@ -2,6 +2,7 @@
  * v2.0.0 Request/Response Recorder
  */
 
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { RecordingConfig, RecordedRequest, RecordedSession } from './types';
@@ -125,7 +126,9 @@ export class RequestRecorder {
         try {
             fs.writeFileSync(this.config.recordPath, JSON.stringify(session, null, 2));
         } catch (error) {
-            console.error('Failed to save recording session:', error);
+            const logger = createDebugLogger(this.config.getConfig?.());
+            if (logger.enabled) logger.log('recorder  failed to save recording session', { error: String(error) });
+            else console.error('Failed to save recording session:', error);
         }
     }
 
@@ -141,7 +144,9 @@ export class RequestRecorder {
             const content = fs.readFileSync(this.config.recordPath, 'utf-8');
             return JSON.parse(content) as RecordedSession;
         } catch (error) {
-            console.error('Failed to load recording session:', error);
+            const logger = createDebugLogger(this.config.getConfig?.());
+            if (logger.enabled) logger.log('recorder  failed to load recording session', { error: String(error) });
+            else console.error('Failed to load recording session:', error);
             return null;
         }
     }

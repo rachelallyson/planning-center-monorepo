@@ -7,6 +7,7 @@ import type { MockClientConfig, RecordingConfig } from './types';
 import { MockPcoClient } from './mock-client';
 import { RequestRecorder } from './recorder';
 import { PcoClient } from '../client';
+import type { FieldDefinitionResource, WorkflowResource } from '../types';
 
 /**
  * Create a mock client for testing
@@ -45,6 +46,9 @@ export function createTestClient(overrides: MockClientConfig = {}): MockPcoClien
         auth: {
             type: 'oauth',
             accessToken: 'test-token',
+            refreshToken: 'test-refresh-token',
+            onRefresh: async () => {},
+            onRefreshFailure: async () => {},
         },
     };
 
@@ -98,7 +102,7 @@ export function createTestClient(overrides: MockClientConfig = {}): MockPcoClien
         },
 
         fields: {
-            getAllFieldDefinitions: () => Promise.resolve([
+            getAllFieldDefinitions: (): Promise<FieldDefinitionResource[]> => Promise.resolve([
                 {
                     type: 'FieldDefinition',
                     id: 'field_1',
@@ -109,17 +113,21 @@ export function createTestClient(overrides: MockClientConfig = {}): MockPcoClien
                         data_type: 'date',
                         required: false,
                         public: false,
+                        tab_id: 1,
+                        sequence: 1,
+                        config: null,
+                        deleted_at: null,
                     },
                     relationships: {
                         tab: { data: { type: 'Tab', id: 'tab_1' } },
                         field_options: { data: [] },
                     },
-                },
+                } as FieldDefinitionResource,
             ]),
         },
 
         workflows: {
-            getAll: () => Promise.resolve({
+            getAll: (_options?: any) => Promise.resolve({
                 data: [
                     {
                         type: 'Workflow',
@@ -132,7 +140,7 @@ export function createTestClient(overrides: MockClientConfig = {}): MockPcoClien
                         relationships: {
                             cards: { data: [] },
                         },
-                    },
+                    } as WorkflowResource,
                 ],
                 meta: { total_count: 1 },
                 links: { self: '/workflows', next: null, prev: null },
@@ -170,6 +178,9 @@ export function createErrorMockClient(errorType: 'network' | 'auth' | 'validatio
         auth: {
             type: 'oauth',
             accessToken: 'test-token',
+            refreshToken: 'test-refresh-token',
+            onRefresh: async () => {},
+            onRefreshFailure: async () => {},
         },
     };
 
@@ -194,6 +205,9 @@ export function createSlowMockClient(delayMs: number = 1000): MockPcoClient {
         auth: {
             type: 'oauth',
             accessToken: 'test-token',
+            refreshToken: 'test-refresh-token',
+            onRefresh: async () => {},
+            onRefreshFailure: async () => {},
         },
     };
 
