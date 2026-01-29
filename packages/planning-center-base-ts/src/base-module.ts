@@ -231,14 +231,20 @@ export abstract class BaseModule {
 
     /**
      * Create a resource
+     *
+     * Returns flattened shape (same as getSingle/getList): attributes and relationships at top level.
      */
     protected async createResource<T extends ResourceObject<string, any, any>>(
         endpoint: string,
         data: any,
         params?: Record<string, any>
-    ): Promise<T> {
+    ): Promise<FlattenedResource<
+        T['type'],
+        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+    >> {
         this.debugLog('base.createResource', { endpoint, params });
-        const response = await this.httpClient.request<{ data: T }>({
+        const response = await this.httpClient.request<{ data: T; included?: ResourceObject<string, any, any>[] }>({
             method: 'POST',
             endpoint,
             data,
@@ -254,21 +260,31 @@ export abstract class BaseModule {
                 `Status: ${responseStatus}, Response: ${JSON.stringify(responseData)}`
             );
         }
-        const created = response.data.data;
+        const created = mapIncludedToRelationships([response.data.data], response.data?.included)[0];
         this.debugLog('base.createResource result', { endpoint, id: (created as { id?: string })?.id });
-        return created;
+        return created as FlattenedResource<
+            T['type'],
+            T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
+            T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+        >;
     }
 
     /**
      * Update a resource
+     *
+     * Returns flattened shape (same as getSingle/getList): attributes and relationships at top level.
      */
     protected async updateResource<T extends ResourceObject<string, any, any>>(
         endpoint: string,
         data: any,
         params?: Record<string, any>
-    ): Promise<T> {
+    ): Promise<FlattenedResource<
+        T['type'],
+        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+    >> {
         this.debugLog('base.updateResource', { endpoint, params });
-        const response = await this.httpClient.request<{ data: T }>({
+        const response = await this.httpClient.request<{ data: T; included?: ResourceObject<string, any, any>[] }>({
             method: 'PATCH',
             endpoint,
             data,
@@ -284,9 +300,13 @@ export abstract class BaseModule {
                 `Status: ${responseStatus}, Response: ${JSON.stringify(responseData)}`
             );
         }
-        const updated = response.data.data;
+        const updated = mapIncludedToRelationships([response.data.data], response.data?.included)[0];
         this.debugLog('base.updateResource result', { endpoint, id: (updated as { id?: string })?.id });
-        return updated;
+        return updated as FlattenedResource<
+            T['type'],
+            T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
+            T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+        >;
     }
 
     /**
