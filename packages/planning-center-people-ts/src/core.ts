@@ -6,11 +6,12 @@ import {
   retryWithBackoff,
   withErrorBoundary,
 } from './error-handling';
-import { PcoRateLimiter, RateLimitHeaders } from '@rachelallyson/planning-center-base-ts';
+import { PcoRateLimiter, RateLimitHeaders, createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 import {
   Paginated,
   ResourceObject,
   Response as JsonApiResponse,
+  Attributes,
 } from './types';
 import { attemptTokenRefresh, hasRefreshTokenCapability, type TokenRefreshCallback, type TokenRefreshFailureCallback } from './auth';
 
@@ -50,6 +51,8 @@ export interface PcoClientConfig {
     maxDelay?: number;
     onRetry?: (error: PcoError, attempt: number) => void;
   };
+  /** Enable debug logging (same as base package; optional for v1 createPcoClient flow) */
+  debug?: boolean | import('@rachelallyson/planning-center-base-ts').PcoDebugOptions;
 }
 
 // Re-export PcoApiError for convenience
@@ -253,7 +256,7 @@ export async function patch<
 export async function del(
   client: PcoClientState,
   endpoint: string,
-  params?: Record<string, any>,
+  params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
 ): Promise<void> {
   return withErrorBoundary(
@@ -287,7 +290,7 @@ export async function del(
 export async function getAllPages<T extends ResourceObject<string, any, any>>(
   client: PcoClientState,
   endpoint: string,
-  params?: Record<string, any>,
+  params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
 ): Promise<T[]> {
   return withErrorBoundary(
@@ -385,7 +388,7 @@ async function makeFetchRequest<TDoc>(
   client: PcoClientState,
   method: string,
   endpoint: string,
-  data?: Record<string, any>,
+  data?: Partial<Attributes>,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
 ): Promise<TDoc> {
@@ -513,8 +516,8 @@ async function makeFetchRequest<TDoc>(
             makeFetchRequest<TDoc>(client, method, endpoint, data, params, context)
           );
         } catch (refreshError) {
-          // If token refresh fails, fall through to normal error handling
-          console.warn('Token refresh failed:', refreshError);
+          const logger = createDebugLogger(client.config);
+          if (logger.enabled) logger.log('core  token refresh failed', { error: String(refreshError) });
         }
       }
 

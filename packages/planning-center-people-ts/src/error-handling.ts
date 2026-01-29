@@ -32,7 +32,7 @@ export interface ErrorContext {
   category?: ErrorCategory;
   severity?: ErrorSeverity;
   retryCount?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Enhanced PCO API Error with additional context
@@ -145,12 +145,14 @@ export class PcoError extends PcoApiError {
   // Create from fetch error
   static fromFetchError(
     response: Response,
-    data?: any,
+    data?: unknown,
     context: Partial<ErrorContext> = {}
   ): PcoError {
     const status = response.status;
     const statusText = response.statusText;
-    const errors = data?.errors || [];
+    const errors: JsonApiError[] = (data && typeof data === 'object' && data !== null && 'errors' in data) 
+      ? ((data as { errors?: unknown[] }).errors || []) as JsonApiError[]
+      : [];
     const rateLimitHeaders = {
       'Retry-After': response.headers.get('retry-after') || undefined,
       'X-PCO-API-Request-Rate-Count':
@@ -164,7 +166,16 @@ export class PcoError extends PcoApiError {
     const message =
       errors.length > 0
         ? errors
-            .map((e: any) => e.detail || e.title || 'Unknown error')
+            .map((e: unknown) => {
+              if (e && typeof e === 'object' && 'detail' in e) {
+                return (e as { detail?: unknown }).detail;
+              }
+              if (e && typeof e === 'object' && 'title' in e) {
+                return (e as { title?: unknown }).title;
+              }
+              return 'Unknown error';
+            })
+            .map((msg: unknown) => typeof msg === 'string' ? msg : 'Unknown error')
             .join('; ')
         : statusText;
 
@@ -233,7 +244,7 @@ export class PcoError extends PcoApiError {
   }
 
   // Get error summary for logging
-  getErrorSummary(): Record<string, any> {
+  getErrorSummary(): Record<string, unknown> {
     return {
       category: this.category,
       context: this.context,
@@ -250,7 +261,7 @@ export class PcoError extends PcoApiError {
 }
 
 // Determine if an error should not be retried
-export function shouldNotRetry(error: any): boolean {
+export function shouldNotRetry(error: unknown): boolean {
   if (error instanceof PcoError) {
     return !error.shouldRetry();
   }

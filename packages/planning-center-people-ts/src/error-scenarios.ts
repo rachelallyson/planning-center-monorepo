@@ -68,14 +68,18 @@ export async function retryWithExponentialBackoff<T>(
 /**
  * Check if an error is retryable
  */
-function isRetryableError(error: any, retryableStatuses: number[]): boolean {
+function isRetryableError(error: unknown, retryableStatuses: number[]): boolean {
   if (error instanceof PcoApiError) {
     return retryableStatuses.includes(error.status);
   }
 
   // Network errors are generally retryable
-  if (error.name === 'TypeError' && error.message.includes('fetch')) {
-    return true;
+  if (error && typeof error === 'object' && 'name' in error && 'message' in error) {
+    const errorName = (error as { name?: unknown }).name;
+    const errorMessage = (error as { message?: unknown }).message;
+    if (errorName === 'TypeError' && typeof errorMessage === 'string' && errorMessage.includes('fetch')) {
+      return true;
+    }
   }
 
   return false;
@@ -157,9 +161,9 @@ export class CircuitBreaker {
 /**
  * Result of a bulk operation with individual item results
  */
-export interface BulkOperationResult<T> {
-  successful: { index: number; data: T }[];
-  failed: { index: number; error: Error; data?: any }[];
+export interface BulkOperationResult<R> {
+  successful: { index: number; data: R }[];
+  failed: { index: number; error: Error; data?: unknown }[]; // data is the input item that failed (type T from executeBulkOperation), using unknown for flexibility
   totalProcessed: number;
   successRate: number;
 }
@@ -178,7 +182,7 @@ export async function executeBulkOperation<T, R>(
 ): Promise<BulkOperationResult<R>> {
   const { batchSize = 10, continueOnError = true, onItemComplete } = options;
   const successful: { index: number; data: R }[] = [];
-  const failed: { index: number; error: Error; data?: any }[] = [];
+  const failed: { index: number; error: Error; data?: T }[] = [];
 
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -272,7 +276,7 @@ export const TIMEOUT_CONFIG = {
 /**
  * Classify errors for appropriate handling
  */
-export function classifyError(error: any): {
+export function classifyError(error: unknown): {
   category:
     | 'network'
     | 'authentication'
@@ -289,7 +293,12 @@ export function classifyError(error: any): {
     return classifyPcoError(error);
   }
 
-  if (error.name === 'TypeError' && error.message.includes('fetch')) {
+  // Type guard for Error-like objects
+  const isErrorLike = (e: unknown): e is { name?: string; message?: string; status?: number } => {
+    return typeof e === 'object' && e !== null;
+  };
+
+  if (isErrorLike(error) && error.name === 'TypeError' && error.message?.includes('fetch')) {
     return {
       category: 'network',
       retryable: true,
@@ -299,7 +308,7 @@ export function classifyError(error: any): {
     };
   }
 
-  if (error.message.includes('timeout')) {
+  if (isErrorLike(error) && error.message?.includes('timeout')) {
     return {
       category: 'network',
       retryable: true,
@@ -398,12 +407,16 @@ function classifyPcoError(error: PcoApiError): {
     };
   }
 
+  const isErrorLike = (e: unknown): e is { message?: string } => {
+    return typeof e === 'object' && e !== null;
+  };
+
   return {
     category: 'unknown',
     retryable: false,
     severity: 'medium',
     userMessage:
-      error.message || 'An error occurred while processing your request.',
+      (isErrorLike(error) && error.message) || 'An error occurred while processing your request.',
   };
 }
 
@@ -414,7 +427,7 @@ function classifyPcoError(error: PcoApiError): {
  */
 export async function attemptRecovery<T>(
   operation: () => Promise<T>,
-  error: any,
+  error: unknown,
   context: {
     client: PcoClientState;
     operation: string;
@@ -475,7 +488,7 @@ export interface ErrorReport {
     message: string;
     stack?: string;
     status?: number;
-    errors?: any[];
+    errors?: Array<{ detail?: string; title?: string; [key: string]: unknown }>;
   };
   context: {
     clientConfig: {
@@ -496,7 +509,7 @@ export interface ErrorReport {
  * Create detailed error report
  */
 export function createErrorReport(
-  error: any,
+  error: unknown,
   context: {
     operation: string;
     client: PcoClientState;
@@ -509,6 +522,19 @@ export function createErrorReport(
 ): ErrorReport {
   const classification = classifyError(error);
 
+  // Type guard for error-like objects
+  const isErrorLike = (e: unknown): e is { 
+    name?: string; 
+    message?: string; 
+    stack?: string; 
+    status?: number;
+    errors?: Array<{ detail?: string; title?: string; [key: string]: unknown }>;
+  } => {
+    return typeof e === 'object' && e !== null;
+  };
+
+  const errorObj = isErrorLike(error) ? error : {};
+
   return {
     classification,
     context: {
@@ -520,11 +546,11 @@ export function createErrorReport(
       requestInfo: context.requestInfo,
     },
     error: {
-      errors: error.errors,
-      message: error.message || 'Unknown error',
-      name: error.name || 'UnknownError',
-      stack: error.stack,
-      status: error.status,
+      errors: errorObj.errors,
+      message: errorObj.message || 'Unknown error',
+      name: errorObj.name || 'UnknownError',
+      stack: errorObj.stack,
+      status: errorObj.status,
     },
     operation: context.operation,
     timestamp: new Date().toISOString(),

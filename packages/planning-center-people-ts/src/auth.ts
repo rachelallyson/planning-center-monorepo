@@ -1,4 +1,5 @@
 import type { PcoClientState } from './core';
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 
 // OAuth token response from PCO
 export interface TokenResponse {
@@ -51,7 +52,7 @@ export interface PcoClientConfigWithRefresh {
     maxRetries?: number;
     baseDelay?: number;
     maxDelay?: number;
-    onRetry?: (error: any, attempt: number) => void;
+    onRetry?: (error: unknown, attempt: number) => void;
   };
 }
 
@@ -131,20 +132,22 @@ export async function attemptTokenRefresh<T>(
     throw new Error('No refresh token or callback configured');
   }
 
+  const logger = createDebugLogger(client.config as { debug?: boolean | import('@rachelallyson/planning-center-base-ts').PcoDebugOptions });
+  if (logger.enabled) logger.log('auth  attemptTokenRefresh start', {});
+
   try {
-    // Attempt to refresh the token
     const newTokens = await refreshAccessToken(client, client.config.refreshToken!);
 
-    // Update the client with new tokens
     updateClientTokens(client, newTokens);
+    if (logger.enabled) logger.log('auth  attemptTokenRefresh success', {});
 
     // Call the token refresh callback if provided
     if (client.config.onTokenRefresh) {
       try {
         await client.config.onTokenRefresh(newTokens);
       } catch (callbackError) {
-        // Log callback error but don't fail the token refresh
-        console.warn('Token refresh callback failed:', callbackError);
+        const logger = createDebugLogger(client.config as { debug?: boolean | import('@rachelallyson/planning-center-base-ts').PcoDebugOptions });
+        if (logger.enabled) logger.log('auth  token refresh callback failed', { error: String(callbackError) });
       }
     }
 
@@ -152,6 +155,7 @@ export async function attemptTokenRefresh<T>(
     return await originalRequest();
 
   } catch (error) {
+    if (logger.enabled) logger.log('auth  attemptTokenRefresh failed', { error: String(error) });
     const refreshError = new Error(`Token refresh failed: ${error instanceof Error ? error.message : String(error)}`);
 
     // Call the failure callback if provided
@@ -163,8 +167,8 @@ export async function attemptTokenRefresh<T>(
           attemptCount: 1, // Could be enhanced to track retry attempts
         });
       } catch (callbackError) {
-        // Log callback error but don't fail the refresh error
-        console.warn('Token refresh failure callback failed:', callbackError);
+        const logger = createDebugLogger(client.config as { debug?: boolean | import('@rachelallyson/planning-center-base-ts').PcoDebugOptions });
+        if (logger.enabled) logger.log('auth  token refresh failure callback failed', { error: String(callbackError) });
       }
     }
 
