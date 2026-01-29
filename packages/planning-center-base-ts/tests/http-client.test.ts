@@ -26,6 +26,8 @@ describe('PcoHttpClient', () => {
     };
     httpClient = new PcoHttpClient(config, eventEmitter);
     jest.clearAllMocks();
+    // Reset fetch mock so each test's mockResolvedValueOnce/mockRejectedValueOnce is used
+    mockFetch.mockReset();
   });
 
   describe('request', () => {
@@ -308,7 +310,8 @@ describe('PcoHttpClient', () => {
       const patConfig: PcoClientConfig = {
         auth: {
           type: 'personal_access_token',
-          personalAccessToken: 'app-id:app-secret',
+          personalAccessToken: 'app-id',
+          personalAccessTokenSecret: 'app-secret',
         },
         baseURL: 'https://api.planningcenteronline.com/test/v2',
       };
