@@ -53,6 +53,8 @@ export type {
   PeopleList,
   PersonAttributes,
   PersonRelationships,
+  PersonRelationshipMap,
+  FlattenedPersonResource,
   PersonResource,
   PersonSingle,
   PhoneNumberAttributes,

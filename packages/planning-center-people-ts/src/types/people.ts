@@ -10,6 +10,7 @@ import {
   ResourceObject,
   Response,
 } from './json-api';
+import type { FlattenedResource } from '@rachelallyson/planning-center-base-ts';
 
 // ===== Person Resource =====
 
@@ -64,14 +65,42 @@ export interface PersonRelationships {
 export interface PersonResource
   extends ResourceObject<'Person', PersonAttributes, PersonRelationships> { }
 
+/**
+ * Mapping of Person relationship keys to their resource types
+ * Used for proper typing of flattened relationships
+ */
+export type PersonRelationshipMap = {
+  emails: EmailResource[];
+  phone_numbers: PhoneNumberResource[];
+  addresses: AddressResource[];
+  household: HouseholdResource;
+  primary_campus: CampusResource;
+  gender: ResourceObject<string, any, any>; // Gender is a simple resource, not fully typed
+  workflow_cards: WorkflowCardResource[];
+  notes: NoteResource[];
+  field_data: FieldDatumResource[];
+  social_profiles: SocialProfileResource[];
+};
+
+/**
+ * Flattened Person resource type with properly typed relationships
+ * Relationships are typed as their actual resource types, not Relationship wrappers
+ */
+export type FlattenedPersonResource = FlattenedResource<
+  PersonResource['type'],
+  PersonAttributes,
+  PersonRelationships,
+  PersonRelationshipMap
+>;
+
 export type PeopleList = Paginated<PersonResource, PeopleIncluded>;
 export type PersonSingle = Response<PersonResource>;
 
 // ===== Email Resource =====
 
 export interface EmailAttributes extends Attributes {
-  address?: string;
-  location?: string;
+  address: string;
+  location: 'Home' | 'Work' | 'Other';
   primary?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -91,8 +120,8 @@ export type EmailSingle = Response<EmailResource>;
 // ===== Phone Number Resource =====
 
 export interface PhoneNumberAttributes extends Attributes {
-  number?: string;
-  location?: string;
+  number: string;
+  location: 'Home' | 'Work' | 'Other';
   primary?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -261,13 +290,15 @@ export type FieldOptionSingle = Response<FieldOptionResource>;
 
 // ===== Field Datum Resource (aka field_data) =====
 
+export interface FieldDatumFileMetadata {
+  url?: string | null;
+  // Additional file metadata that may be present (e.g., filename, size, etc.)
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 export interface FieldDatumAttributes extends Attributes {
   value?: string | null;
-  file?: {
-    url?: string | null;
-    // Additional file metadata that may be present
-    [key: string]: any;
-  } | null;
+  file?: FieldDatumFileMetadata | null;
   file_content_type?: string | null;
   file_name?: string | null;
   file_size?: string | number | null;
@@ -287,6 +318,27 @@ export interface FieldDatumResource
     FieldDatumAttributes,
     FieldDatumRelationships
   > { }
+
+/**
+ * Mapping of FieldDatum relationship keys to their resource types
+ * Used for proper typing of flattened relationships
+ */
+export type FieldDatumRelationshipMap = {
+  field_definition: FieldDefinitionResource;
+  field_option: FieldOptionResource;
+  customizable: PersonResource; // Polymorphic relationship to Person
+};
+
+/**
+ * Flattened FieldDatum resource type with properly typed relationships
+ * Relationships are typed as their actual resource types, not Relationship wrappers
+ */
+export type FlattenedFieldDatumResource = FlattenedResource<
+  FieldDatumResource['type'],
+  FieldDatumAttributes,
+  FieldDatumRelationships,
+  FieldDatumRelationshipMap
+>;
 
 export type FieldDataList = Paginated<FieldDatumResource>;
 export type FieldDataSingle = Response<FieldDatumResource>;
@@ -378,7 +430,8 @@ export type ListStarSingle = Response<ListStarResource>;
 // ===== Note Resource =====
 
 export interface NoteAttributes extends Attributes {
-  content?: string;
+  note?: string;
+  note_category_id?: string;
   created_at?: string;
   updated_at?: string;
 }
