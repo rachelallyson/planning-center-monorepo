@@ -42,7 +42,7 @@ describe('v2.0.0 Campus API Integration Tests', () => {
         }, 30000);
 
         it('should get all campuses with pagination', async () => {
-            const campuses = await client.campus.getAll({ per_page: 10 });
+            const campuses = await client.campus.getPage({ perPage: 10 });
 
             expect(campuses).toBeDefined();
             expect(Array.isArray(campuses.data)).toBe(true);
@@ -73,31 +73,31 @@ describe('v2.0.0 Campus API Integration Tests', () => {
             const campus = await client.campus.create(campusData);
 
             validateResourceStructure(campus, 'Campus');
-            expect(campus.attributes?.description).toBe(campusData.description);
-            expect(campus.attributes?.street).toBe(campusData.street);
-            expect(campus.attributes?.city).toBe(campusData.city);
-            expect(campus.attributes?.state).toBe(campusData.state);
-            expect(campus.attributes?.zip).toBe(campusData.zip);
-            expect(campus.attributes?.country).toBe(campusData.country);
-            expect(campus.attributes?.phone_number).toBe(campusData.phone_number);
-            expect(campus.attributes?.website).toBe(campusData.website);
-            expect(campus.attributes?.twenty_four_hour_time).toBe(campusData.twenty_four_hour_time);
-            expect(campus.attributes?.date_format).toBe(campusData.date_format);
-            expect(campus.attributes?.church_center_enabled).toBe(campusData.church_center_enabled);
+            expect(campus.description).toBe(campusData.description);
+            expect(campus.street).toBe(campusData.street);
+            expect(campus.city).toBe(campusData.city);
+            expect(campus.state).toBe(campusData.state);
+            expect(campus.zip).toBe(campusData.zip);
+            expect(campus.country).toBe(campusData.country);
+            expect(campus.phone_number).toBe(campusData.phone_number);
+            expect(campus.website).toBe(campusData.website);
+            expect(campus.twenty_four_hour_time).toBe(campusData.twenty_four_hour_time);
+            expect(campus.date_format).toBe(campusData.date_format);
+            expect(campus.church_center_enabled).toBe(campusData.church_center_enabled);
             
             // Validate attribute types
-            if (campus.attributes?.name !== undefined) validateStringAttribute(campus.attributes, 'name');
-            if (campus.attributes?.description !== undefined) validateStringAttribute(campus.attributes, 'description');
-            if (campus.attributes?.street !== undefined) validateStringAttribute(campus.attributes, 'street');
-            if (campus.attributes?.city !== undefined) validateStringAttribute(campus.attributes, 'city');
-            if (campus.attributes?.state !== undefined) validateStringAttribute(campus.attributes, 'state');
-            if (campus.attributes?.zip !== undefined) validateStringAttribute(campus.attributes, 'zip');
-            if (campus.attributes?.country !== undefined) validateStringAttribute(campus.attributes, 'country');
-            if (campus.attributes?.phone_number !== undefined) validateStringAttribute(campus.attributes, 'phone_number');
-            if (campus.attributes?.website !== undefined) validateStringAttribute(campus.attributes, 'website');
-            if (campus.attributes?.twenty_four_hour_time !== undefined) validateBooleanAttribute(campus.attributes, 'twenty_four_hour_time');
-            if (campus.attributes?.date_format !== undefined) validateNumberAttribute(campus.attributes, 'date_format');
-            if (campus.attributes?.church_center_enabled !== undefined) validateBooleanAttribute(campus.attributes, 'church_center_enabled');
+            if (campus.name !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'name');
+            if (campus.description !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'description');
+            if (campus.street !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'street');
+            if (campus.city !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'city');
+            if (campus.state !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'state');
+            if (campus.zip !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'zip');
+            if (campus.country !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'country');
+            if (campus.phone_number !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'phone_number');
+            if (campus.website !== undefined) validateStringAttribute(campus as Record<string, unknown>, 'website');
+            if (campus.twenty_four_hour_time !== undefined) validateBooleanAttribute(campus as Record<string, unknown>, 'twenty_four_hour_time');
+            if (campus.date_format !== undefined) validateNumberAttribute(campus as Record<string, unknown>, 'date_format');
+            if (campus.church_center_enabled !== undefined) validateBooleanAttribute(campus as Record<string, unknown>, 'church_center_enabled');
 
             testCampusId = campus.id || '';
             expect(testCampusId).toBeTruthy();
@@ -110,7 +110,8 @@ describe('v2.0.0 Campus API Integration Tests', () => {
 
             validateResourceStructure(campus, 'Campus');
             expect(campus.id).toBe(testCampusId);
-            expect(campus.attributes?.description).toContain(TEST_PREFIX);
+            // getById returns flattened resource - attributes are at top level
+            expect(campus.description).toContain(TEST_PREFIX);
         }, 30000);
 
         it('should update a campus', async () => {
@@ -127,10 +128,10 @@ describe('v2.0.0 Campus API Integration Tests', () => {
 
             validateResourceStructure(updatedCampus, 'Campus');
             expect(updatedCampus.id).toBe(testCampusId);
-            expect(updatedCampus.attributes?.description).toBe(updateData.description);
-            expect(updatedCampus.attributes?.city).toBe(updateData.city);
-            expect(updatedCampus.attributes?.phone_number).toBe(updateData.phone_number);
-            expect(updatedCampus.attributes?.twenty_four_hour_time).toBe(updateData.twenty_four_hour_time);
+            expect(updatedCampus.description).toBe(updateData.description);
+            expect(updatedCampus.city).toBe(updateData.city);
+            expect(updatedCampus.phone_number).toBe(updateData.phone_number);
+            expect(updatedCampus.twenty_four_hour_time).toBe(updateData.twenty_four_hour_time);
         }, 30000);
 
         it('should get campus lists', async () => {

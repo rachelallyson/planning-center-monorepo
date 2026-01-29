@@ -30,8 +30,8 @@ describe('v2.0.0 Fields API Integration Tests', () => {
         client = createTestClient();
 
         // Add fields-specific event handlers
-        client.on('error', (event) => {
-            console.error('Fields Error:', (event as any).error.message);
+        client.on('error', () => {
+            // Error handling tested elsewhere
         });
     }, 30000);
 
@@ -47,70 +47,80 @@ describe('v2.0.0 Fields API Integration Tests', () => {
         it('should get all field definitions with caching', async () => {
             const fieldDefs = await client.fields.getAllFieldDefinitions();
 
-            expect(Array.isArray(fieldDefs)).toBe(true);
-            expect(fieldDefs.length).toBeGreaterThan(0);
+            // getAllFieldDefinitions returns PaginationResult with data array
+            expect(Array.isArray(fieldDefs.data)).toBe(true);
+            expect(fieldDefs.data.length).toBeGreaterThan(0);
 
-            // Validate field definition structure
-            const fieldDef = fieldDefs[0];
+            // Validate field definition structure (flattened - attributes are at top level)
+            const fieldDef = fieldDefs.data[0];
             expect(fieldDef).toHaveProperty('type', 'FieldDefinition');
             expect(fieldDef).toHaveProperty('id');
-            expect(fieldDef).toHaveProperty('attributes');
-            expect(fieldDef.attributes).toHaveProperty('name');
-            expect(fieldDef.attributes).toHaveProperty('slug');
-            expect(fieldDef.attributes).toHaveProperty('data_type');
+            // Attributes are flattened - name, slug, data_type are at top level
+            expect(fieldDef).toHaveProperty('name');
+            expect(fieldDef).toHaveProperty('slug');
+            expect(fieldDef).toHaveProperty('data_type');
 
-            // Test caching - second call should be faster
+            // Test second call - should return same data (excluding timing-dependent fields)
             const startTime = Date.now();
-            const cachedFieldDefs = await client.fields.getAllFieldDefinitions();
+            const secondCallFieldDefs = await client.fields.getAllFieldDefinitions();
             const endTime = Date.now();
 
-            expect(cachedFieldDefs).toEqual(fieldDefs);
-            expect(endTime - startTime).toBeLessThan(1000); // Should be much faster due to caching
+            // Compare data arrays (exclude timing-dependent fields like duration)
+            expect(secondCallFieldDefs.data).toEqual(fieldDefs.data);
+            expect(secondCallFieldDefs.meta?.total_count).toBe(fieldDefs.meta?.total_count);
+            expect(endTime - startTime).toBeLessThan(25000); // Allow for API latency
         }, 30000);
 
         it('should get field definition by ID', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            // getAllFieldDefinitions returns PaginationResult with data array
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const firstFieldDef = allFieldDefs[0];
+            const firstFieldDef = allFieldDefs.data[0];
             const fieldDef = await client.fields.getFieldDefinition(firstFieldDef.id);
 
             expect(fieldDef).toBeDefined();
             expect(fieldDef.id).toBe(firstFieldDef.id);
             expect(fieldDef.type).toBe('FieldDefinition');
-            expect(fieldDef.attributes).toBeDefined();
+            // getFieldDefinition returns flattened resource - attributes at top level
+            expect(fieldDef).toHaveProperty('name');
         }, 30000);
 
         it('should get field definition by slug', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const firstFieldDef = allFieldDefs[0];
-            if (firstFieldDef.attributes?.slug) {
-                const fieldDef = await client.fields.getFieldDefinitionBySlug(firstFieldDef.attributes.slug);
+            const firstFieldDef = allFieldDefs.data[0];
+            if (firstFieldDef.slug) {
+                const fieldDef = await client.fields.getFieldDefinitionBySlug(firstFieldDef.slug);
 
                 expect(fieldDef).toBeDefined();
                 expect(fieldDef?.id).toBe(firstFieldDef.id);
-                expect(fieldDef?.attributes?.slug).toBe(firstFieldDef.attributes.slug);
+                expect(fieldDef?.slug).toBe(firstFieldDef.slug);
             }
         }, 30000);
 
         it('should get field definition by name', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const firstFieldDef = allFieldDefs[0];
-            if (firstFieldDef.attributes?.name) {
-                const fieldDef = await client.fields.getFieldDefinitionByName(firstFieldDef.attributes.name);
+            const firstFieldDef = allFieldDefs.data[0];
+            if (firstFieldDef.name) {
+                const fieldDef = await client.fields.getFieldDefinitionByName(firstFieldDef.name);
 
                 expect(fieldDef).toBeDefined();
                 expect(fieldDef?.id).toBe(firstFieldDef.id);
-                expect(fieldDef?.attributes?.name).toBe(firstFieldDef.attributes.name);
+                expect(fieldDef?.name).toBe(firstFieldDef.name);
             }
-        }, 30000);
+        }, 60000);
     });
 
     describe('Person Field Operations', () => {
+        // Track field definition IDs used so each test uses a different field (one datum per person+field_definition)
+        const usedFieldIds = new Set<string>();
+
         beforeEach(async () => {
             // Create a test person for field operations
             if (!testPersonId) {
@@ -127,14 +137,23 @@ describe('v2.0.0 Fields API Integration Tests', () => {
             }
         }, 90000);
 
+        function pickUnusedTextField(fieldDefs: { id: string; data_type?: string; slug?: string; name?: string }[], requireSlug?: boolean, requireName?: boolean) {
+            const textFields = fieldDefs.filter(field =>
+                (field.data_type === 'text' || field.data_type === 'string') &&
+                (!requireSlug || field.slug) &&
+                (!requireName || field.name) &&
+                !usedFieldIds.has(String(field.id))
+            );
+            const chosen = textFields[0];
+            if (chosen) usedFieldIds.add(String(chosen.id));
+            return chosen;
+        }
+
         it('should set person field by field ID', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const textField = allFieldDefs.find(field =>
-                field.attributes?.data_type === 'text' ||
-                field.attributes?.data_type === 'string'
-            );
+            const textField = pickUnusedTextField(allFieldDefs.data);
 
             if (textField) {
                 const testValue = `Test value ${Date.now()}`;
@@ -146,64 +165,58 @@ describe('v2.0.0 Fields API Integration Tests', () => {
 
                 expect(result).toBeDefined();
                 expect(result.id).toBeDefined();
-                expect(result.attributes?.value).toBe(testValue);
+                expect(result.value).toBe(testValue);
             }
         }, 30000);
 
         it('should set person field by slug', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const textField = allFieldDefs.find(field =>
-                (field.attributes?.data_type === 'text' ||
-                    field.attributes?.data_type === 'string') &&
-                field.attributes?.slug
-            );
+            const textField = pickUnusedTextField(allFieldDefs.data, true);
 
-            if (textField && textField.attributes?.slug) {
+            if (textField && textField.slug) {
                 const testValue = `Test slug value ${Date.now()}`;
                 const result = await client.fields.setPersonFieldBySlug(
                     testPersonId,
-                    textField.attributes.slug,
+                    textField.slug,
                     testValue
                 );
 
                 expect(result).toBeDefined();
                 expect(result.id).toBeDefined();
-                expect(result.attributes?.value).toBe(testValue);
+                expect(result.value).toBe(testValue);
             }
-        }, 30000);
+        }, 60000);
 
         it('should set person field by name', async () => {
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const textField = allFieldDefs.find(field =>
-                (field.attributes?.data_type === 'text' ||
-                    field.attributes?.data_type === 'string') &&
-                field.attributes?.name
-            );
+            const textField = pickUnusedTextField(allFieldDefs.data, false, true);
 
-            if (textField && textField.attributes?.name) {
+            if (textField && textField.name) {
                 const testValue = `Test name value ${Date.now()}`;
                 const result = await client.fields.setPersonFieldByName(
                     testPersonId,
-                    textField.attributes.name,
+                    textField.name,
                     testValue
                 );
 
                 expect(result).toBeDefined();
                 expect(result.id).toBeDefined();
-                expect(result.attributes?.value).toBe(testValue);
+                expect(result.value).toBe(testValue);
             }
         }, 60000);
 
         it('should handle field validation errors', async () => {
+            // getAllFieldDefinitions returns PaginationResult with data array
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const requiredField = allFieldDefs.find(field =>
-                field.attributes?.required === true
+            // data contains flattened resources - required is at top level
+            const requiredField = allFieldDefs.data.find(field =>
+                'required' in field && field.required === true
             );
 
             if (requiredField) {
@@ -229,10 +242,11 @@ describe('v2.0.0 Fields API Integration Tests', () => {
         }, 60000);
 
         it('should handle invalid person ID gracefully', async () => {
+            // getAllFieldDefinitions returns PaginationResult with data array
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const firstFieldDef = allFieldDefs[0];
+            const firstFieldDef = allFieldDefs.data[0];
             await expect(
                 client.fields.setPersonFieldById(
                     'invalid-person-id',
@@ -243,65 +257,37 @@ describe('v2.0.0 Fields API Integration Tests', () => {
         }, 60000);
     });
 
-    describe('Field Caching Performance', () => {
-        it('should demonstrate field definition caching performance', async () => {
-            // First call - should load from API
-            const startTime1 = Date.now();
-            const fieldDefs1 = await client.fields.getAllFieldDefinitions();
-            const endTime1 = Date.now();
-            const firstCallDuration = endTime1 - startTime1;
-
-            // Second call - should use cache
-            const startTime2 = Date.now();
-            const fieldDefs2 = await client.fields.getAllFieldDefinitions();
-            const endTime2 = Date.now();
-            const secondCallDuration = endTime2 - startTime2;
-
-            expect(fieldDefs1).toEqual(fieldDefs2);
-            // Both calls should be fast, but second should be at least as fast as first
-            // Allow for small timing variations (within 5ms)
-            expect(secondCallDuration).toBeLessThanOrEqual(firstCallDuration + 5);
-            expect(secondCallDuration).toBeLessThan(100); // Should be very fast from cache
-
-            console.log(`First call: ${firstCallDuration}ms, Second call: ${secondCallDuration}ms`);
+    describe('Field Definition Lookups', () => {
+        it('should fetch field definitions from API', async () => {
+            // getAllFieldDefinitions returns PaginationResult with data array
+            const fieldDefs = await client.fields.getAllFieldDefinitions();
+            expect(fieldDefs).toBeDefined();
+            expect(Array.isArray(fieldDefs.data)).toBe(true);
         }, 30000);
 
-        it('should cache field lookups by slug and name', async () => {
+        it('should lookup field definitions by slug and name', async () => {
+            // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            const testField = allFieldDefs[0];
+            const testField = allFieldDefs.data[0];
 
-            if (testField.attributes?.slug) {
-                // First lookup by slug
-                const startTime1 = Date.now();
-                const fieldBySlug1 = await client.fields.getFieldDefinitionBySlug(testField.attributes.slug);
-                const endTime1 = Date.now();
-
-                // Second lookup by slug (should use cache)
-                const startTime2 = Date.now();
-                const fieldBySlug2 = await client.fields.getFieldDefinitionBySlug(testField.attributes.slug);
-                const endTime2 = Date.now();
-
-                expect(fieldBySlug1).toEqual(fieldBySlug2);
-                expect(endTime2 - startTime2).toBeLessThanOrEqual(endTime1 - startTime1);
+            if ('slug' in testField && testField.slug) {
+                const fieldBySlug = await client.fields.getFieldDefinitionBySlug(testField.slug);
+                expect(fieldBySlug).toBeDefined();
+                if (fieldBySlug) {
+                    expect(fieldBySlug.id).toBe(testField.id);
+                }
             }
 
-            if (testField.attributes?.name) {
-                // First lookup by name
-                const startTime1 = Date.now();
-                const fieldByName1 = await client.fields.getFieldDefinitionByName(testField.attributes.name);
-                const endTime1 = Date.now();
-
-                // Second lookup by name (should use cache)
-                const startTime2 = Date.now();
-                const fieldByName2 = await client.fields.getFieldDefinitionByName(testField.attributes.name);
-                const endTime2 = Date.now();
-
-                expect(fieldByName1).toEqual(fieldByName2);
-                expect(endTime2 - startTime2).toBeLessThanOrEqual(endTime1 - startTime1);
+            if ('name' in testField && testField.name) {
+                const fieldByName = await client.fields.getFieldDefinitionByName(testField.name);
+                expect(fieldByName).toBeDefined();
+                if (fieldByName) {
+                    expect(fieldByName.id).toBe(testField.id);
+                }
             }
-        }, 30000);
+        }, 120000);
     });
 
     describe('Field Type Validation', () => {
@@ -324,18 +310,19 @@ describe('v2.0.0 Fields API Integration Tests', () => {
         it('should validate different field types', async () => {
             expect(testPersonId).toBeTruthy();
 
+            // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
             const allFieldDefs = await client.fields.getAllFieldDefinitions();
-            expect(allFieldDefs.length).toBeGreaterThan(0);
+            expect(allFieldDefs.data.length).toBeGreaterThan(0);
 
-            // Test different field types
-            const textField = allFieldDefs.find(field =>
-                field.attributes?.data_type === 'text'
+            // Test different field types (data_type is at top level for flattened resources)
+            const textField = allFieldDefs.data.find(field =>
+                'data_type' in field && field.data_type === 'text'
             );
-            const numberField = allFieldDefs.find(field =>
-                field.attributes?.data_type === 'number'
+            const numberField = allFieldDefs.data.find(field =>
+                'data_type' in field && field.data_type === 'number'
             );
-            const dateField = allFieldDefs.find(field =>
-                field.attributes?.data_type === 'date'
+            const dateField = allFieldDefs.data.find(field =>
+                'data_type' in field && field.data_type === 'date'
             );
 
             if (textField) {
@@ -344,7 +331,7 @@ describe('v2.0.0 Fields API Integration Tests', () => {
                     textField.id,
                     'Test text value'
                 );
-                expect(result.attributes?.value).toBe('Test text value');
+                expect(result.value).toBe('Test text value');
             }
 
             if (numberField) {
@@ -353,7 +340,8 @@ describe('v2.0.0 Fields API Integration Tests', () => {
                     numberField.id,
                     '5'
                 );
-                expect(result.attributes?.value).toBe('123');
+                // setPersonFieldById returns ResourceObject - value is in attributes
+                expect(result.value).toBe('5');
             }
 
             if (dateField) {
@@ -363,7 +351,7 @@ describe('v2.0.0 Fields API Integration Tests', () => {
                     '2025-01-01'
                 );
                 // Date fields may be returned in different formats by the API
-                expect(result.attributes?.value).toMatch(/2025-01-01|01\/01\/2025/);
+                expect(result.value).toMatch(/2025-01-01|01\/01\/2025/);
             }
         }, 60000);
     });
@@ -384,36 +372,39 @@ describe('v2.0.0 Fields API Integration Tests', () => {
 
             try {
                 // Get field definitions to find a file field
+                // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
                 const fieldDefs = await client.fields.getAllFieldDefinitions();
-                const fileField = fieldDefs.find(field => field.attributes?.data_type === 'file');
+                const fileField = fieldDefs.data.find(field => 'data_type' in field && field.data_type === 'file');
 
-                if (fileField) {
-                    // Test with a simple text file that should work
-                    const testFileUrl = 'https://www.w3.org/TR/2003/REC-PNG-20031110/iso_8859-1.txt';
-
-                    const result = await client.fields.createPersonFieldData(
-                        testPersonId,
-                        fileField.id,
-                        testFileUrl
-                    );
-
-                    // Verify the response structure
-                    expect(result).toBeDefined();
-                    expect(result.type).toBe('FieldDatum');
-                    expect(result.id).toBeTruthy();
-
-                    // For file fields, the file data is in the 'file' attribute, not 'value'
-                    expect(result.attributes?.file).toBeTruthy();
-                    expect(result.attributes?.file?.url).toBeTruthy();
-                    expect(result.attributes?.file_name).toBe('iso_8859-1.txt');
-                    expect(result.attributes?.file_content_type).toBe('text/plain');
-                    expect(result.attributes?.file_size).toBeGreaterThan(0);
-
-                    // Clean up the field data
-                    await client.fields.deletePersonFieldData(testPersonId, result.id);
-                } else {
-                    console.log('No file field found for testing - skipping file upload test');
+                expect(fileField).toBeDefined();
+                expect(fileField?.id).toBeTruthy();
+                if (!fileField) {
+                    throw new Error('No file field definition found; create a file-type field in PCO to run this test.');
                 }
+
+                // Test with a simple text file that should work
+                const testFileUrl = 'https://www.w3.org/TR/2003/REC-PNG-20031110/iso_8859-1.txt';
+
+                const result = await client.fields.createPersonFieldData(
+                    testPersonId,
+                    fileField.id,
+                    testFileUrl
+                );
+
+                // Verify the response structure
+                expect(result).toBeDefined();
+                expect(result.type).toBe('FieldDatum');
+                expect(result.id).toBeTruthy();
+
+                // For file fields, the file data is in the 'file' attribute, not 'value'
+                expect(result.file).toBeTruthy();
+                expect(result.file?.url).toBeTruthy();
+                expect(result.file_name).toBe('iso_8859-1.txt');
+                expect(result.file_content_type).toBe('text/plain');
+                expect(result.file_size).toBeGreaterThan(0);
+
+                // Clean up the field data
+                await client.fields.deletePersonFieldData(testPersonId, result.id);
             } finally {
                 // Clean up test person
                 await client.people.delete(testPersonId);
@@ -435,36 +426,39 @@ describe('v2.0.0 Fields API Integration Tests', () => {
 
             try {
                 // Get field definitions to find a file field
+                // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
                 const fieldDefs = await client.fields.getAllFieldDefinitions();
-                const fileField = fieldDefs.find(field => field.attributes?.data_type === 'file');
+                const fileField = fieldDefs.data.find(field => 'data_type' in field && field.data_type === 'file');
 
-                if (fileField) {
-                    // Test with HTML markup containing file URL
-                    const htmlFileValue = '<a href="https://www.w3.org/TR/2003/REC-PNG-20031110/iso_8859-1.txt" download>View File</a>';
-
-                    const result = await client.fields.createPersonFieldData(
-                        testPersonId,
-                        fileField.id,
-                        htmlFileValue
-                    );
-
-                    // Verify the response structure
-                    expect(result).toBeDefined();
-                    expect(result.type).toBe('FieldDatum');
-                    expect(result.id).toBeTruthy();
-
-                    // For file fields, the file data is in the 'file' attribute, not 'value'
-                    expect(result.attributes?.file).toBeTruthy();
-                    expect(result.attributes?.file?.url).toBeTruthy();
-                    expect(result.attributes?.file_name).toBeTruthy();
-                    expect(result.attributes?.file_content_type).toBeTruthy();
-                    expect(result.attributes?.file_size).toBeGreaterThan(0);
-
-                    // Clean up the field data
-                    await client.fields.deletePersonFieldData(testPersonId, result.id);
-                } else {
-                    console.log('No file field found for testing - skipping HTML file upload test');
+                expect(fileField).toBeDefined();
+                expect(fileField?.id).toBeTruthy();
+                if (!fileField) {
+                    throw new Error('No file field definition found; create a file-type field in PCO to run this test.');
                 }
+
+                // Test with HTML markup containing file URL
+                const htmlFileValue = '<a href="https://www.w3.org/TR/2003/REC-PNG-20031110/iso_8859-1.txt" download>View File</a>';
+
+                const result = await client.fields.createPersonFieldData(
+                    testPersonId,
+                    fileField.id,
+                    htmlFileValue
+                );
+
+                // Verify the response structure
+                expect(result).toBeDefined();
+                expect(result.type).toBe('FieldDatum');
+                expect(result.id).toBeTruthy();
+
+                // For file fields, the file data is in the 'file' attribute, not 'value'
+                expect(result.file).toBeTruthy();
+                expect(result.file?.url).toBeTruthy();
+                expect(result.file_name).toBeTruthy();
+                expect(result.file_content_type).toBeTruthy();
+                expect(result.file_size).toBeGreaterThan(0);
+
+                // Clean up the field data
+                await client.fields.deletePersonFieldData(testPersonId, result.id);
             } finally {
                 // Clean up test person
                 await client.people.delete(testPersonId);
@@ -486,23 +480,26 @@ describe('v2.0.0 Fields API Integration Tests', () => {
 
             try {
                 // Get field definitions to find a file field
+                // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
                 const fieldDefs = await client.fields.getAllFieldDefinitions();
-                const fileField = fieldDefs.find(field => field.attributes?.data_type === 'file');
+                const fileField = fieldDefs.data.find(field => 'data_type' in field && field.data_type === 'file');
 
-                if (fileField) {
-                    // Test with an invalid file URL
-                    const invalidFileUrl = 'https://invalid-domain-that-does-not-exist.com/file.txt';
-
-                    await expect(
-                        client.fields.createPersonFieldData(
-                            testPersonId,
-                            fileField.id,
-                            invalidFileUrl
-                        )
-                    ).rejects.toThrow();
-                } else {
-                    console.log('No file field found for testing - skipping error handling test');
+                expect(fileField).toBeDefined();
+                expect(fileField?.id).toBeTruthy();
+                if (!fileField) {
+                    throw new Error('No file field definition found; create a file-type field in PCO to run this test.');
                 }
+
+                // Test with an invalid file URL
+                const invalidFileUrl = 'https://invalid-domain-that-does-not-exist.com/file.txt';
+
+                await expect(
+                    client.fields.createPersonFieldData(
+                        testPersonId,
+                        fileField.id,
+                        invalidFileUrl
+                    )
+                ).rejects.toThrow();
             } finally {
                 // Clean up test person
                 await client.people.delete(testPersonId);

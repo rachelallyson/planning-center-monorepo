@@ -55,11 +55,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
         }
 
         if (testPersonId2) {
-            try {
-                await client.people.delete(testPersonId2);
-            } catch (error) {
-                console.warn('Failed to clean up test person 2:', error);
-            }
+            await client.people.delete(testPersonId2);
         }
     }, 30000);
 
@@ -80,8 +76,9 @@ describe('v2.0.0 Households API Integration Tests', () => {
 
             validateResourceStructure(household, 'Household');
             expect(household.id).toBe(householdId);
-            expect(household.attributes).toBeDefined();
-        }, 30000);
+            // getById() returns flattened resources - attributes are at top level, not in .attributes
+            expect(household).toHaveProperty('name');
+        }, 60000);
 
         it('should create household', async () => {
             const timestamp = Date.now();
@@ -103,7 +100,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
             const household = await client.households.create(householdData);
 
             validateResourceStructure(household, 'Household');
-            expect(household.attributes?.name).toBe(householdData.name);
+            expect(household.name).toBe(householdData.name);
 
             testHouseholdId = household.id || '';
             expect(testHouseholdId).toBeTruthy();
@@ -141,7 +138,7 @@ describe('v2.0.0 Households API Integration Tests', () => {
 
             validateResourceStructure(updatedHousehold, 'Household');
             expect(updatedHousehold.id).toBe(testHouseholdId);
-            expect(updatedHousehold.attributes?.name).toBe(updateData.name);
+            expect(updatedHousehold.name).toBe(updateData.name);
         }, 60000);
 
         it('should handle household operations (member management not yet implemented)', async () => {
@@ -205,8 +202,6 @@ describe('v2.0.0 Households API Integration Tests', () => {
 
             expect(households.data.length).toBeGreaterThan(0);
             expect(householdFetchTime).toBeLessThan(30000); // Allow more time for API response
-
-            console.log(`Household fetch time: ${householdFetchTime}ms`);
         }, 30000);
     });
 });

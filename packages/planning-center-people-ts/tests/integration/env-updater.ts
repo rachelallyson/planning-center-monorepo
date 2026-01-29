@@ -34,10 +34,7 @@ export async function updateEnvTestFile(tokenUpdate: TokenUpdate): Promise<void>
 
         // Write the updated content back to the file
         fs.writeFileSync(envPath, envContent, 'utf8');
-
-        console.log('✅ Updated .env.test file with new tokens');
-    } catch (error) {
-        console.error('❌ Failed to update .env.test file:', error);
+    } catch {
         // Don't throw - this is not critical for test execution
     }
 }

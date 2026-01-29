@@ -18,44 +18,35 @@ describe('Token Refresh Integration Tests', () => {
     });
 
     describe('Token Refresh Persistence', () => {
-        it('should update .env.test when token is refreshed', async () => {
-            // Get current tokens before making requests
+        const hasOAuth = () => {
+            const t = getCurrentTokens();
+            return !!(t?.accessToken && t?.refreshToken);
+        };
+        (hasOAuth() ? it : it.skip)('should update .env.test when token is refreshed', async () => {
             const tokensBefore = getCurrentTokens();
-            console.log('🔍 Tokens before requests:', {
-                hasAccessToken: !!tokensBefore.accessToken,
-                hasRefreshToken: !!tokensBefore.refreshToken,
-                accessTokenLength: tokensBefore.accessToken?.length || 0,
-                refreshTokenLength: tokensBefore.refreshToken?.length || 0,
-            });
-
+            expect(tokensBefore.accessToken).toBeDefined();
+            expect(tokensBefore.refreshToken).toBeDefined();
 
             // Make several API requests that might trigger token refresh
             const requests = [
-                client.people.getAll({ perPage: 1 }),
-                client.people.getAll({ perPage: 1 }),
-                client.people.getAll({ perPage: 1 }),
-                client.campus.getAll({ perPage: 1 }),
-                client.households.getAll({ perPage: 1 }),
+                client.people.getPage({ perPage: 1 }),
+                client.people.getPage({ perPage: 1 }),
+                client.people.getPage({ perPage: 1 }),
+                client.campus.getPage({ perPage: 1 }),
+                client.households.getPage({ perPage: 1 }),
             ];
 
             // Execute requests in parallel
             const results = await Promise.all(requests);
             
             // Verify all requests succeeded
-            results.forEach((result, index) => {
+            results.forEach((result) => {
                 expect(result.data).toBeDefined();
                 expect(Array.isArray(result.data)).toBe(true);
-                console.log(`✅ Request ${index + 1} completed successfully`);
             });
 
             // Get tokens after requests
             const tokensAfter = getCurrentTokens();
-            console.log('🔍 Tokens after requests:', {
-                hasAccessToken: !!tokensAfter.accessToken,
-                hasRefreshToken: !!tokensAfter.refreshToken,
-                accessTokenLength: tokensAfter.accessToken?.length || 0,
-                refreshTokenLength: tokensAfter.refreshToken?.length || 0,
-            });
 
             // Verify tokens are still present
             expect(tokensAfter.accessToken).toBeDefined();
@@ -63,17 +54,11 @@ describe('Token Refresh Integration Tests', () => {
             
             // If tokens changed, verify they're different
             if (tokensBefore.accessToken !== tokensAfter.accessToken) {
-                console.log('🔄 Access token was refreshed!');
                 expect(tokensAfter.accessToken).not.toBe(tokensBefore.accessToken);
-            } else {
-                console.log('ℹ️  Access token was not refreshed (may still be valid)');
             }
 
             if (tokensBefore.refreshToken !== tokensAfter.refreshToken) {
-                console.log('🔄 Refresh token was updated!');
                 expect(tokensAfter.refreshToken).not.toBe(tokensBefore.refreshToken);
-            } else {
-                console.log('ℹ️  Refresh token was not updated');
             }
         }, 30000);
 
@@ -83,7 +68,7 @@ describe('Token Refresh Integration Tests', () => {
             
             // The request may succeed or fail depending on token validity
             // The important thing is that it doesn't crash - test should execute
-            await expect(invalidClient.people.getAll({ perPage: 1 })).resolves.toBeDefined();
+            await expect(invalidClient.people.getPage({ perPage: 1 })).resolves.toBeDefined();
         }, 30000);
     });
 
@@ -97,13 +82,11 @@ describe('Token Refresh Integration Tests', () => {
             if (tokens.accessToken) {
                 expect(typeof tokens.accessToken).toBe('string');
                 expect(tokens.accessToken.length).toBeGreaterThan(0);
-                console.log('✅ Access token found in .env.test');
             }
             
             if (tokens.refreshToken) {
                 expect(typeof tokens.refreshToken).toBe('string');
                 expect(tokens.refreshToken.length).toBeGreaterThan(0);
-                console.log('✅ Refresh token found in .env.test');
             }
         });
     });

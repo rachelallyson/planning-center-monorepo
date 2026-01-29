@@ -14,7 +14,7 @@
  * The test includes detailed error messages to help identify issues.
  */
 
-import { PcoClient } from '../../src';
+import { PcoClient, type FlattenedPersonResource } from '../../src';
 import { createTestClient, logAuthStatus } from './test-config';
 
 const TEST_PREFIX = 'TEST_DUPLICATE_PREVENTION_2025';
@@ -26,27 +26,13 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
     beforeAll(async () => {
         logAuthStatus();
         
-        try {
-            client = createTestClient();
-            console.log('✅ Test client created successfully');
-        } catch (error) {
-            console.log('❌ No credentials available for integration test');
-            console.log('💡 To run this test with real API calls:');
-            console.log('   1. Set PCO_PERSONAL_ACCESS_TOKEN in .env.test, or');
-            console.log('   2. Set PCO_ACCESS_TOKEN and PCO_REFRESH_TOKEN in .env.test');
-            throw error;
-        }
+        client = createTestClient();
     }, 30000);
 
     afterAll(async () => {
         // Clean up all test persons
         for (const personId of createdPersonIds) {
-            try {
-                await client.people.delete(personId);
-                console.log(`🧹 Cleaned up test person: ${personId}`);
-            } catch (error) {
-                console.warn(`⚠️  Failed to clean up person ${personId}:`, error);
-            }
+            await client.people.delete(personId);
         }
     }, 120000);
 
@@ -61,16 +47,10 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
             const testFirstName = 'Duplicate';
             const testLastName = `Test${timestamp}`;
 
-            console.log('\n🧪 Test: Duplicate prevention with email/phone match');
-            console.log('📧 Test email:', testEmail);
-            console.log('📞 Test phone:', testPhone);
-            console.log('👤 Test name:', `${testFirstName} ${testLastName}`);
-
             let existingPersonId: string;
 
             try {
                 // Step 1: Create the person in PCO (first time - simulates first guest check-in)
-                console.log('\nStep 1: Creating initial person with email/phone...');
                 const startTime = Date.now();
                 
                 const initialPerson = await client.people.findOrCreate({
@@ -82,16 +62,12 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
                     matchStrategy: 'exact',
                 });
 
-                const creationTime = Date.now() - startTime;
                 existingPersonId = initialPerson.id;
                 createdPersonIds.push(existingPersonId);
-
-                console.log(`✅ Initial person created: ${existingPersonId} (took ${creationTime}ms)`);
 
                 // Verify person exists in PCO
                 const firstPerson = await client.people.getById(existingPersonId);
                 expect(firstPerson.id).toBe(existingPersonId);
-                console.log('✅ Person verified in PCO');
 
                 // BUG DETECTION: Wait for PCO to process and verify contact info
                 // The PCO API may need time to verify email/phone contacts after person creation
@@ -100,16 +76,11 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
                 // This reveals a timing bug in the matching logic
                 // Note: The retry logic in findOrCreate will also handle delays, but we wait here
                 // to reduce the number of retries needed
-                console.log('\n⏳ Waiting 30 seconds for PCO to verify contacts...');
-                console.log('💡 This simulates the delay between first and second guest check-in');
                 await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds
 
                 // Step 2: Now try to find the same person with the SAME email and phone
                 // This simulates the bug scenario where duplicates were being created
                 // (second guest checks in with same email/phone)
-                console.log('\nStep 2: Searching for existing person with same email/phone...');
-                console.log('⚠️  This should MATCH the existing person, not create a duplicate');
-                
                 const searchStartTime = Date.now();
                 let matchedPersonId: string;
 
@@ -133,8 +104,6 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
                     });
 
                     matchedPersonId = matchedPerson.id;
-                    const searchTime = Date.now() - searchStartTime;
-                    console.log(`✅ Found person: ${matchedPersonId} (took ${searchTime}ms)`);
 
                     // CRITICAL: Should match existing person, not create new one
                     // If this fails, it means the bug still exists - duplicate prevention isn't working
@@ -152,26 +121,23 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
 
                     expect(matchedPersonId).toBe(existingPersonId);
                     expect(matchedPersonId).not.toBeUndefined();
-                    console.log('✅ SUCCESS: Matched existing person, no duplicate created!');
 
                     // Step 3: Verify person still exists and has correct info
-                    console.log('\nStep 3: Verifying matched person details...');
+                    // getById returns flattened resource
                     const verifiedPerson = await client.people.getById(matchedPersonId);
                     expect(verifiedPerson.id).toBe(existingPersonId);
-                    expect(verifiedPerson.attributes?.first_name).toBe(testFirstName);
-                    console.log('✅ Person details verified');
+                    expect(verifiedPerson.first_name).toBe(testFirstName);
 
                     // Step 4: Verify email/phone are present
-                    console.log('\nStep 4: Verifying email and phone contacts...');
                     const emails = await client.people.getEmails(matchedPersonId);
-                    const emailAddresses = emails.data.map((e: any) =>
-                        (e.attributes?.address || e.address)?.toLowerCase()
+                    // getEmails returns flattened resources - address is at top level
+                    const emailAddresses = emails.data.map((e) =>
+                        e.address?.toLowerCase()
                     );
                     expect(emailAddresses).toContain(testEmail.toLowerCase());
-                    console.log('✅ Email contact verified');
 
                     const phones = await client.people.getPhoneNumbers(matchedPersonId);
-                    const phoneNumbers = phones.data.map((p: any) => p.attributes?.number || p.number);
+                    const phoneNumbers = phones.data.map((p: any) => p.number);
                     const normalizePhone = (num: string) => num.replace(/\D/g, '');
                     const normalizedTestPhone = normalizePhone(testPhone);
                     const normalizedPhones = phoneNumbers.map(normalizePhone);
@@ -179,17 +145,14 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
                         p => p === normalizedTestPhone || p === normalizedTestPhone.substring(1)
                     );
                     expect(phoneMatches).toBe(true);
-                    console.log('✅ Phone contact verified');
 
-                    console.log('\n✅ TEST PASSED: Duplicate prevention working correctly!');
-
-                } catch (error: any) {
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
                     const searchTime = Date.now() - searchStartTime;
                     const errorMessage = error instanceof Error ? error.message : String(error);
 
                     // Check if error is about duplicate creation
                     if (errorMessage.includes('BUG DETECTED')) {
-                        console.error(`\n❌ ${errorMessage}`);
                         throw error; // Re-throw the detailed bug detection error
                     }
 
@@ -197,14 +160,6 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
                     // 1. PCO is taking longer than expected to verify contacts
                     // 2. There's an issue with the retry logic
                     // 3. The matching logic has a bug
-                    console.error(`\n❌ Failed to find person after ${searchTime}ms`);
-                    console.error(`Error: ${errorMessage}`);
-                    console.error('\n💡 This might indicate:');
-                    console.error('   1. PCO is taking longer than 2.5 minutes to verify contacts');
-                    console.error('   2. There\'s an issue with the retry logic');
-                    console.error('   3. The matching logic has a bug');
-                    console.error(`   4. The person might not exist: ${existingPersonId}`);
-
                     throw new Error(
                         `Failed to find existing person after ${searchTime}ms with retry logic.\n` +
                         `Initial person ID: ${existingPersonId}\n` +
@@ -216,8 +171,7 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
 
             } catch (error) {
                 // If we created a person but the test failed, we still want to clean it up
-                // The afterAll hook will handle cleanup, but we log the error here
-                console.error('\n❌ Test failed with error:', error);
+                // The afterAll hook will handle cleanup
                 throw error;
             }
         }, 420000); // 7 minute timeout (retry logic can take up to 3 minutes + test wait + API calls)
@@ -230,12 +184,7 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
             const testFirstName = 'Rapid';
             const testLastName = `Test${timestamp}`;
 
-            console.log('\n🧪 Test: Rapid successive calls without duplicates');
-            console.log('📧 Test email:', testEmail);
-            console.log('📞 Test phone:', testPhone);
-
             // Create first person
-            console.log('\nStep 1: Creating initial person...');
             const firstPerson = await client.people.findOrCreate({
                 firstName: testFirstName,
                 lastName: testLastName,
@@ -247,10 +196,8 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
 
             const firstPersonId = firstPerson.id;
             createdPersonIds.push(firstPersonId);
-            console.log(`✅ First person created: ${firstPersonId}`);
 
             // Immediately try to create/find again (simulating rapid check-ins)
-            console.log('\nStep 2: Immediately searching for same person (rapid check-in scenario)...');
             const secondPerson = await client.people.findOrCreate({
                 firstName: testFirstName,
                 lastName: testLastName,
@@ -267,19 +214,8 @@ describe('Duplicate Prevention - Comprehensive Integration Test', () => {
 
             // Should match the first person (or if contacts aren't verified yet, might create new)
             // But with retry logic, it should eventually find the first person
-            console.log(`✅ Second call result: ${secondPerson.id}`);
-
             // If retry logic worked, we should have the same person
-            // If not, we might have a duplicate (which would be a bug)
-            if (secondPerson.id !== firstPersonId) {
-                console.warn(`⚠️  Different person ID returned: ${secondPerson.id} vs ${firstPersonId}`);
-                console.warn('💡 This might indicate contacts weren\'t verified yet, or retry logic needs adjustment');
-                // Don't fail the test, but log the warning
-                // In production, this would be a bug if it creates a duplicate
-            } else {
-                console.log('✅ SUCCESS: Same person matched, no duplicate created!');
-                expect(secondPerson.id).toBe(firstPersonId);
-            }
+            expect(secondPerson.id).toBe(firstPersonId);
         }, 180000); // 3 minute timeout
     });
 });

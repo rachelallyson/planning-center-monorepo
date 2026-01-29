@@ -34,11 +34,12 @@ describe('Diagnostic: Inspect object-shaped attributes', () => {
     });
 
     it('logs object-shaped person attributes for the first person', async () => {
-        const people = await client.people.getAll({ perPage: 1 });
+        const people = await client.people.getPage({ perPage: 1 });
         expect(people.data.length).toBeGreaterThan(0);
         const person = people.data[0];
 
-        const attrs = person.attributes ?? {};
+        // Flattened resources: attributes at top level (no .attributes)
+        const attrs = (person as { attributes?: Record<string, unknown> }).attributes ?? person;
         for (const key of FIELDS_TO_CHECK) {
             const value = (attrs as any)[key];
             if (value !== undefined && typeof value === 'object') {
@@ -49,17 +50,20 @@ describe('Diagnostic: Inspect object-shaped attributes', () => {
                 } catch {
                     serialized = String(value);
                 }
-                // eslint-disable-next-line no-console
-                console.log(`[Person.attributes.${String(key)}] typeof=object value=\n${serialized}`);
+                expect(typeof value).toBe('object');
+                expect(serialized).toBeTruthy();
             }
         }
     }, 30000);
 
     it('logs object-shaped field attributes for a field definition (if present)', async () => {
         const defs = await client.fields.getAllFieldDefinitions();
-        if (defs.length === 0) return;
-        const field = defs[0];
-        const attrs = field.attributes ?? {};
+        // getAllFieldDefinitions returns PaginationResult with data array
+        expect(defs.data.length).toBeGreaterThan(0);
+        // Fields are flattened - attributes are at top level
+        const field = defs.data[0];
+        // For flattened resources, we access properties directly, not through attributes
+        const attrs = field;
         const candidateKeys = ['deleted_at'];
         for (const key of candidateKeys) {
             const value = (attrs as any)[key];
@@ -70,23 +74,22 @@ describe('Diagnostic: Inspect object-shaped attributes', () => {
                 } catch {
                     serialized = String(value);
                 }
-                // eslint-disable-next-line no-console
-                console.log(`[FieldDefinition.attributes.${String(key)}] typeof=object value=\n${serialized}`);
+                expect(typeof value).toBe('object');
+                expect(serialized).toBeTruthy();
             }
         }
     }, 30000);
 
     it('logs campus latitude/longitude types (if present)', async () => {
-        const campuses = await client.campus.getAll({ perPage: 1 });
+        const campuses = await client.campus.getPage({ perPage: 1 });
         expect(campuses.data.length).toBeGreaterThan(0);
         const campus = campuses.data[0];
-        const attrs = campus.attributes ?? {};
+        // Flattened resources: attributes at top level
+        const attrs = (campus as { attributes?: Record<string, unknown> }).attributes ?? campus;
         const lat = (attrs as any)['latitude'];
         const lng = (attrs as any)['longitude'];
-        // eslint-disable-next-line no-console
-        console.log(`[Campus.attributes.latitude] typeof=${typeof lat} value=${lat}`);
-        // eslint-disable-next-line no-console
-        console.log(`[Campus.attributes.longitude] typeof=${typeof lng} value=${lng}`);
+        expect(typeof lat).toBeDefined();
+        expect(typeof lng).toBeDefined();
     }, 30000);
 });
 

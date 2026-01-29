@@ -23,24 +23,13 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
     beforeAll(async () => {
         logAuthStatus();
         
-        try {
-            client = createTestClient();
-            console.log('✅ Test client created successfully');
-        } catch (error) {
-            console.log('❌ No credentials available for integration test');
-            throw error;
-        }
+        client = createTestClient();
     }, 30000);
 
     afterAll(async () => {
         // Clean up all test persons
         for (const personId of createdPersonIds) {
-            try {
-                await client.people.delete(personId);
-                console.log(`🧹 Cleaned up test person: ${personId}`);
-            } catch (error) {
-                console.warn(`⚠️  Failed to clean up person ${personId}:`, error);
-            }
+            await client.people.delete(personId);
         }
     }, 120000);
 
@@ -53,15 +42,10 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
             const testFirstName = 'RetryExhaustion';
             const testLastName = `Test${timestamp}`;
 
-            console.log('\n🧪 Test: Retry exhaustion should not create duplicate');
-            console.log('📧 Test email:', testEmail);
-            console.log('📞 Test phone:', testPhone);
-
             let firstPersonId: string;
 
             try {
                 // Step 1: Create the person (first time)
-                console.log('\nStep 1: Creating initial person...');
                 const firstPerson = await client.people.findOrCreate({
                     firstName: testFirstName,
                     lastName: testLastName,
@@ -73,13 +57,9 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
 
                 firstPersonId = firstPerson.id;
                 createdPersonIds.push(firstPersonId);
-                console.log(`✅ Initial person created: ${firstPersonId}`);
 
                 // Step 2: Immediately try to find with SHORT retry config (simulating exhaustion)
                 // This simulates the bug: retry logic exhausts before contacts are verified
-                console.log('\nStep 2: Searching with SHORT retry config (will exhaust quickly)...');
-                console.log('⚠️  This simulates retry logic exhausting before contacts are verified');
-                
                 let secondPersonId: string;
                 let retryExhausted = false;
 
@@ -101,22 +81,16 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                     });
 
                     secondPersonId = foundPerson.id;
-                    console.log(`✅ Found person: ${secondPersonId}`);
 
-                } catch (error: any) {
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
                     retryExhausted = true;
-                    const errorMessage = error.message || String(error);
-                    console.log(`\n❌ Retry logic exhausted (expected): ${errorMessage}`);
+                    const errorMessage = (error as Error).message || String(error);
                     
                     // THIS IS THE BUG: In production code, this catch block would create a new person
                     // But it SHOULD NOT create a duplicate if the person exists but contacts aren't verified yet
                     
-                    // Simulate what the production code does (BUGGY BEHAVIOR):
-                    console.log('\n⚠️  BUG SIMULATION: Catching error and creating new person...');
-                    console.log('💡 This is the bug - should NOT create duplicate if person exists!');
-                    
                     // Wait a bit more to see if contacts get verified
-                    console.log('⏳ Waiting additional 10 seconds to see if contacts get verified...');
                     await new Promise(resolve => setTimeout(resolve, 10000));
                     
                     // Try one more time with longer retry
@@ -136,7 +110,6 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                         });
                         
                         secondPersonId = foundPerson.id;
-                        console.log(`✅ Found person after longer wait: ${secondPersonId}`);
                         
                         // Verify it's the SAME person (not a duplicate)
                         if (secondPersonId !== firstPersonId) {
@@ -147,19 +120,11 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                             );
                         }
                         
-                        console.log('✅ SUCCESS: Same person found after longer wait (no duplicate created)');
-                        
                     } catch (secondError: any) {
                         // If still not found, this might indicate:
                         // 1. Contacts take longer than 40 seconds to verify
                         // 2. There's a bug in the matching logic
                         // 3. The person truly doesn't exist (shouldn't happen)
-                        
-                        console.error(`\n❌ Still not found after longer wait: ${secondError.message}`);
-                        console.error('💡 This might indicate:');
-                        console.error('   1. PCO takes longer than 40 seconds to verify contacts');
-                        console.error('   2. There\'s a bug in the matching logic');
-                        console.error('   3. The person was never created (unlikely)');
                         
                         // Don't create a duplicate - this is the correct behavior
                         // The production code should NOT create a duplicate here
@@ -175,14 +140,11 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                 // Verify we have the same person (no duplicate)
                 if (retryExhausted && secondPersonId) {
                     expect(secondPersonId).toBe(firstPersonId);
-                    console.log('\n✅ TEST PASSED: No duplicate created despite retry exhaustion');
                 } else if (!retryExhausted) {
                     expect(secondPersonId).toBe(firstPersonId);
-                    console.log('\n✅ TEST PASSED: Person found before retry exhaustion');
                 }
 
             } catch (error) {
-                console.error('\n❌ Test failed:', error);
                 throw error;
             }
         }, 60000); // 1 minute timeout
@@ -194,11 +156,6 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
             const testPhone = `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
             const testFirstName = 'BugDemo';
             const testLastName = `Test${timestamp}`;
-
-            console.log('\n🧪 Test: Demonstrating the bug scenario');
-            console.log('📧 Test email:', testEmail);
-            console.log('📞 Test phone:', testPhone);
-            console.log('⚠️  This test shows what happens with buggy error handling');
 
             let firstPersonId: string;
 
@@ -215,13 +172,8 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
 
                 firstPersonId = firstPerson.id;
                 createdPersonIds.push(firstPersonId);
-                console.log(`✅ First person created: ${firstPersonId}`);
 
                 // Simulate the buggy production code behavior
-                console.log('\n⚠️  BUGGY BEHAVIOR SIMULATION:');
-                console.log('   1. Try to find with short retry (will exhaust)');
-                console.log('   2. Catch error and create new person (BUG!)');
-                
                 let duplicateCreated = false;
                 let secondPersonId: string | null = null;
 
@@ -240,9 +192,8 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                             initialDelay: 1000,
                         },
                     });
-                } catch (error: any) {
-                    console.log(`\n❌ Retry exhausted: ${error.message}`);
-                    console.log('💡 BUGGY CODE WOULD CREATE DUPLICATE HERE');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
                     
                     // THIS IS THE BUG: Creating a new person when retry exhausts
                     // This should NOT happen if the person exists but contacts aren't verified
@@ -260,35 +211,17 @@ describe('Retry Exhaustion - Duplicate Creation Bug', () => {
                         duplicateCreated = (secondPersonId !== firstPersonId);
                         
                         if (duplicateCreated) {
-                            console.error(`\n❌ BUG CONFIRMED: Duplicate created!`);
-                            console.error(`   First person: ${firstPersonId}`);
-                            console.error(`   Duplicate: ${secondPersonId}`);
                             createdPersonIds.push(secondPersonId);
-                        } else {
-                            console.log(`\n✅ No duplicate: Same person ID returned`);
                         }
-                    } catch (createError: any) {
-                        console.error(`\n❌ Error creating person: ${createError.message}`);
+                    } catch (createError: unknown) {
+                        throw createError;
                     }
                 }
 
-                // Report findings
-                if (duplicateCreated && secondPersonId) {
-                    console.error('\n🚨 BUG DETECTED: Duplicate person created!');
-                    console.error('💡 The production code should NOT create a duplicate when retry exhausts.');
-                    console.error('💡 Instead, it should:');
-                    console.error('   1. Wait longer for contacts to verify');
-                    console.error('   2. Check if person exists before creating');
-                    console.error('   3. Throw a specific error indicating retry exhaustion');
-                    
-                    // This test documents the bug - it doesn't fail
-                    // The actual fix should prevent this scenario
-                } else {
-                    console.log('\n✅ No duplicate created (correct behavior)');
-                }
+                // Report findings: if duplicateCreated && secondPersonId, the bug scenario occurred
+                // The test documents the bug - the actual fix should prevent this scenario
 
             } catch (error) {
-                console.error('\n❌ Test error:', error);
                 throw error;
             }
         }, 60000);

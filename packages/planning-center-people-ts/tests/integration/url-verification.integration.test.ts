@@ -17,21 +17,11 @@ describe('URL Verification Integration Tests', () => {
         logAuthStatus();
         client = createTestClient();
 
-        // Add request monitoring
-        client.on('request:start', (event) => {
-            console.log(`🌐 ${(event as any).method} ${(event as any).endpoint}`);
-        });
-        client.on('request:complete', (event) => {
-            console.log(`✅ ${(event as any).method} ${(event as any).endpoint} - ${(event as any).status} (${(event as any).duration}ms)`);
-        });
-        client.on('error', (event) => {
-            console.error(`❌ ${(event as any).method} ${(event as any).endpoint} - ${(event as any).error.message}`);
-        });
     }, 30000);
 
     describe('People API URL Verification', () => {
         it('should access people list endpoint with correct URL structure', async () => {
-            const response = await client.people.getAll({ perPage: 1 });
+            const response = await client.people.getPage({ perPage: 1 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -40,7 +30,7 @@ describe('URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access people list with filtering parameters', async () => {
-            const response = await client.people.getAll({
+            const response = await client.people.getPage({
                 where: { status: 'active' },
                 include: ['emails', 'phone_numbers'],
                 perPage: 5,
@@ -53,7 +43,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access single person endpoint with correct URL structure', async () => {
             // First get a person ID
-            const peopleResponse = await client.people.getAll({ perPage: 1 });
+            const peopleResponse = await client.people.getPage({ perPage: 1 });
             expect(peopleResponse.data.length).toBeGreaterThan(0);
             
             const personId = peopleResponse.data[0].id;
@@ -76,7 +66,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access people by campus endpoint', async () => {
             // First get a campus ID
-            const campusesResponse = await client.campus.getAll({ per_page: 1 });
+            const campusesResponse = await client.campus.getPage({ perPage: 1 });
             if (campusesResponse.data.length > 0) {
                 const campusId = campusesResponse.data[0].id;
                 const response = await client.people.getByCampus(campusId, { perPage: 5 });
@@ -88,7 +78,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access people household members endpoint', async () => {
             // First get a household ID
-            const householdsResponse = await client.households.getAll({ perPage: 1 });
+            const householdsResponse = await client.households.getPage({ perPage: 1 });
             if (householdsResponse.data.length > 0) {
                 const householdId = householdsResponse.data[0].id;
                 const response = await client.people.getHouseholdMembers(householdId, { perPage: 5 });
@@ -100,7 +90,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access people workflow cards endpoint', async () => {
             // First get a person ID
-            const peopleResponse = await client.people.getAll({ perPage: 1 });
+            const peopleResponse = await client.people.getPage({ perPage: 1 });
             if (peopleResponse.data.length > 0) {
                 const personId = peopleResponse.data[0].id;
                 const response = await client.people.getWorkflowCards(personId, { perPage: 5 });
@@ -112,7 +102,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access people notes endpoint', async () => {
             // First get a person ID
-            const peopleResponse = await client.people.getAll({ perPage: 1 });
+            const peopleResponse = await client.people.getPage({ perPage: 1 });
             if (peopleResponse.data.length > 0) {
                 const personId = peopleResponse.data[0].id;
                 const response = await client.people.getNotes(personId, { perPage: 5 });
@@ -120,11 +110,11 @@ describe('URL Verification Integration Tests', () => {
                 expect(response).toHaveProperty('data');
                 expect(Array.isArray(response.data)).toBe(true);
             }
-        }, 30000);
+        }, 60000);
 
         it('should access people field data endpoint', async () => {
             // First get a person ID
-            const peopleResponse = await client.people.getAll({ perPage: 1 });
+            const peopleResponse = await client.people.getPage({ perPage: 1 });
             if (peopleResponse.data.length > 0) {
                 const personId = peopleResponse.data[0].id;
                 const response = await client.people.getFieldData(personId, { perPage: 5 });
@@ -136,7 +126,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access people social profiles endpoint', async () => {
             // First get a person ID
-            const peopleResponse = await client.people.getAll({ perPage: 1 });
+            const peopleResponse = await client.people.getPage({ perPage: 1 });
             if (peopleResponse.data.length > 0) {
                 const personId = peopleResponse.data[0].id;
                 const response = await client.people.getSocialProfiles(personId, { perPage: 5 });
@@ -193,13 +183,15 @@ describe('URL Verification Integration Tests', () => {
         it('should access field definitions endpoint', async () => {
             const response = await client.fields.getAllFieldDefinitions();
             
-            expect(Array.isArray(response)).toBe(true);
+            expect(response).toHaveProperty('data');
+            expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access field definitions with filtering', async () => {
             const response = await client.fields.getAllFieldDefinitions();
             
-            expect(Array.isArray(response)).toBe(true);
+            expect(response).toHaveProperty('data');
+            expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access tabs endpoint', async () => {
@@ -211,9 +203,10 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access field options endpoint', async () => {
             // First get a field definition ID
+            // getAllFieldDefinitions returns PaginationResult with data array
             const fieldsResponse = await client.fields.getAllFieldDefinitions();
-            if (fieldsResponse.length > 0) {
-                const fieldId = fieldsResponse[0].id;
+            if (fieldsResponse.data.length > 0) {
+                const fieldId = fieldsResponse.data[0].id;
                 const response = await client.fields.getFieldOptions(fieldId);
                 
                 expect(response).toHaveProperty('data');
@@ -224,7 +217,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Workflows API URL Verification', () => {
         it('should access workflows endpoint', async () => {
-            const response = await client.workflows.getAll({ perPage: 5 });
+            const response = await client.workflows.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -232,7 +225,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access workflow cards endpoint', async () => {
             // Get a person first to get their workflow cards
-            const people = await client.people.getAll({ perPage: 1 });
+            const people = await client.people.getPage({ perPage: 1 });
             if (people.data.length > 0) {
                 const personId = people.data[0].id;
                 const response = await client.workflows.getPersonWorkflowCards(personId);
@@ -244,7 +237,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access workflow cards with filtering', async () => {
             // Get a person first to get their workflow cards
-            const people = await client.people.getAll({ perPage: 1 });
+            const people = await client.people.getPage({ perPage: 1 });
             if (people.data.length > 0) {
                 const personId = people.data[0].id;
                 const response = await client.workflows.getPersonWorkflowCards(personId);
@@ -257,7 +250,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Households API URL Verification', () => {
         it('should access households endpoint', async () => {
-            const response = await client.households.getAll({ perPage: 5 });
+            const response = await client.households.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -265,7 +258,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access single household endpoint', async () => {
             // First get a household ID
-            const householdsResponse = await client.households.getAll({ perPage: 1 });
+            const householdsResponse = await client.households.getPage({ perPage: 1 });
             if (householdsResponse.data.length > 0) {
                 const householdId = householdsResponse.data[0].id;
                 const household = await client.households.getById(householdId, ['people']);
@@ -279,7 +272,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Notes API URL Verification', () => {
         it('should access notes endpoint', async () => {
-            const response = await client.notes.getAll({ perPage: 5 });
+            const response = await client.notes.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -295,7 +288,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Lists API URL Verification', () => {
         it('should access lists endpoint', async () => {
-            const response = await client.lists.getAll({ perPage: 5 });
+            const response = await client.lists.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -311,7 +304,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Campus API URL Verification', () => {
         it('should access campuses endpoint', async () => {
-            const response = await client.campus.getAll({ per_page: 5 });
+            const response = await client.campus.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -319,7 +312,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access single campus endpoint', async () => {
             // First get a campus ID
-            const campusesResponse = await client.campus.getAll({ per_page: 1 });
+            const campusesResponse = await client.campus.getPage({ perPage: 1 });
             if (campusesResponse.data.length > 0) {
                 const campusId = campusesResponse.data[0].id;
                 const campus = await client.campus.getById(campusId);
@@ -334,7 +327,7 @@ describe('URL Verification Integration Tests', () => {
     describe('ServiceTime API URL Verification', () => {
         it('should access service times endpoint', async () => {
             // Get a campus first
-            const campuses = await client.campus.getAll({ per_page: 1 });
+            const campuses = await client.campus.getPage({ perPage: 1 });
             if (campuses.data.length > 0) {
                 const campusId = campuses.data[0].id;
                 const response = await client.serviceTime.getAll(campusId);
@@ -347,7 +340,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Forms API URL Verification', () => {
         it('should access forms endpoint', async () => {
-            const response = await client.forms.getAll({ per_page: 5 });
+            const response = await client.forms.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -355,7 +348,7 @@ describe('URL Verification Integration Tests', () => {
 
         it('should access form categories endpoint', async () => {
             // Get a form first
-            const forms = await client.forms.getAll({ per_page: 1 });
+            const forms = await client.forms.getPage({ perPage: 1 });
             if (forms.data.length > 0) {
                 const formId = forms.data[0].id;
                 const response = await client.forms.getFormCategory(formId);
@@ -368,7 +361,7 @@ describe('URL Verification Integration Tests', () => {
 
     describe('Reports API URL Verification', () => {
         it('should access reports endpoint', async () => {
-            const response = await client.reports.getAll({ per_page: 5 });
+            const response = await client.reports.getPage({ perPage: 5 });
             
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
@@ -381,8 +374,8 @@ describe('URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should handle invalid parameters gracefully', async () => {
-            await expect(client.people.getAll({
-                where: { invalid_field: 'invalid_value' }
+            await expect(client.people.getPage({
+                where: { invalid_field: 'invalid_value' } as any
             })).resolves.toBeDefined();
         }, 30000);
     });

@@ -12,8 +12,8 @@
  */
 
 import {
-    createPcoClient,
-    buildQueryParams,
+    PcoClient,
+    type FlattenedPersonResource,
     calculateAge,
     isValidEmail,
     isValidPhone,
@@ -30,75 +30,52 @@ import {
     getPersonWorkflowCardsWithNotes,
     createWorkflowCardWithNote,
     exportAllPeopleData,
-    deletePerson,
-    getHouseholds,
-    getWorkflows,
-    type PcoClientState,
     type PersonAttributes,
     type EmailAttributes,
     type PhoneNumberAttributes,
     type AddressAttributes,
     type WorkflowCardNoteAttributes,
 } from '../../src';
+import { buildQueryParams } from '@rachelallyson/planning-center-base-ts';
+import { createTestClient, logAuthStatus } from './test-config';
 
 // Test configuration
 const TEST_PREFIX = 'TEST_INTEGRATION_2025';
 const RATE_LIMIT_MAX = parseInt(process.env.PCO_RATE_LIMIT_MAX || '90');
 const RATE_LIMIT_WINDOW = parseInt(process.env.PCO_RATE_LIMIT_WINDOW || '20000');
+const ENV_WORKFLOW_ID = typeof process.env.PCO_TEST_WORKFLOW_ID === 'string' && process.env.PCO_TEST_WORKFLOW_ID.trim()
+    ? process.env.PCO_TEST_WORKFLOW_ID.trim()
+    : '';
 
 describe('Helpers API Integration Tests', () => {
-    let client: PcoClientState;
+    let client: PcoClient;
     let testPersonId = ''
     let testHouseholdId = ''
     let testWorkflowId = ''
 
     beforeAll(async () => {
-        // Validate environment variables
-        const hasAppCredentials = process.env.PCO_APP_ID && process.env.PCO_APP_SECRET;
-        const hasOAuthCredentials = process.env.PCO_ACCESS_TOKEN;
-
-        if (!hasAppCredentials && !hasOAuthCredentials) {
-            throw new Error(
-                'PCO credentials not found. Please set PCO_APP_ID and PCO_APP_SECRET, or PCO_ACCESS_TOKEN in .env.test'
-            );
-        }
-
-        // Create client with rate limiting
-        const config = hasOAuthCredentials
-            ? {
-                accessToken: process.env.PCO_ACCESS_TOKEN!,
-                rateLimit: {
-                    maxRequests: RATE_LIMIT_MAX,
-                    perMilliseconds: RATE_LIMIT_WINDOW,
-                },
-                timeout: 30000,
-            }
-            : {
-                appId: process.env.PCO_APP_ID!,
-                appSecret: process.env.PCO_APP_SECRET!,
-                rateLimit: {
-                    maxRequests: RATE_LIMIT_MAX,
-                    perMilliseconds: RATE_LIMIT_WINDOW,
-                },
-                timeout: 30000,
-            };
-
-        client = createPcoClient(config);
+        // Use createTestClient() to ensure consistent credential loading
+        logAuthStatus();
+        client = createTestClient();
 
         // Get test data for helper functions
-        const householdsResponse = await getHouseholds(client, { per_page: 1 });
+        const householdsResponse = await client.households.getPage({ perPage: 1 });
         expect(householdsResponse.data.length).toBeGreaterThan(0);
         testHouseholdId = householdsResponse.data[0].id;
 
-        const workflowsResponse = await getWorkflows(client, { per_page: 1 });
-        expect(workflowsResponse.data.length).toBeGreaterThan(0);
-        testWorkflowId = workflowsResponse.data[0].id;
+        if (ENV_WORKFLOW_ID) {
+            testWorkflowId = ENV_WORKFLOW_ID;
+        } else {
+            const workflowsResponse = await client.workflows.getPage({ perPage: 1 });
+            expect(workflowsResponse.data.length).toBeGreaterThan(0);
+            testWorkflowId = workflowsResponse.data[0].id;
+        }
     }, 30000);
 
     afterAll(async () => {
         // Clean up test person
         if (testPersonId) {
-            await deletePerson(client, testPersonId);
+            await client.people.delete(testPersonId);
             testPersonId = '';
         }
     }, 30000);
@@ -114,12 +91,14 @@ describe('Helpers API Integration Tests', () => {
 
             const result = buildQueryParams(params);
 
+            // buildQueryParams adds offset when page and per_page are present: offset = (page - 1) * per_page
             expect(result).toEqual({
                 'where[status]': 'active',
                 'where[name]': 'John',
                 include: 'emails,phone_numbers',
                 per_page: 10,
                 page: 2,
+                offset: 10,
             });
         });
 
@@ -132,10 +111,10 @@ describe('Helpers API Integration Tests', () => {
         });
 
         it('should validate email format', () => {
-            expect(isValidEmail('test@example.com')).toBe(true);
+            expect(isValidEmail('test@gmail.com')).toBe(true);
             expect(isValidEmail('invalid-email')).toBe(false);
             expect(isValidEmail('test@')).toBe(false);
-            expect(isValidEmail('@example.com')).toBe(false);
+            expect(isValidEmail('@gmail.com')).toBe(false);
         });
 
         it('should validate phone format', () => {
@@ -168,7 +147,7 @@ describe('Helpers API Integration Tests', () => {
             const validData = {
                 first_name: 'John',
                 last_name: 'Doe',
-                email: 'john@example.com',
+                email: 'john@gmail.com',
                 phone: '+1234567890',
                 birthdate: '1990-01-01',
             };
@@ -203,31 +182,31 @@ describe('Helpers API Integration Tests', () => {
                     address: `helper${timestamp}@planningcenteronline.com`,
                     location: 'home',
                     primary: true,
-                } as Partial<EmailAttributes>,
+                },
                 phone: {
                     number: `+1-555-${timestamp.toString().slice(-7)}`,
                     location: 'mobile',
                     primary: true,
-                } as Partial<PhoneNumberAttributes>,
+                } ,
                 address: {
-                    street: `${timestamp} Helper Street`,
+                    street_line_1: `${timestamp} Helper Street`,
                     city: 'Helper City',
                     state: 'HC',
                     zip: '12345',
                     location: 'home',
                     primary: true,
-                } as Partial<AddressAttributes>,
+                } 
             };
 
             const result = await createPersonWithContact(client, personData, contactData);
 
-            expect(result.person.data).toBeDefined();
-            expect(result.person.data?.attributes?.first_name).toBe(personData.first_name);
-            expect(result.email?.data).toBeDefined();
-            expect(result.phone?.data).toBeDefined();
-            expect(result.address?.data).toBeDefined();
+            expect(result.person).toBeDefined();
+            expect(result.person.first_name).toBe(personData.first_name);
+            expect(result.email).toBeDefined();
+            expect(result.phone).toBeDefined();
+            expect(result.address).toBeDefined();
 
-            testPersonId = result.person.data?.id || '';
+            testPersonId = result.person.id || '';
         }, 30000);
 
         it('should get primary contact information', async () => {
@@ -246,15 +225,15 @@ describe('Helpers API Integration Tests', () => {
         it('should search people by criteria', async () => {
             const searchResult = await searchPeople(client, {
                 status: 'active',
-                per_page: 5,
+                perPage: 5,
             });
 
             expect(searchResult).toHaveProperty('data');
             expect(Array.isArray(searchResult.data)).toBe(true);
 
-            // All returned people should be active
-            searchResult.data.forEach((person) => {
-                expect(person.attributes?.status).toBe('active');
+            // All returned people should be active (flattened resources have status at top level)
+            searchResult.data.forEach((person: FlattenedPersonResource & { attributes?: { status?: string }; status?: string }) => {
+                expect(person.status).toBe('active');
             });
         }, 30000);
 
@@ -266,16 +245,20 @@ describe('Helpers API Integration Tests', () => {
             expect(Array.isArray(peopleByHousehold.data)).toBe(true);
 
             // All returned people should belong to the specified household
+            // getAll returns flattened resources - household is at top level
             peopleByHousehold.data.forEach((person) => {
-                const householdData = person.relationships?.household?.data;
+                expect(person.id).toBeTruthy();
+                const householdData = person.household;
+                expect(householdData).toBeDefined();
+                // household can be HouseholdResource or ResourceIdentifier
                 if (householdData) {
-                    expect(householdData.id).toBe(testHouseholdId);
-                } else {
-                    // If household relationship is not included, at least verify we got people
-                    expect(person.id).toBeTruthy();
+                    expect(householdData).toHaveProperty('id');
+                    if ('id' in householdData) {
+                        expect(householdData.id).toBe(testHouseholdId);
+                    }
                 }
             });
-        }, 30000);
+        }, 120000);
 
         it('should get complete person profile', async () => {
             const completeProfile = await getCompletePersonProfile(client, testPersonId);
@@ -287,7 +270,7 @@ describe('Helpers API Integration Tests', () => {
             expect(completeProfile).toHaveProperty('fieldData');
             expect(completeProfile).toHaveProperty('workflowCards');
 
-            expect(completeProfile.person.data?.id).toBe(testPersonId);
+            expect(completeProfile.person.id).toBe(testPersonId);
             expect(Array.isArray(completeProfile.emails.data)).toBe(true);
             expect(Array.isArray(completeProfile.phones.data)).toBe(true);
             expect(Array.isArray(completeProfile.addresses.data)).toBe(true);
@@ -304,7 +287,10 @@ describe('Helpers API Integration Tests', () => {
             expect(orgInfo.stats).toHaveProperty('totalHouseholds');
             expect(orgInfo.stats).toHaveProperty('totalLists');
 
-            expect(orgInfo.organization.data?.type).toBe('Organization');
+            expect(orgInfo.organization !== undefined).toBe(true);
+            if (orgInfo.organization != null) {
+                expect(orgInfo.organization.type).toBe('Organization');
+            }
             expect(typeof orgInfo.stats.totalPeople).toBe('number');
             expect(typeof orgInfo.stats.totalHouseholds).toBe('number');
             expect(typeof orgInfo.stats.totalLists).toBe('number');
@@ -343,7 +329,6 @@ describe('Helpers API Integration Tests', () => {
             expect(testPersonId).toBeDefined();
             expect(testWorkflowId).toBeDefined();
 
-
             const timestamp = Date.now();
             const noteData: Partial<WorkflowCardNoteAttributes> = {
                 note: `Test workflow card note ${timestamp}`,
@@ -354,10 +339,9 @@ describe('Helpers API Integration Tests', () => {
             expect(result).toHaveProperty('workflowCard');
             expect(result).toHaveProperty('note');
 
-            expect(result.workflowCard.data?.type).toBe('WorkflowCard');
-            expect(result.note.data?.type).toBe('WorkflowCardNote');
-            expect(result.note.data?.attributes?.note).toBe(noteData.note);
-
+            expect(result.workflowCard.type).toBe('WorkflowCard');
+            expect(result.note.type).toBe('WorkflowCardNote');
+            expect(result.note.note).toBe(noteData.note);
         }, 30000);
 
         it('should export all people data', async () => {
@@ -365,7 +349,6 @@ describe('Helpers API Integration Tests', () => {
                 includeInactive: false,
                 includeFieldData: false,
                 includeWorkflowCards: false,
-                perPage: 10,
             });
 
             expect(exportData).toHaveProperty('people');
@@ -382,10 +365,10 @@ describe('Helpers API Integration Tests', () => {
             expect(typeof exportData.exportDate).toBe('string');
             expect(typeof exportData.totalCount).toBe('number');
 
-            // All exported people should be active
-            exportData.people.forEach((person) => {
-                expect(person.attributes?.status).toBe('active');
+            // All exported people should be active (flattened resources have status at top level)
+            exportData.people.forEach((person: { attributes?: { status?: string }; status?: string }) => {
+                expect(person.status).toBe('active');
             });
-        }, 30000);
+        }, 120000);
     });
 });

@@ -30,8 +30,8 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
         client = createTestClient();
 
         // Add batch-specific event handlers
-        client.on('error', (event) => {
-            console.error('Batch Error:', event.error.message);
+        client.on('error', () => {
+            // Error handling tested elsewhere
         });
     }, 30000);
 
@@ -63,9 +63,7 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
             const operations = [
                 {
                     id: 'create-person-1',
-                    type: 'create' as const,
-                    resourceType: 'Person',
-                    endpoint: '/people',
+                    type: 'people.create' as const,
                     data: {
                         first_name: `${TEST_PREFIX}_Batch1_${timestamp}`,
                         last_name: `${TEST_PREFIX}_Test_${timestamp}`,
@@ -74,9 +72,7 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
                 },
                 {
                     id: 'create-person-2',
-                    type: 'create' as const,
-                    resourceType: 'Person',
-                    endpoint: '/people',
+                    type: 'people.create' as const,
                     data: {
                         first_name: `${TEST_PREFIX}_Batch2_${timestamp}`,
                         last_name: `${TEST_PREFIX}_Test_${timestamp}`,
@@ -95,8 +91,8 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
 
             // Store person IDs for cleanup
             result.results.forEach((batchResult) => {
-                if (batchResult.success && batchResult.data?.data?.id) {
-                    testPersonIds.push(batchResult.data.data.id);
+                if (batchResult.success && batchResult.data?.id) {
+                    testPersonIds.push(batchResult.data.id);
                 }
             });
 
@@ -104,9 +100,11 @@ describe('v2.0.0 Batch Operations Integration Tests', () => {
             result.results.forEach((batchResult, index) => {
                 expect(batchResult.success).toBe(true);
                 expect(batchResult.data).toBeDefined();
+                // create() returns ResourceObject with type, id, attributes at top level
                 expect(batchResult.data?.type).toBe('Person');
+                expect(batchResult.data?.id).toBeTruthy();
                 // Check that the name contains the expected pattern (Batch1_ or Batch2_)
-                expect(batchResult.data?.data?.attributes?.first_name).toMatch(/Batch[12]_/);
+                expect(batchResult.data?.first_name).toMatch(/Batch[12]_/);
             });
         }, 60000);
 
