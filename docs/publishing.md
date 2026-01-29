@@ -34,11 +34,7 @@ After the base package is published:
 ```bash
 cd packages/planning-center-people-ts
 
-# Update dependency to use published version (not local workspace reference)
-# Edit package.json and change:
-# "@rachelallyson/planning-center-base-ts": "*"
-# to:
-# "@rachelallyson/planning-center-base-ts": "^1.0.0" (or latest version)
+# Dependency should reference published base (e.g. "^1.1.0"); no change needed if already set
 
 # Build the package
 npm run build
@@ -52,12 +48,12 @@ npm publish
 
 ## Versioning Strategy
 
-- **Base package**: Start at 1.0.0, follow semver
+- **Base package**: Follow semver (e.g. 1.1.x)
   - Major: Breaking changes to public API
   - Minor: New features, backward compatible
   - Patch: Bug fixes, backward compatible
 
-- **People package**: Already at 2.8.0, continue semver
+- **People package**: Follow semver (e.g. 3.x)
   - Major: Breaking changes
   - Minor: New features
   - Patch: Bug fixes
@@ -66,9 +62,9 @@ npm publish
 
 After publishing, tag the release using the package-prefixed format:
 
-- **Base package**: `git tag -a base-ts-v1.0.0 -m "Release base-ts v1.0.0"`
-- **People package**: `git tag -a people-ts-v2.9.0 -m "Release people-ts v2.9.0"`
-- **Check-ins package**: `git tag -a check-ins-ts-v1.0.0 -m "Release check-ins-ts v1.0.0"`
+- **Base package**: `git tag -a planning-center-base-ts@1.1.1 -m "Release base-ts 1.1.1"`
+- **People package**: `git tag -a planning-center-people-ts@3.0.0 -m "Release people-ts 3.0.0"`
+- **Check-ins package**: `git tag -a planning-center-check-ins-ts@2.0.0 -m "Release check-ins-ts 2.0.0"`
 
 Then push the tag: `git push origin <tag-name>`
 
@@ -76,9 +72,9 @@ Then push the tag: `git push origin <tag-name>`
 
 ## After Publishing
 
-1. Update the people package's dependency back to `*` for local development (monorepo workspace)
-2. Tag the release in git using the package-prefixed format (see above)
-3. Update CHANGELOG.md files if maintained
+1. Tag the release in git using the package-prefixed format (see above), then `git push origin <tag-name>`
+2. CHANGELOG.md should already be updated before publishing
+3. Pushing to `main` (including docs/ or package changes) triggers the docs deploy to GitHub Pages
 
 ## Troubleshooting
 
