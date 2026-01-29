@@ -3,9 +3,6 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
-import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
 import type {
     FormResource,
     FormAttributes,
@@ -16,69 +13,55 @@ import type {
     FormSubmissionResource,
     FormSubmissionValueResource,
 } from '../types';
+import type { FormListOptions, FormPageOptions } from '../types/api-options';
 
 /**
  * Forms module for managing form-related operations
  * Most operations are read-only based on API documentation
  */
 export class FormsModule extends BaseModule {
-    constructor(
-        httpClient: PcoHttpClient,
-        paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
-    ) {
-        super(httpClient, paginationHelper, eventEmitter);
-    }
-
     /**
      * Get all forms across all pages
      */
-    async getAll(params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-        page?: number;
-    }): Promise<FormsList> {
-        const queryParams: Record<string, any> = {};
+    async getAll(params?: FormListOptions) {
+        this.debugLog('forms.getAll', { params });
+        return this.getAllPages<FormResource>('/forms', {
+            where: params?.where,
+            include: params?.include,
+            order: params?.order
+        });
+    }
 
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        // Note: per_page and page options are ignored when getting all pages
-        // Use getAllPagesPaginated() if you need pagination control
-
-        const result = await this.getAllPages<FormResource>('/forms', queryParams);
-        
-        // Return in the same format as before for backward compatibility
-        return {
-            data: result.data,
-            meta: { total_count: result.totalCount },
-            links: {}
-        } as FormsList;
+    /**
+     * Get a single page of forms with optional filtering and pagination control
+     * Use this when you need a specific page or want to limit the number of results
+     * @param params - List parameters including where, include, perPage, page, and order
+     * @returns A single page of results with meta and links for pagination
+     */
+    async getPage(params?: FormPageOptions) {
+        this.debugLog('forms.getPage', { params });
+        return this.getList<FormResource>('/forms', {
+            where: params?.where,
+            include: params?.include,
+            per_page: params?.perPage,
+            page: params?.page,
+            order: params?.order
+        })
     }
 
     /**
      * Get a specific form by ID
      */
-    async getById(id: string, include?: string[]): Promise<FormResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-        return this.getSingle<FormResource>(`/forms/${id}`, params);
+    async getById(id: string, include?: string[]) {
+        this.debugLog('forms.getById', { id, include });
+        return this.getSingle<FormResource>(`/forms/${id}`, include);
     }
 
     /**
      * Get form category for a specific form
      */
-    async getFormCategory(formId: string): Promise<FormCategoryResource> {
+    async getFormCategory(formId: string) {
+        this.debugLog('forms.getFormCategory', { formId });
         return this.getSingle<FormCategoryResource>(`/forms/${formId}/category`);
     }
 
@@ -86,13 +69,18 @@ export class FormsModule extends BaseModule {
      * Get form fields for a specific form
      */
     async getFormFields(formId: string, params?: {
-        where?: Record<string, any>;
+        where?: Record<string, string | number | boolean | undefined>; // FormField nested resource doesn't have documented where[] fields
         include?: string[];
-        per_page?: number;
+        perPage?: number;
         page?: number;
-    }): Promise<{ data: FormFieldResource[] }> {
-        const result = await this.getList<FormFieldResource>(`/forms/${formId}/fields`, params);
-        return { data: result.data };
+    }) {
+        this.debugLog('forms.getFormFields', { formId, params });
+        return await this.getList<FormFieldResource>(`/forms/${formId}/fields`, {
+            where: params?.where,
+            include: params?.include,
+            per_page: params?.perPage,
+            page: params?.page
+        });
     }
 
     /**
@@ -100,38 +88,35 @@ export class FormsModule extends BaseModule {
      * Note: This requires the formId to get field options
      */
     async getFormFieldOptions(formId: string, formFieldId: string, params?: {
-        where?: Record<string, any>;
+        where?: Record<string, string | number | boolean | undefined>; // FormFieldOption nested resource doesn't have documented where[] fields
         include?: string[];
         per_page?: number;
         page?: number;
-    }): Promise<{ data: FormFieldOptionResource[] }> {
-        const result = await this.getList<FormFieldOptionResource>(`/forms/${formId}/fields/${formFieldId}/options`, params);
-        return { data: result.data };
+    }) {
+        this.debugLog('forms.getFormFieldOptions', { formId, formFieldId, params });
+        return await this.getList<FormFieldOptionResource>(`/forms/${formId}/fields/${formFieldId}/options`, params);
     }
 
     /**
      * Get form submissions for a specific form
      */
     async getFormSubmissions(formId: string, params?: {
-        where?: Record<string, any>;
+        where?: Record<string, string | number | boolean | undefined>; // FormSubmission nested resource doesn't have documented where[] fields
         include?: string[];
         per_page?: number;
         page?: number;
-    }): Promise<{ data: FormSubmissionResource[] }> {
-        const result = await this.getList<FormSubmissionResource>(`/forms/${formId}/form_submissions`, params);
-        return { data: result.data };
+    }) {
+        this.debugLog('forms.getFormSubmissions', { formId, params });
+        return await this.getList<FormSubmissionResource>(`/forms/${formId}/form_submissions`, params);
     }
 
     /**
      * Get a specific form submission by ID
      * Note: This requires the formId to get the submission
      */
-    async getFormSubmissionById(formId: string, formSubmissionId: string, include?: string[]): Promise<FormSubmissionResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-        return this.getSingle<FormSubmissionResource>(`/forms/${formId}/form_submissions/${formSubmissionId}`, params);
+    async getFormSubmissionById(formId: string, formSubmissionId: string, include?: string[]) {
+        this.debugLog('forms.getFormSubmissionById', { formId, formSubmissionId, include });
+        return this.getSingle<FormSubmissionResource>(`/forms/${formId}/form_submissions/${formSubmissionId}`, include);
     }
 
     /**
@@ -139,12 +124,12 @@ export class FormsModule extends BaseModule {
      * Note: This requires the formId to get submission values
      */
     async getFormSubmissionValues(formId: string, formSubmissionId: string, params?: {
-        where?: Record<string, any>;
+        where?: Record<string, string | number | boolean | undefined>; // FormSubmissionValue nested resource doesn't have documented where[] fields
         include?: string[];
         per_page?: number;
         page?: number;
-    }): Promise<{ data: FormSubmissionValueResource[] }> {
-        const result = await this.getList<FormSubmissionValueResource>(`/forms/${formId}/form_submissions/${formSubmissionId}/form_submission_values`, params);
-        return { data: result.data };
+    }) {
+        this.debugLog('forms.getFormSubmissionValues', { formId, formSubmissionId, params });
+        return await this.getList<FormSubmissionValueResource>(`/forms/${formId}/form_submissions/${formSubmissionId}/form_submission_values`, params);
     }
 }

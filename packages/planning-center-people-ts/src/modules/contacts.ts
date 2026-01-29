@@ -3,9 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
-import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
 import type {
     EmailResource,
     EmailAttributes,
@@ -14,147 +12,173 @@ import type {
     AddressResource,
     AddressAttributes,
     SocialProfileResource,
-    SocialProfileAttributes
+    SocialProfileAttributes,
+    Meta,
+    TopLevelLinks
 } from '../types';
 
 export class ContactsModule extends BaseModule {
     /**
      * Get all emails
      */
-    async getAllEmails(): Promise<{ data: EmailResource[]; meta?: any; links?: any }> {
+    async getAllEmails() {
+        this.debugLog('contacts.getAllEmails');
         return this.getList<EmailResource>('/emails');
     }
 
     /**
      * Get a single email by ID
      */
-    async getEmailById(id: string): Promise<EmailResource> {
+    async getEmailById(id: string) {
+        this.debugLog('contacts.getEmailById', { id });
         return this.getSingle<EmailResource>(`/emails/${id}`);
     }
 
     /**
-     * Create an email
+     * Create an email for a person
+     * Note: Emails must be created via person-specific endpoint
      */
-    async createEmail(data: EmailAttributes): Promise<EmailResource> {
-        return this.createResource<EmailResource>('/emails', data);
+    async createEmail(personId: string, data: EmailAttributes) {
+        this.debugLog('contacts.createEmail', { personId, data });
+        return this.createResource<EmailResource>(`/people/${personId}/emails`, data);
     }
 
     /**
      * Update an email
      */
-    async updateEmail(id: string, data: Partial<EmailAttributes>): Promise<EmailResource> {
+    async updateEmail(id: string, data: Partial<EmailAttributes>) {
+        this.debugLog('contacts.updateEmail', { id, data });
         return this.updateResource<EmailResource>(`/emails/${id}`, data);
     }
 
     /**
      * Delete an email
      */
-    async deleteEmail(id: string): Promise<void> {
+    async deleteEmail(id: string) {
+        this.debugLog('contacts.deleteEmail', { id });
         return this.deleteResource(`/emails/${id}`);
     }
 
     /**
      * Get all phone numbers
      */
-    async getAllPhoneNumbers(): Promise<{ data: PhoneNumberResource[]; meta?: any; links?: any }> {
+    async getAllPhoneNumbers() {
+        this.debugLog('contacts.getAllPhoneNumbers');
         return this.getList<PhoneNumberResource>('/phone_numbers');
     }
 
     /**
      * Get a single phone number by ID
      */
-    async getPhoneNumberById(id: string): Promise<PhoneNumberResource> {
+    async getPhoneNumberById(id: string) {
+        this.debugLog('contacts.getPhoneNumberById', { id });
         return this.getSingle<PhoneNumberResource>(`/phone_numbers/${id}`);
     }
 
     /**
-     * Create a phone number
+     * Create a phone number for a person
+     * Note: Phone numbers must be created via person-specific endpoint
      */
-    async createPhoneNumber(data: PhoneNumberAttributes): Promise<PhoneNumberResource> {
-        return this.createResource<PhoneNumberResource>('/phone_numbers', data);
+    async createPhoneNumber(personId: string, data: PhoneNumberAttributes) {
+        this.debugLog('contacts.createPhoneNumber', { personId, data });
+        return this.createResource<PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
     }
 
     /**
      * Update a phone number
      */
-    async updatePhoneNumber(id: string, data: Partial<PhoneNumberAttributes>): Promise<PhoneNumberResource> {
+    async updatePhoneNumber(id: string, data: Partial<PhoneNumberAttributes>) {
+        this.debugLog('contacts.updatePhoneNumber', { id, data });
         return this.updateResource<PhoneNumberResource>(`/phone_numbers/${id}`, data);
     }
 
     /**
      * Delete a phone number
      */
-    async deletePhoneNumber(id: string): Promise<void> {
+    async deletePhoneNumber(id: string) {
+        this.debugLog('contacts.deletePhoneNumber', { id });
         return this.deleteResource(`/phone_numbers/${id}`);
     }
 
     /**
      * Get all addresses
      */
-    async getAllAddresses(): Promise<{ data: AddressResource[]; meta?: any; links?: any }> {
+    async getAllAddresses() {
+        this.debugLog('contacts.getAllAddresses');
         return this.getList<AddressResource>('/addresses');
     }
 
     /**
      * Get a single address by ID
      */
-    async getAddressById(id: string): Promise<AddressResource> {
+    async getAddressById(id: string) {
+        this.debugLog('contacts.getAddressById', { id });
         return this.getSingle<AddressResource>(`/addresses/${id}`);
     }
 
     /**
-     * Create an address
+     * Create an address for a person
+     * Note: Addresses must be created via person-specific endpoint
      */
-    async createAddress(data: AddressAttributes): Promise<AddressResource> {
-        return this.createResource<AddressResource>('/addresses', data);
+    async createAddress(personId: string, data: AddressAttributes) {
+        this.debugLog('contacts.createAddress', { personId, data });
+        return this.createResource<AddressResource>(`/people/${personId}/addresses`, data);
     }
 
     /**
      * Update an address
      */
-    async updateAddress(id: string, data: Partial<AddressAttributes>): Promise<AddressResource> {
+    async updateAddress(id: string, data: Partial<AddressAttributes>) {
+        this.debugLog('contacts.updateAddress', { id, data });
         return this.updateResource<AddressResource>(`/addresses/${id}`, data);
     }
 
     /**
      * Delete an address
      */
-    async deleteAddress(id: string): Promise<void> {
+    async deleteAddress(id: string) {
+        this.debugLog('contacts.deleteAddress', { id });
         return this.deleteResource(`/addresses/${id}`);
     }
 
     /**
      * Get all social profiles
      */
-    async getAllSocialProfiles(): Promise<{ data: SocialProfileResource[]; meta?: any; links?: any }> {
+    async getAllSocialProfiles() {
+        this.debugLog('contacts.getAllSocialProfiles');
         return this.getList<SocialProfileResource>('/social_profiles');
     }
 
     /**
      * Get a single social profile by ID
      */
-    async getSocialProfileById(id: string): Promise<SocialProfileResource> {
+    async getSocialProfileById(id: string) {
+        this.debugLog('contacts.getSocialProfileById', { id });
         return this.getSingle<SocialProfileResource>(`/social_profiles/${id}`);
     }
 
     /**
-     * Create a social profile
+     * Create a social profile for a person
+     * Note: Social profiles must be created via person-specific endpoint
      */
-    async createSocialProfile(data: SocialProfileAttributes): Promise<SocialProfileResource> {
-        return this.createResource<SocialProfileResource>('/social_profiles', data);
+    async createSocialProfile(personId: string, data: SocialProfileAttributes) {
+        this.debugLog('contacts.createSocialProfile', { personId, data });
+        return this.createResource<SocialProfileResource>(`/people/${personId}/social_profiles`, data);
     }
 
     /**
      * Update a social profile
      */
-    async updateSocialProfile(id: string, data: Partial<SocialProfileAttributes>): Promise<SocialProfileResource> {
+    async updateSocialProfile(id: string, data: Partial<SocialProfileAttributes>) {
+        this.debugLog('contacts.updateSocialProfile', { id, data });
         return this.updateResource<SocialProfileResource>(`/social_profiles/${id}`, data);
     }
 
     /**
      * Delete a social profile
      */
-    async deleteSocialProfile(id: string): Promise<void> {
+    async deleteSocialProfile(id: string) {
+        this.debugLog('contacts.deleteSocialProfile', { id });
         return this.deleteResource(`/social_profiles/${id}`);
     }
 }

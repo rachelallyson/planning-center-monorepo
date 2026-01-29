@@ -1,91 +1,75 @@
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
-import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationOptions, PaginationResult } from '@rachelallyson/planning-center-base-ts';
 import type {
     CampusResource,
     CampusAttributes,
     CampusesList,
     CampusSingle,
+    ListResource,
+    ServiceTimeResource,
+    Meta,
+    TopLevelLinks
 } from '../types';
+import type { ListWhereClause, CampusWhereClause } from '../types/api-options';
+import type { CampusListOptions, CampusPageOptions } from '../types/api-options';
 
 /**
  * Campus module for managing campus-related operations
  */
 export class CampusModule extends BaseModule {
-    constructor(
-        httpClient: PcoHttpClient,
-        paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
-    ) {
-        super(httpClient, paginationHelper, eventEmitter);
-    }
-
     /**
      * Get all campuses across all pages
      */
-    async getAll(params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-        page?: number;
-    }): Promise<CampusesList> {
-        const queryParams: Record<string, any> = {};
+    async getAll(params?: CampusListOptions) {
+        this.debugLog('campus.getAll', { params });
+        return this.getAllPages<CampusResource>('/campuses', {
+            where: params?.where,
+            include: params?.include,
+            order: params?.order
+        });
+    }
 
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        // Note: per_page and page options are ignored when getting all pages
-        // Use getAllPagesPaginated() if you need pagination control
-
-        const result = await this.getAllPages<CampusResource>('/campuses', queryParams);
-        
-        // Return in the same format as before for backward compatibility
-        return {
-            data: result.data,
-            meta: { total_count: result.totalCount },
-            links: {}
-        } as CampusesList;
+    /**
+     * Get a single page of campuses with optional filtering and pagination control
+     * Use this when you need a specific page or want to limit the number of results
+     * @param params - List parameters including where, include, perPage, page, and order
+     * @returns A single page of results with meta and links for pagination
+     */
+    async getPage(params?: CampusPageOptions) {
+        this.debugLog('campus.getPage', { params });
+        return this.getList<CampusResource>('/campuses', {
+            where: params?.where,
+            include: params?.include,
+            per_page: params?.perPage,
+            page: params?.page,
+            order: params?.order
+        }) 
     }
 
     /**
      * Get a specific campus by ID
      */
-    async getById(id: string, include?: string[]): Promise<CampusResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<CampusResource>(`/campuses/${id}`, params);
+    async getById(id: string, include?: string[]) {
+        return this.getSingle<CampusResource>(`/campuses/${id}`, include);
     }
 
     /**
      * Create a new campus
      */
-    async create(data: CampusAttributes): Promise<CampusResource> {
+    async create(data: CampusAttributes) {
         return this.createResource<CampusResource>('/campuses', data);
     }
 
     /**
      * Update an existing campus
      */
-    async update(id: string, data: Partial<CampusAttributes>): Promise<CampusResource> {
+    async update(id: string, data: Partial<CampusAttributes>) {
         return this.updateResource<CampusResource>(`/campuses/${id}`, data);
     }
 
     /**
      * Delete a campus
      */
-    async delete(id: string): Promise<void> {
+    async delete(id: string) {
         return this.deleteResource(`/campuses/${id}`);
     }
 
@@ -93,78 +77,33 @@ export class CampusModule extends BaseModule {
      * Get lists for a specific campus
      */
     async getLists(campusId: string, params?: {
-        where?: Record<string, any>;
+        where?: ListWhereClause;
         include?: string[];
         per_page?: number;
         page?: number;
-    }): Promise<any> {
-        return this.getList(`/campuses/${campusId}/lists`, params);
+    }) {
+        this.debugLog('campus.getLists', { campusId, params });
+        return this.getList<ListResource>(`/campuses/${campusId}/lists`, {
+            where: params?.where,
+            include: params?.include,
+            per_page: params?.per_page,
+            page: params?.page
+        });
     }
 
     /**
      * Get service times for a specific campus
      */
     async getServiceTimes(campusId: string, params?: {
-        where?: Record<string, any>;
+        where?: never; // ServiceTime endpoint doesn't support where[] filtering
         include?: string[];
         per_page?: number;
         page?: number;
-    }): Promise<any> {
-        return this.getList(`/campuses/${campusId}/service_times`, params);
-    }
-
-    /**
-     * Get all campuses with pagination
-     */
-    async getAllCampuses(params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-    }): Promise<CampusResource[]> {
-        const queryParams: Record<string, any> = {};
-
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        if (params?.per_page) {
-            queryParams.per_page = params.per_page;
-        }
-
-        const result = await super.getAllPages<CampusResource>('/campuses', queryParams);
-        return result.data;
-    }
-
-    /**
-     * Get all campuses with pagination support
-     */
-    async getAllPagesPaginated(params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-    }, paginationOptions?: PaginationOptions): Promise<PaginationResult<CampusResource>> {
-        const queryParams: Record<string, any> = {};
-
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        if (params?.per_page) {
-            queryParams.per_page = params.per_page;
-        }
-
-        return super.getAllPages<CampusResource>('/campuses', queryParams, paginationOptions);
+    }) {
+        return this.getList<ServiceTimeResource>(`/campuses/${campusId}/service_times`, {
+            include: params?.include,
+            per_page: params?.per_page,
+            page: params?.page
+        });
     }
 }

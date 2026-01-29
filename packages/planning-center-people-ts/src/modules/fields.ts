@@ -3,7 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
+import type { PcoHttpClient, QueryOptions } from '@rachelallyson/planning-center-base-ts';
 import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
 import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
 import type {
@@ -11,11 +11,17 @@ import type {
     FieldDefinitionAttributes,
     FieldDatumResource,
     FieldDatumAttributes,
+    FieldDatumRelationshipMap,
+    FlattenedFieldDatumResource,
     FieldOptionResource,
     FieldOptionAttributes,
     TabResource,
-    TabAttributes
+    TabAttributes,
+    Meta,
+    TopLevelLinks
 } from '../types';
+import type { FieldDataOptions, FieldDefinitionListOptions } from '../types/api-options';
+import type { FlattenedResource } from '@rachelallyson/planning-center-base-ts';
 
 export interface FieldSetOptions {
     /** Field definition ID */
@@ -31,97 +37,117 @@ export interface FieldSetOptions {
 }
 
 export class FieldsModule extends BaseModule {
-    constructor(
-        httpClient: PcoHttpClient,
-        paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
-    ) {
-        super(httpClient, paginationHelper, eventEmitter);
-    }
-
     /**
      * Get all field definitions
+     * @param include - Optional array of relationships to include (defaults to ['tab'])
+     *   Valid values: 'tab', 'field_options'
+     * @param options - Optional additional options
+     *   - includeDeleted: If true, includes deleted field definitions (default: false)
+     *   - where: Optional object for filtering field definitions
+     *     Valid keys: config, data_type, deleted_at, name, sequence, slug, tab_id
+     *     Example: { tab_id: '123', data_type: 'string' }
+     *   - order: Optional field name to order by (prefix with '-' to reverse order)
+     *     Valid values: config, data_type, deleted_at, name, sequence, slug, tab_id
+     *     Example: 'sequence' or '-name' for descending
      */
-    async getAllFieldDefinitions(): Promise<FieldDefinitionResource[]> {
-        // Build query params - include must be a comma-separated string, not an array
-        const params: Record<string, any> = {
-            include: 'tab',
-        };
-
-        const result = await this.getAllPages<FieldDefinitionResource>('/field_definitions', params);
-
-        return result.data;
+    async getAllFieldDefinitions(options?: FieldDefinitionListOptions) {
+        this.debugLog('fields.getAllFieldDefinitions', { options });
+        return this.getAllPages<FieldDefinitionResource>('/field_definitions', options);
     }
 
     /**
      * Get a single field definition by ID
      */
-    async getFieldDefinition(id: string): Promise<FieldDefinitionResource> {
+    async getFieldDefinition(id: string) {
+        this.debugLog('fields.getFieldDefinition', { id });
         return this.getSingle<FieldDefinitionResource>(`/field_definitions/${id}`);
     }
 
     /**
      * Get field definition by slug
      */
-    async getFieldDefinitionBySlug(slug: string): Promise<FieldDefinitionResource | null> {
+    async getFieldDefinitionBySlug(slug: string) {
+        this.debugLog('fields.getFieldDefinitionBySlug', { slug });
         const allFieldDefinitions = await this.getAllFieldDefinitions();
-        return allFieldDefinitions.find(fd => fd.attributes?.slug === slug) || null;
+        type FlattenedFieldDefinition = FlattenedResource<
+            FieldDefinitionResource['type'],
+            FieldDefinitionAttributes,
+            FieldDefinitionResource extends { relationships?: infer R } ? R : never
+        >;
+        return allFieldDefinitions.data.find((fd: FlattenedFieldDefinition) => fd.slug === slug) || null;
     }
 
     /**
      * Get field definition by name
      */
-    async getFieldDefinitionByName(name: string): Promise<FieldDefinitionResource | null> {
+    async getFieldDefinitionByName(name: string) {
+        this.debugLog('fields.getFieldDefinitionByName', { name });
         const allFieldDefinitions = await this.getAllFieldDefinitions();
-        return allFieldDefinitions.find(fd => fd.attributes?.name === name) || null;
+        type FlattenedFieldDefinition = FlattenedResource<
+            FieldDefinitionResource['type'],
+            FieldDefinitionAttributes,
+            FieldDefinitionResource extends { relationships?: infer R } ? R : never
+        >;
+        return allFieldDefinitions.data.find((fd: FlattenedFieldDefinition) => fd.name === name) || null;
     }
 
     /**
      * Create a field definition
      */
-    async createFieldDefinition(tabId: string, data: FieldDefinitionAttributes): Promise<FieldDefinitionResource> {
+    async createFieldDefinition(tabId: string, data: Partial<FieldDefinitionAttributes>) {
+        this.debugLog('fields.createFieldDefinition', { tabId, data });
         return this.createResource<FieldDefinitionResource>(`/tabs/${tabId}/field_definitions`, data);
     }
 
     /**
      * Update a field definition
      */
-    async updateFieldDefinition(id: string, data: Partial<FieldDefinitionAttributes>): Promise<FieldDefinitionResource> {
+    async updateFieldDefinition(id: string, data: Partial<FieldDefinitionAttributes>) {
+        this.debugLog('fields.updateFieldDefinition', { id, data });
         return this.updateResource<FieldDefinitionResource>(`/field_definitions/${id}`, data);
     }
 
     /**
      * Delete a field definition
      */
-    async deleteFieldDefinition(id: string): Promise<void> {
+    async deleteFieldDefinition(id: string) {
+        this.debugLog('fields.deleteFieldDefinition', { id });
         return this.deleteResource(`/field_definitions/${id}`);
     }
 
     /**
      * Get field options for a field definition
      */
-    async getFieldOptions(fieldDefinitionId: string): Promise<{ data: FieldOptionResource[]; meta?: any; links?: any }> {
+    async getFieldOptions(fieldDefinitionId: string) {
+        this.debugLog('fields.getFieldOptions', { fieldDefinitionId });
         return this.getList<FieldOptionResource>(`/field_definitions/${fieldDefinitionId}/field_options`);
     }
 
     /**
      * Create a field option
      */
-    async createFieldOption(fieldDefinitionId: string, data: FieldOptionAttributes): Promise<FieldOptionResource> {
+    async createFieldOption(fieldDefinitionId: string, data: FieldOptionAttributes) {
+        this.debugLog('fields.createFieldOption', { fieldDefinitionId, data });
         return this.createResource<FieldOptionResource>(`/field_definitions/${fieldDefinitionId}/field_options`, data);
     }
 
     /**
      * Get person's field data
      */
-    async getPersonFieldData(personId: string): Promise<{ data: FieldDatumResource[]; meta?: any; links?: any }> {
-        return this.getList<FieldDatumResource>(`/people/${personId}/field_data`);
+    async getPersonFieldData(personId: string, options?: FieldDataOptions): Promise<{
+        data: FlattenedFieldDatumResource[];
+        meta?: Meta;
+        links?: TopLevelLinks;
+    }> {
+        this.debugLog('fields.getPersonFieldData', { personId, options });
+        return this.getList<FieldDatumResource, FieldDatumRelationshipMap>(`/people/${personId}/field_data`, options as QueryOptions);
     }
 
     /**
      * Set a person's field value with automatic field lookup
      */
-    async setPersonField(personId: string, options: FieldSetOptions): Promise<FieldDatumResource> {
+    async setPersonField(personId: string, options: FieldSetOptions) {
+        this.debugLog('fields.setPersonField', { personId, options });
         const fieldDef = await this.resolveFieldDefinition(options);
 
         if (!fieldDef) {
@@ -136,14 +162,16 @@ export class FieldsModule extends BaseModule {
     /**
      * Set a person's field value by field definition ID
      */
-    async setPersonFieldById(personId: string, fieldId: string, value: string): Promise<FieldDatumResource> {
+    async setPersonFieldById(personId: string, fieldId: string, value: string) {
+        this.debugLog('fields.setPersonFieldById', { personId, fieldId });
         return this.createPersonFieldData(personId, fieldId, value);
     }
 
     /**
      * Set a person's field value by field slug
      */
-    async setPersonFieldBySlug(personId: string, fieldSlug: string, value: string): Promise<FieldDatumResource> {
+    async setPersonFieldBySlug(personId: string, fieldSlug: string, value: string) {
+        this.debugLog('fields.setPersonFieldBySlug', { personId, fieldSlug, value });
         const fieldDef = await this.getFieldDefinitionBySlug(fieldSlug);
 
         if (!fieldDef) {
@@ -156,7 +184,8 @@ export class FieldsModule extends BaseModule {
     /**
      * Set a person's field value by field name
      */
-    async setPersonFieldByName(personId: string, fieldName: string, value: string): Promise<FieldDatumResource> {
+    async setPersonFieldByName(personId: string, fieldName: string, value: string) {
+        this.debugLog('fields.setPersonFieldByName', { personId, fieldName, value });
         const fieldDef = await this.getFieldDefinitionByName(fieldName);
 
         if (!fieldDef) {
@@ -174,14 +203,15 @@ export class FieldsModule extends BaseModule {
         fieldDefinitionId: string,
         value: string,
         options: { handleFileUploads?: boolean } = {}
-    ): Promise<FieldDatumResource> {
+    ) {
+        this.debugLog('fields.createPersonFieldData', { personId, fieldDefinitionId, options });
         const { handleFileUploads = true } = options;
 
         // Get field definition to determine type
         const fieldDef = await this.getFieldDefinition(fieldDefinitionId);
 
         // Check if this is a file field and handle accordingly
-        if (fieldDef.attributes && fieldDef.attributes.data_type === 'file' && handleFileUploads) {
+        if (fieldDef && (fieldDef).data_type === 'file' && handleFileUploads) {
             return this.createPersonFileFieldData(personId, fieldDefinitionId, value);
         }
 
@@ -189,26 +219,33 @@ export class FieldsModule extends BaseModule {
         const cleanValue = this.isFileUrl(value) ? this.extractFileUrl(value) : value;
 
         // Check if field data already exists for this person and field
-        try {
-            const existingFieldData = await this.getPersonFieldData(personId);
-            const existingDatum = existingFieldData.data.find(
-                datum => {
-                    const fieldDefData = datum.relationships?.field_definition?.data;
-                    return Array.isArray(fieldDefData)
-                        ? fieldDefData.some(fd => fd.id === fieldDefinitionId)
-                        : fieldDefData?.id === fieldDefinitionId;
+        // Per test construction standards, we should fail explicitly if something is wrong
+        const existingFieldData = await this.getPersonFieldData(personId, {include: ['field_definition']});
+        const existingDatum = existingFieldData.data.find(
+            datum => {
+                // Check the relationship field_definition first
+                // When include: ['field_definition'] is used, this should be a full resource object
+                // When not included, it might be a ResourceIdentifier with just {type, id}
+                const fieldDefData = datum.field_definition;
+                if (fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData) {
+                    // Compare as strings to handle number/string ID mismatches
+                    return String(fieldDefData.id) === String(fieldDefinitionId);
                 }
-            );
-
-            if (existingDatum) {
-                // Update existing field data
-                return this.updateResource<FieldDatumResource>(
-                    `/people/${personId}/field_data/${existingDatum.id}`,
-                    { value: cleanValue }
-                );
+                // Fallback: check if field_definition_id is available as an attribute
+                // (some API responses might include this even though it's not in the type definition)
+                if ('field_definition_id' in datum && datum.field_definition_id !== undefined) {
+                    return String(datum.field_definition_id) === String(fieldDefinitionId);
+                }
+                return false;
             }
-        } catch (error) {
-            // If we can't get existing field data, continue with creation
+        );
+
+        if (existingDatum) {
+            // Update existing field data
+            return this.updateResource<FieldDatumResource>(
+                `/people/${personId}/field_data/${existingDatum.id}`,
+                { value: cleanValue }
+            );
         }
 
         return this.createResource<FieldDatumResource>(`/people/${personId}/field_data`, {
@@ -220,53 +257,55 @@ export class FieldsModule extends BaseModule {
     /**
      * Delete person's field data
      */
-    async deletePersonFieldData(personId: string, fieldDataId: string): Promise<void> {
+    async deletePersonFieldData(personId: string, fieldDataId: string) {
+        this.debugLog('fields.deletePersonFieldData', { personId, fieldDataId });
         return this.deleteResource(`/people/${personId}/field_data/${fieldDataId}`);
     }
 
     /**
      * Get all tabs
      */
-    async getTabs(): Promise<{ data: TabResource[]; meta?: any; links?: any }> {
+    async getTabs() {
+        this.debugLog('fields.getTabs');
         return this.getList<TabResource>('/tabs');
     }
 
     /**
      * Get a single tab by ID
      */
-    async getTabById(id: string, include?: string[]): Promise<TabResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-        return this.getSingle<TabResource>(`/tabs/${id}`, params);
+    async getTabById(id: string, include?: string[]) {
+        this.debugLog('fields.getTabById', { id, include });
+        return this.getSingle<TabResource>(`/tabs/${id}`, include);
     }
 
     /**
      * Create a tab
      */
-    async createTab(data: TabAttributes): Promise<TabResource> {
+    async createTab(data: TabAttributes) {
+        this.debugLog('fields.createTab', { data });
         return this.createResource<TabResource>('/tabs', data);
     }
 
     /**
      * Update a tab
      */
-    async updateTab(id: string, data: Partial<TabAttributes>): Promise<TabResource> {
+    async updateTab(id: string, data: Partial<TabAttributes>) {
+        this.debugLog('fields.updateTab', { id, data });
         return this.updateResource<TabResource>(`/tabs/${id}`, data);
     }
 
     /**
      * Delete a tab
      */
-    async deleteTab(id: string): Promise<void> {
+    async deleteTab(id: string) {
+        this.debugLog('fields.deleteTab', { id });
         return this.deleteResource(`/tabs/${id}`);
     }
 
     /**
      * Resolve field definition from options
      */
-    private async resolveFieldDefinition(options: FieldSetOptions): Promise<FieldDefinitionResource | null> {
+    private async resolveFieldDefinition(options: FieldSetOptions) {
         if (options.fieldId) {
             return this.getFieldDefinition(options.fieldId);
         }
@@ -289,7 +328,7 @@ export class FieldsModule extends BaseModule {
         personId: string,
         fieldDefinitionId: string,
         fileUrl: string
-    ): Promise<FieldDatumResource> {
+    ) {
         try {
             // Extract clean URL from HTML markup if needed
             const cleanFileUrl = this.extractFileUrl(fileUrl);
@@ -361,14 +400,14 @@ export class FieldsModule extends BaseModule {
     /**
      * Check if a value is a file URL
      */
-    private isFileUrl(value: string): boolean {
+    private isFileUrl(value: string) {
         return value.includes('s3.') || value.includes('amazonaws.com') || value.includes('<a href=');
     }
 
     /**
      * Extract file URL from HTML markup
      */
-    private extractFileUrl(value: string): string {
+    private extractFileUrl(value: string) {
         if (value.startsWith('http') && !value.includes('<')) {
             return value;
         }
@@ -389,7 +428,7 @@ export class FieldsModule extends BaseModule {
     /**
      * Get filename from URL
      */
-    private getFilename(url: string): string {
+    private getFilename(url: string) {
         const cleanUrl = this.extractFileUrl(url);
         const urlParts = cleanUrl.split('/');
         return urlParts[urlParts.length - 1] || 'file';
@@ -398,7 +437,7 @@ export class FieldsModule extends BaseModule {
     /**
      * Get file extension from URL
      */
-    private getFileExtension(url: string): string {
+    private getFileExtension(url: string) {
         const filename = this.getFilename(url);
         const lastDot = filename.lastIndexOf('.');
         return lastDot > 0 ? filename.substring(lastDot + 1).toLowerCase() : '';
@@ -407,7 +446,7 @@ export class FieldsModule extends BaseModule {
     /**
      * Get MIME type from file extension
      */
-    private getMimeType(extension: string): string {
+    private getMimeType(extension: string) {
         const mimeTypes: Record<string, string> = {
             csv: 'text/csv',
             doc: 'application/msword',

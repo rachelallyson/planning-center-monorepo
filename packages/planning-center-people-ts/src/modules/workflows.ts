@@ -3,7 +3,6 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationOptions, PaginationResult } from '@rachelallyson/planning-center-base-ts';
 import type {
     WorkflowResource,
     WorkflowAttributes,
@@ -13,15 +12,16 @@ import type {
     WorkflowCardSnoozeAttributes,
     WorkflowCardEmailAttributes,
     WorkflowCardNoteResource,
-    WorkflowCardNoteAttributes
+    WorkflowCardNoteAttributes,
+    Meta,
+    TopLevelLinks
 } from '../types';
+import type { ResourceObject } from '../types/json-api';
 
-export interface WorkflowListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
+import type { WorkflowListOptions, WorkflowPageOptions } from '../types/api-options';
+
+// Re-export for backward compatibility
+export type { WorkflowListOptions };
 
 export interface AddPersonToWorkflowOptions {
     note?: string;
@@ -34,89 +34,73 @@ export class WorkflowsModule extends BaseModule {
     /**
      * Get all workflows across all pages
      */
-    async getAll(options: WorkflowListOptions = {}): Promise<{ data: WorkflowResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
+    async getAll(options: WorkflowListOptions = {}) {
+        this.debugLog('workflows.getAll', { options });
+        return  await this.getAllPages<WorkflowResource>('/workflows', {
+            where: options.where,
+            include: options.include,
+            order: options.order
+        });
 
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        // Note: perPage and page options are ignored when getting all pages
-        // Use getAllPagesPaginated() if you need pagination control
-
-        const result = await this.getAllPages<WorkflowResource>('/workflows', params);
-        
-        // Return in the same format as before for backward compatibility
-        return {
-            data: result.data,
-            meta: { total_count: result.totalCount },
-            links: {}
-        };
     }
 
     /**
-     * Get all workflows across all pages
+     * Get a single page of workflows with optional filtering and pagination control
+     * Use this when you need a specific page or want to limit the number of results
+     * @param options - List options including where, include, perPage, and page
+     * @returns A single page of results with meta and links for pagination
      */
-    async getAllPagesPaginated(options: WorkflowListOptions = {}, paginationOptions?: PaginationOptions): Promise<PaginationResult<WorkflowResource>> {
-        const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        return this.getAllPages<WorkflowResource>('/workflows', params, paginationOptions);
+    async getPage(options: WorkflowPageOptions = {}) {
+        this.debugLog('workflows.getPage', { options });
+        return this.getList<WorkflowResource>('/workflows', {
+            where: options.where,
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page,
+            order: options.order
+        });
     }
 
     /**
      * Get a single workflow by ID
      */
-    async getById(id: string, include?: string[]): Promise<WorkflowResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<WorkflowResource>(`/workflows/${id}`, params);
+    async getById(id: string, include?: string[]) {
+        this.debugLog('workflows.getById', { id, include });
+        return this.getSingle<WorkflowResource>(`/workflows/${id}`, include);
     }
 
     /**
      * Create a workflow
      */
-    async create(data: WorkflowAttributes): Promise<WorkflowResource> {
+    async create(data: WorkflowAttributes) {
+        this.debugLog('workflows.create', { data });
         return this.createResource<WorkflowResource>('/workflows', data);
     }
 
     /**
      * Update a workflow
      */
-    async update(id: string, data: Partial<WorkflowAttributes>): Promise<WorkflowResource> {
+    async update(id: string, data: Partial<WorkflowAttributes>) {
+        this.debugLog('workflows.update', { id, data });
         return this.updateResource<WorkflowResource>(`/workflows/${id}`, data);
     }
 
     /**
      * Delete a workflow
      */
-    async delete(id: string): Promise<void> {
+    async delete(id: string) {
+        this.debugLog('workflows.delete', { id });
         return this.deleteResource(`/workflows/${id}`);
     }
 
     /**
      * Get workflow cards for a person
+     * @param personId - The person ID
+     * @param options - Optional pagination options
      */
-    async getPersonWorkflowCards(personId: string): Promise<{ data: WorkflowCardResource[]; meta?: any; links?: any }> {
-        return this.getList<WorkflowCardResource>(`/people/${personId}/workflow_cards`);
+    async getPersonWorkflowCards(personId: string, options?: { perPage?: number; page?: number }) {
+        this.debugLog('workflows.getPersonWorkflowCards', { personId, options });
+        return this.getList<WorkflowCardResource>(`/people/${personId}/workflow_cards`, options);
     }
 
     /**
@@ -126,25 +110,26 @@ export class WorkflowsModule extends BaseModule {
         personId: string,
         workflowId: string,
         options: AddPersonToWorkflowOptions = {}
-    ): Promise<WorkflowCardResource> {
+    ) {
+        this.debugLog('workflows.addPersonToWorkflow', { personId, workflowId, options });
         const { skipIfExists = true, skipIfActive = true } = options;
 
         // Check for existing workflow cards if requested
         if (skipIfExists || skipIfActive) {
             const existingCards = await this.getPersonWorkflowCards(personId);
             const existingCard = existingCards.data.find(card => {
-                const workflowData = card.relationships?.workflow?.data;
+                const workflowData = card?.workflow?.data;
                 return workflowData && !Array.isArray(workflowData) && workflowData.id === workflowId;
             });
 
-            if (existingCard && existingCard.attributes) {
+            if (existingCard) {
                 // Check if card is completed or removed
-                if (skipIfExists && (existingCard.attributes.completed_at || existingCard.attributes.removed_at)) {
+                if (skipIfExists && (existingCard.completed_at || existingCard.removed_at)) {
                     throw new Error(`Person already has a completed/removed card in this workflow`);
                 }
 
                 // Check if card is active
-                if (skipIfActive && !existingCard.attributes.completed_at && !existingCard.attributes.removed_at) {
+                if (skipIfActive && !existingCard.completed_at && !existingCard.removed_at) {
                     throw new Error(`Person already has an active card in this workflow`);
                 }
             }
@@ -167,7 +152,8 @@ export class WorkflowsModule extends BaseModule {
     /**
      * Create a workflow card
      */
-    async createWorkflowCard(workflowId: string, personId: string): Promise<WorkflowCardResource> {
+    async createWorkflowCard(workflowId: string, personId: string) {
+        this.debugLog('workflows.createWorkflowCard', { workflowId, personId });
         return this.createResource<WorkflowCardResource>(`/workflows/${workflowId}/cards`, {
             person_id: personId,
         } as Partial<WorkflowCardAttributes>);
@@ -176,7 +162,8 @@ export class WorkflowsModule extends BaseModule {
     /**
      * Update a workflow card
      */
-    async updateWorkflowCard(workflowCardId: string, data: Partial<WorkflowCardAssignableAttributes>, personId?: string): Promise<WorkflowCardResource> {
+    async updateWorkflowCard(workflowCardId: string, data: Partial<WorkflowCardAssignableAttributes>, personId?: string) {
+        this.debugLog('workflows.updateWorkflowCard', { workflowCardId, data, personId });
         // If personId is provided, use the person-specific endpoint
         if (personId) {
             return this.updateResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}`, data);
@@ -188,7 +175,8 @@ export class WorkflowsModule extends BaseModule {
     /**
      * Get workflow card notes
      */
-    async getWorkflowCardNotes(personId: string, workflowCardId: string): Promise<{ data: WorkflowCardNoteResource[]; meta?: any; links?: any }> {
+    async getWorkflowCardNotes(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.getWorkflowCardNotes', { personId, workflowCardId });
         return this.getList<WorkflowCardNoteResource>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`);
     }
 
@@ -199,28 +187,11 @@ export class WorkflowsModule extends BaseModule {
         personId: string,
         workflowCardId: string,
         data: WorkflowCardNoteAttributes
-    ): Promise<WorkflowCardNoteResource> {
+    ) {
+        this.debugLog('workflows.createWorkflowCardNote', { personId, workflowCardId, data });
         return this.createResource<WorkflowCardNoteResource>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`, data);
     }
 
-    /**
-     * Update a workflow card note
-     */
-    async updateWorkflowCardNote(
-        personId: string,
-        workflowCardId: string,
-        noteId: string,
-        data: Partial<WorkflowCardNoteAttributes>
-    ): Promise<WorkflowCardNoteResource> {
-        return this.updateResource<WorkflowCardNoteResource>(`/people/${personId}/workflow_cards/${workflowCardId}/notes/${noteId}`, data);
-    }
-
-    /**
-     * Delete a workflow card note
-     */
-    async deleteWorkflowCardNote(personId: string, workflowCardId: string, noteId: string): Promise<void> {
-        return this.deleteResource(`/people/${personId}/workflow_cards/${workflowCardId}/notes/${noteId}`);
-    }
 
     /**
      * Create a workflow card with a note
@@ -233,6 +204,7 @@ export class WorkflowsModule extends BaseModule {
         workflowCard: WorkflowCardResource;
         note: WorkflowCardNoteResource;
     }> {
+        this.debugLog('workflows.createWorkflowCardWithNote', { workflowId, personId, noteData });
         const workflowCard = await this.createWorkflowCard(workflowId, personId);
         const note = await this.createWorkflowCardNote(personId, workflowCard.id, noteData);
 
@@ -242,28 +214,32 @@ export class WorkflowsModule extends BaseModule {
     /**
      * Move a workflow card back to the previous step
      */
-    async goBackWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async goBackWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.goBackWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/go_back`, {});
     }
 
     /**
      * Move a workflow card to the next step
      */
-    async promoteWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async promoteWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.promoteWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/promote`, {});
     }
 
     /**
      * Remove a workflow card
      */
-    async removeWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async removeWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.removeWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/remove`, {});
     }
 
     /**
      * Restore a workflow card
      */
-    async restoreWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async restoreWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.restoreWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/restore`, {});
     }
 
@@ -274,37 +250,42 @@ export class WorkflowsModule extends BaseModule {
         personId: string,
         workflowCardId: string,
         data: WorkflowCardEmailAttributes
-    ): Promise<WorkflowCardResource> {
+    ) {
+        this.debugLog('workflows.sendEmailWorkflowCard', { personId, workflowCardId, data });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/send_email`, data);
     }
 
     /**
      * Move a workflow card to the next step without completing the current step
      */
-    async skipStepWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async skipStepWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.skipStepWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/skip_step`, {});
     }
 
     /**
      * Snooze a workflow card for a specific duration
      */
-    async snoozeWorkflowCard(personId: string, workflowCardId: string, data: WorkflowCardSnoozeAttributes): Promise<WorkflowCardResource> {
+    async snoozeWorkflowCard(personId: string, workflowCardId: string, data: WorkflowCardSnoozeAttributes) {
+        this.debugLog('workflows.snoozeWorkflowCard', { personId, workflowCardId, data });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/snooze`, data);
     }
 
     /**
      * Unsnooze a workflow card
      */
-    async unsnoozeWorkflowCard(personId: string, workflowCardId: string): Promise<WorkflowCardResource> {
+    async unsnoozeWorkflowCard(personId: string, workflowCardId: string) {
+        this.debugLog('workflows.unsnoozeWorkflowCard', { personId, workflowCardId });
         return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/unsnooze`, {});
     }
 
     /**
      * Format note template with variables
      */
-    private formatNoteTemplate(template: string, variables: Record<string, any>): string {
+    private formatNoteTemplate(template: string, variables: Record<string, string | number | boolean>) {
         return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-            return variables[key] || match;
+            const value = variables[key];
+            return value !== undefined ? String(value) : match;
         });
     }
 }

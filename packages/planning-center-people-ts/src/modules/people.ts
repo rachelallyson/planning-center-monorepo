@@ -3,16 +3,16 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
+import type {
+    PcoHttpClient,
+    PaginationHelper,
     PcoEventEmitter,
-    PaginationOptions,
-    PaginationResult
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     PersonResource,
     PersonAttributes,
+    PersonRelationshipMap,
     EmailResource,
     EmailAttributes,
     PhoneNumberResource,
@@ -22,16 +22,21 @@ import type {
     SocialProfileResource,
     SocialProfileAttributes,
     CampusResource,
-    HouseholdResource
+    HouseholdResource,
+    WorkflowCardResource,
+    NoteResource,
+    FieldDatumResource,
+    PeopleIncluded,
+    FlattenedPersonResource
 } from '../types';
+import type { Meta, TopLevelLinks } from '../types/json-api';
+import type { ResourceObject, Attributes, Relationship } from '../types/json-api';
 import { PersonMatcher } from '../matching/matcher';
 
-export interface PeopleListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
+import type { PersonListOptions, PersonPageOptions, PersonWhereClause } from '../types/api-options';
+
+// Re-export for backward compatibility
+export type PeopleListOptions = PersonListOptions;
 
 export interface PersonCreateOptions {
     firstName?: string;
@@ -189,70 +194,52 @@ export class PeopleModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
-        this.personMatcher = new PersonMatcher(this);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        this.personMatcher = new PersonMatcher(this, getConfig);
     }
 
     /**
      * Get all people across all pages with optional filtering
      */
-    async getAll(options: PeopleListOptions = {}): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        // Note: perPage and page options are ignored when getting all pages
-        // Use getAllPagesPaginated() if you need pagination control
-
-        const result = await this.getAllPages<PersonResource>('/people', params);
-        
-        // Return in the same format as before for backward compatibility
-        return {
-            data: result.data,
-            meta: { total_count: result.totalCount },
-            links: {}
-        };
+    async getAll(options: PersonListOptions = {}) {
+        this.debugLog('people.getAll', { options });
+        return await this.getAllPages<PersonResource, PeopleIncluded, PersonRelationshipMap>('/people', {
+            where: options.where,
+            include: options.include,
+            order: options.order
+        });
     }
 
     /**
-     * Get all people across all pages
+     * Get a single page of people with optional filtering and pagination control
+     * Use this when you need a specific page or want to limit the number of results
+     * @param options - List options including where, include, perPage, page, and order
+     * @returns A single page of results with meta and links for pagination
      */
-    async getAllPagesPaginated(options: PeopleListOptions = {}, paginationOptions?: PaginationOptions): Promise<PaginationResult<PersonResource>> {
-        const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        return this.getAllPages<PersonResource>('/people', params, paginationOptions);
+    async getPage(options: PersonPageOptions = {}): Promise<{ 
+        data: FlattenedPersonResource[]; 
+        meta?: Meta; 
+        links?: TopLevelLinks 
+    }> {
+        this.debugLog('people.getPage', { options });
+        return this.getList<PersonResource>('/people', {
+            where: options.where,
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page,
+            order: options.order
+        });
     }
 
     /**
      * Get a single person by ID
      */
-    async getById(id: string, include?: string[]): Promise<PersonResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<PersonResource>(`/people/${id}`, params);
+    async getById(id: string, include?: string[]) {
+        this.debugLog('people.getById', { id, include });
+        return this.getSingle<PersonResource>(`/people/${id}`, include);
     }
 
     /**
@@ -267,7 +254,7 @@ export class PeopleModule extends BaseModule {
      * @returns True if person exists, false if not found
      * @throws Error if request times out or other error occurs (except 404)
      * 
-     * @example
+     * @gmail.com
      * ```typescript
      * const exists = await client.people.verifyPersonExists(cachedPersonId);
      * if (!exists) {
@@ -279,14 +266,17 @@ export class PeopleModule extends BaseModule {
     async verifyPersonExists(
         personId: string,
         options?: { timeout?: number }
-    ): Promise<boolean> {
+    ) {
+        this.debugLog('people.verifyPersonExists', { personId, options });
         const timeout = options?.timeout ?? 30000;
         
         const verificationPromise = this.getById(personId)
             .then(() => true)
-            .catch((error: any) => {
+            .catch((error: unknown) => {
                 // 404 means person doesn't exist (merged or deleted)
-                if (error?.status === 404 || error?.response?.status === 404) {
+                const status = (error as { status?: number; response?: { status?: number } })?.status 
+                    ?? (error as { response?: { status?: number } })?.response?.status;
+                if (status === 404) {
                     return false;
                 }
                 // Re-throw other errors
@@ -303,23 +293,119 @@ export class PeopleModule extends BaseModule {
     }
 
     /**
-     * Create a new person
+     * Transform PersonCreateOptions (camelCase) to API format (snake_case)
+     * Also handles snake_case input directly (passes through)
      */
-    async create(data: PersonCreateOptions): Promise<PersonResource> {
-        return this.createResource<PersonResource>('/people', data);
+    private transformPersonData(data: PersonCreateOptions | Partial<PersonCreateOptions> | Partial<PersonAttributes>) {
+        const transformed: Partial<PersonAttributes> = {};
+        const dataObj = data as Record<string, any>;
+        
+        // If data is already in snake_case format, copy those fields directly
+        if (dataObj.first_name !== undefined) transformed.first_name = dataObj.first_name;
+        if (dataObj.last_name !== undefined) transformed.last_name = dataObj.last_name;
+        if (dataObj.given_name !== undefined) transformed.given_name = dataObj.given_name;
+        if (dataObj.middle_name !== undefined) transformed.middle_name = dataObj.middle_name;
+        if (dataObj.nickname !== undefined) transformed.nickname = dataObj.nickname;
+        if (dataObj.birthdate !== undefined) transformed.birthdate = dataObj.birthdate;
+        if (dataObj.anniversary !== undefined) transformed.anniversary = dataObj.anniversary;
+        if (dataObj.gender !== undefined) transformed.gender = dataObj.gender;
+        if (dataObj.grade !== undefined) transformed.grade = dataObj.grade;
+        if (dataObj.child !== undefined) transformed.child = dataObj.child;
+        if (dataObj.status !== undefined) transformed.status = dataObj.status;
+        if (dataObj.medical_notes !== undefined) transformed.medical_notes = dataObj.medical_notes;
+        if (dataObj.job_title !== undefined) transformed.job_title = dataObj.job_title;
+        if (dataObj.employer !== undefined) transformed.employer = dataObj.employer;
+        if (dataObj.school !== undefined) transformed.school = dataObj.school;
+        if (dataObj.graduation_year !== undefined) transformed.graduation_year = dataObj.graduation_year;
+        if (dataObj.avatar !== undefined) transformed.avatar = dataObj.avatar;
+        if (dataObj.site_administrator !== undefined) transformed.site_administrator = dataObj.site_administrator;
+        if (dataObj.accounting_administrator !== undefined) transformed.accounting_administrator = dataObj.accounting_administrator;
+        if (dataObj.people_permissions !== undefined) transformed.people_permissions = dataObj.people_permissions;
+        if (dataObj.directory_status !== undefined) transformed.directory_status = dataObj.directory_status;
+        if (dataObj.login_identifier !== undefined) transformed.login_identifier = dataObj.login_identifier;
+        if (dataObj.membership !== undefined) transformed.membership = dataObj.membership;
+        if (dataObj.remote_id !== undefined) transformed.remote_id = dataObj.remote_id;
+        if (dataObj.demographic_avatar_url !== undefined) transformed.demographic_avatar_url = dataObj.demographic_avatar_url;
+        if (dataObj.inactivated_at !== undefined) transformed.inactivated_at = dataObj.inactivated_at;
+        if (dataObj.resource_permission_flags !== undefined) transformed.resource_permission_flags = dataObj.resource_permission_flags;
+        if (dataObj.primary_campus_id !== undefined) transformed.primary_campus_id = dataObj.primary_campus_id;
+        if (dataObj.household_id !== undefined) transformed.household_id = dataObj.household_id;
+        
+        // Handle PersonCreateOptions fields (camelCase)
+        if (dataObj.firstName !== undefined) transformed.first_name = dataObj.firstName;
+        if (dataObj.lastName !== undefined) transformed.last_name = dataObj.lastName;
+        if (dataObj.givenName !== undefined) transformed.given_name = dataObj.givenName;
+        if (dataObj.middleName !== undefined) transformed.middle_name = dataObj.middleName;
+        if (dataObj.nickname !== undefined) transformed.nickname = dataObj.nickname;
+        if (dataObj.birthdate !== undefined) transformed.birthdate = dataObj.birthdate;
+        if (dataObj.anniversary !== undefined) transformed.anniversary = dataObj.anniversary;
+        if (dataObj.gender !== undefined) transformed.gender = dataObj.gender;
+        if (dataObj.grade !== undefined) transformed.grade = dataObj.grade;
+        if (dataObj.child !== undefined) transformed.child = dataObj.child;
+        if (dataObj.status !== undefined) transformed.status = dataObj.status;
+        if (dataObj.medicalNotes !== undefined) transformed.medical_notes = dataObj.medicalNotes;
+        if (dataObj.jobTitle !== undefined) transformed.job_title = dataObj.jobTitle;
+        if (dataObj.employer !== undefined) transformed.employer = dataObj.employer;
+        if (dataObj.school !== undefined) transformed.school = dataObj.school;
+        if (dataObj.graduationYear !== undefined) transformed.graduation_year = dataObj.graduationYear;
+        if (dataObj.avatar !== undefined) transformed.avatar = dataObj.avatar;
+        if (dataObj.siteAdministrator !== undefined) transformed.site_administrator = dataObj.siteAdministrator;
+        if (dataObj.accountingAdministrator !== undefined) transformed.accounting_administrator = dataObj.accountingAdministrator;
+        if (dataObj.peoplePermissions !== undefined) transformed.people_permissions = dataObj.peoplePermissions;
+        if (dataObj.directoryStatus !== undefined) transformed.directory_status = dataObj.directoryStatus;
+        if (dataObj.loginIdentifier !== undefined) transformed.login_identifier = dataObj.loginIdentifier;
+        if (dataObj.membership !== undefined) transformed.membership = dataObj.membership;
+        if (dataObj.remoteId !== undefined) transformed.remote_id = dataObj.remoteId;
+        if (dataObj.demographicAvatarUrl !== undefined) transformed.demographic_avatar_url = dataObj.demographicAvatarUrl;
+        if (dataObj.inactivatedAt !== undefined) transformed.inactivated_at = dataObj.inactivatedAt;
+        if (dataObj.resourcePermissionFlags !== undefined) transformed.resource_permission_flags = dataObj.resourcePermissionFlags;
+        
+        // Handle relationship fields
+        if (dataObj.primaryCampusId !== undefined) transformed.primary_campus_id = dataObj.primaryCampusId;
+        if (dataObj.householdId !== undefined) transformed.household_id = dataObj.householdId;
+        
+        return transformed;
+    }
+
+    /**
+     * Create a new person
+     * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
+     */
+    async create(data: PersonCreateOptions | Partial<PersonAttributes>) {
+        this.debugLog('people.create', { data });
+        // Check if data is already in snake_case format (has first_name, last_name, etc.)
+        const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
+        
+        // If it's already in snake_case, use it directly; otherwise transform
+        const transformedData = hasSnakeCase 
+            ? (data as Partial<PersonAttributes>)
+            : this.transformPersonData(data as Partial<PersonCreateOptions>);
+        
+        return this.createResource<PersonResource>('/people', transformedData);
     }
 
     /**
      * Update a person
+     * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
      */
-    async update(id: string, data: Partial<PersonCreateOptions>): Promise<PersonResource> {
-        return this.updateResource<PersonResource>(`/people/${id}`, data);
+    async update(id: string, data: Partial<PersonCreateOptions> | Partial<PersonAttributes>) {
+        this.debugLog('people.update', { id, data });
+        // Check if data is already in snake_case format (has first_name, last_name, etc.)
+        const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
+        
+        // If it's already in snake_case, use it directly; otherwise transform
+        const transformedData = hasSnakeCase 
+            ? (data as Partial<PersonAttributes>)
+            : this.transformPersonData(data as Partial<PersonCreateOptions>);
+        
+        return this.updateResource<PersonResource>(`/people/${id}`, transformedData);
     }
 
     /**
      * Delete a person
      */
-    async delete(id: string): Promise<void> {
+    async delete(id: string) {
+        this.debugLog('people.delete', { id });
         return this.deleteResource(`/people/${id}`);
     }
 
@@ -328,159 +414,191 @@ export class PeopleModule extends BaseModule {
     /**
      * Get a person's primary campus
      */
-    async getPrimaryCampus(personId: string): Promise<CampusResource | null> {
+    async getPrimaryCampus(personId: string) {
+        this.debugLog('people.getPrimaryCampus', { personId });
         const person = await this.getById(personId, ['primary_campus']);
-        const campusData = person.relationships?.primary_campus?.data;
+        const campusData = person.primary_campus;
         
-        if (!campusData || Array.isArray(campusData) || !campusData.id) {
+        // campusData can be CampusResource, ResourceIdentifier, or null
+        if (!campusData || Array.isArray(campusData)) {
             return null;
         }
-
-        // Get the full campus resource
-        return this.httpClient.request<{ data: CampusResource }>({
-            method: 'GET',
-            endpoint: `/campuses/${campusData.id}`
-        }).then(response => response.data.data);
+        
+        // Check if it's a ResourceIdentifier (has id but might not have full attributes)
+        if ('id' in campusData && 'type' in campusData) {
+            // Get the full campus resource
+            return this.getSingle<CampusResource>(`/campuses/${campusData.id}`);
+        }
+        
+        // If it's already a full resource, return it
+        return campusData as CampusResource;
     }
 
     /**
      * Set a person's primary campus
      */
-    async setPrimaryCampus(personId: string, campusId: string): Promise<PersonResource> {
-        return this.httpClient.request<{ data: PersonResource }>({
-            method: 'PATCH',
-            endpoint: `/people/${personId}`,
-            data: {
-                data: {
-                    type: 'Person',
-                    id: personId,
-                    attributes: {
-                        primary_campus_id: campusId
-                    }
-                }
-            }
-        }).then(response => response.data.data);
+    async setPrimaryCampus(personId: string, campusId: string) {
+        this.debugLog('people.setPrimaryCampus', { personId, campusId });
+        const transformedData = this.transformPersonData({ primaryCampusId: campusId });
+        return this.updateResource<PersonResource>(`/people/${personId}`, transformedData);
     }
 
     /**
      * Remove a person's primary campus
      */
-    async removePrimaryCampus(personId: string): Promise<PersonResource> {
-        return this.httpClient.request<{ data: PersonResource }>({
-            method: 'PATCH',
-            endpoint: `/people/${personId}`,
-            data: {
-                data: {
-                    type: 'Person',
-                    id: personId,
-                    attributes: {
-                        primary_campus_id: null
-                    }
-                }
-            }
-        }).then(response => response.data.data);
+    async removePrimaryCampus(personId: string) {
+        this.debugLog('people.removePrimaryCampus', { personId });
+        const transformedData = this.transformPersonData({ primaryCampusId: null });
+        return this.updateResource<PersonResource>(`/people/${personId}`, transformedData);
     }
 
     /**
      * Get a person's household
      */
-    async getHousehold(personId: string): Promise<HouseholdResource | null> {
+    async getHousehold(personId: string) {
+        this.debugLog('people.getHousehold', { personId });
         const person = await this.getById(personId, ['household']);
-        const householdData = person.relationships?.household?.data;
+        const householdData = person.household;
         
-        if (!householdData || Array.isArray(householdData) || !householdData.id) {
+        // householdData can be HouseholdResource, ResourceIdentifier, or null
+        if (!householdData || Array.isArray(householdData)) {
             return null;
         }
-
-        // Get the full household resource
-        return this.httpClient.request<{ data: HouseholdResource }>({
-            method: 'GET',
-            endpoint: `/households/${householdData.id}`
-        }).then(response => response.data.data);
+        
+        // Check if it's a ResourceIdentifier (has id but might not have full attributes)
+        if ('id' in householdData && 'type' in householdData) {
+            // Get the full household resource
+            return this.getSingle<HouseholdResource>(`/households/${householdData.id}`);
+        }
+        
+        // If it's already a full resource, return it
+        return householdData as HouseholdResource;
     }
 
     /**
      * Set a person's household
+     * Uses the household_memberships endpoint to create a membership record
      */
-    async setHousehold(personId: string, householdId: string): Promise<PersonResource> {
-        return this.httpClient.request<{ data: PersonResource }>({
-            method: 'PATCH',
-            endpoint: `/people/${personId}`,
-            data: {
-                data: {
-                    type: 'Person',
-                    id: personId,
-                    attributes: {
-                        household_id: householdId
+    async setHousehold(personId: string, householdId: string) {
+        this.debugLog('people.setHousehold', { personId, householdId });
+        // Create a household membership using the household_memberships endpoint
+        interface HouseholdMembershipCreateData {
+            relationships: {
+                person: {
+                    data: {
+                        type: 'Person';
+                        id: string;
+                    };
+                };
+            };
+        }
+        await this.createResource<ResourceObject<'HouseholdMembership', Attributes, { household?: Relationship; person?: Relationship }>>(
+            `/households/${householdId}/household_memberships`, 
+            {
+                relationships: {
+                    person: {
+                        data: {
+                            type: 'Person',
+                            id: personId
+                        }
                     }
                 }
-            }
-        }).then(response => response.data.data);
+            } as HouseholdMembershipCreateData
+        );
+        
+        // Return the updated person
+        return this.getById(personId);
     }
 
     /**
      * Remove a person from their household
+     * Uses the household_memberships endpoint to delete the membership record
      */
-    async removeFromHousehold(personId: string): Promise<PersonResource> {
-        return this.httpClient.request<{ data: PersonResource }>({
-            method: 'PATCH',
-            endpoint: `/people/${personId}`,
-            data: {
-                data: {
-                    type: 'Person',
-                    id: personId,
-                    attributes: {
-                        household_id: null
-                    }
-                }
+    async removeFromHousehold(personId: string) {
+        this.debugLog('people.removeFromHousehold', { personId });
+        // Get the person's household memberships to find the membership ID
+        // Use the person's household_memberships endpoint
+        type HouseholdMembershipResource = ResourceObject<'HouseholdMembership', Attributes, { household?: Relationship; person?: Relationship }>;
+        
+        type HouseholdMembershipResponse = {
+            data: HouseholdMembershipResource[];
+        };
+        
+        const membershipsResponse = await this.httpClient.request<HouseholdMembershipResponse>({
+            method: 'GET',
+            endpoint: `/people/${personId}/household_memberships`
+        });
+        
+        if (!membershipsResponse.data.data || membershipsResponse.data.data.length === 0) {
+            throw new Error(`Person ${personId} is not in a household`);
+        }
+        
+        // Get the first membership (a person can only be in one household)
+        const membership = membershipsResponse.data.data[0];
+        const membershipId = membership.id;
+        
+        // Get the household ID from the membership relationship
+        const membershipHousehold = membership.relationships?.household?.data;
+        if (!membershipHousehold || Array.isArray(membershipHousehold) || !membershipHousehold.id) {
+            // If household relationship is not included, get it from the membership
+            interface HouseholdMembershipDetailResponse {
+                data: HouseholdMembershipResource;
             }
-        }).then(response => response.data.data);
+            const membershipDetails = await this.httpClient.request<HouseholdMembershipDetailResponse>({
+                method: 'GET',
+                endpoint: `/people/${personId}/household_memberships/${membershipId}`,
+                params: {
+                    include: 'household'
+                }
+            });
+            const householdData = membershipDetails.data.data.relationships?.household?.data;
+            if (!householdData || Array.isArray(householdData) || !householdData.id) {
+                throw new Error(`Could not determine household ID for membership ${membershipId}`);
+            }
+            const householdId = householdData.id;
+            await this.deleteResource(`/households/${householdId}/household_memberships/${membershipId}`);
+        } else {
+            const householdId = membershipHousehold.id;
+            await this.deleteResource(`/households/${householdId}/household_memberships/${membershipId}`);
+        }
+        
+        // Return the updated person
+        return this.getById(personId);
     }
 
     /**
      * Get all people in a specific household
+     * Note: This uses getList() internally, so it returns a single page. Use getAll() with where[household_id] for all pages.
      */
-    async getHouseholdMembers(householdId: string, options: PeopleListOptions = {}): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {
-            'where[household_id]': householdId
-        };
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
+    async getHouseholdMembers(householdId: string, options: PersonPageOptions = {}) {
+        this.debugLog('people.getHouseholdMembers', { householdId, options });
+        // household_id is not in PersonWhereClause, so we need to use flat params
+        // Build the where clause manually and merge with other options
+        const params: Record<string, any> = {};
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage) params.per_page = options.perPage;
+        if (options.page) params.page = options.page;
+        params['where[household_id]'] = householdId;
 
         return this.getList<PersonResource>('/people', params);
     }
 
     /**
      * Get people by campus
+     * Note: This uses getList() internally, so it returns a single page. Use getAll() with where[primary_campus_id] for all pages.
      */
-    async getByCampus(campusId: string, options: PeopleListOptions = {}): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {
-            'where[primary_campus_id]': campusId
-        };
-
-        if (options.include) {
-            params.include = options.include.join(',');
+    async getByCampus(campusId: string, options: PersonPageOptions = {}) {
+        this.debugLog('people.getByCampus', { campusId, options });
+        const campusIdNum = Number(campusId);
+        if (isNaN(campusIdNum)) {
+            throw new Error(`Invalid campus ID: ${campusId}`);
         }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<PersonResource>('/people', params);
+        return this.getList<PersonResource>('/people', {
+            where: { primary_campus_id: campusIdNum } as PersonWhereClause,
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page
+        });
     }
 
     /**
@@ -490,22 +608,13 @@ export class PeopleModule extends BaseModule {
         include?: string[];
         perPage?: number;
         page?: number;
-    } = {}): Promise<{ data: any[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList(`/people/${personId}/workflow_cards`, params);
+    } = {}) {
+        this.debugLog('people.getWorkflowCards', { personId, options });
+        return this.getList<WorkflowCardResource>(`/people/${personId}/workflow_cards`, {
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page
+        });
     }
 
     /**
@@ -515,22 +624,13 @@ export class PeopleModule extends BaseModule {
         include?: string[];
         perPage?: number;
         page?: number;
-    } = {}): Promise<{ data: any[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList(`/people/${personId}/notes`, params);
+    } = {}) {
+        this.debugLog('people.getNotes', { personId, options });
+        return this.getList<NoteResource>(`/people/${personId}/notes`, {
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page
+        });
     }
 
     /**
@@ -540,22 +640,13 @@ export class PeopleModule extends BaseModule {
         include?: string[];
         perPage?: number;
         page?: number;
-    } = {}): Promise<{ data: any[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList(`/people/${personId}/field_data`, params);
+    } = {}) {
+        this.debugLog('people.getFieldData', { personId, options });
+        return this.getList<FieldDatumResource>(`/people/${personId}/field_data`, {
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page
+        });
     }
 
     /**
@@ -565,22 +656,13 @@ export class PeopleModule extends BaseModule {
         include?: string[];
         perPage?: number;
         page?: number;
-    } = {}): Promise<{ data: any[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList(`/people/${personId}/social_profiles`, params);
+    } = {}) {
+        this.debugLog('people.getSocialProfiles', { personId, options });
+        return this.getList<SocialProfileResource>(`/people/${personId}/social_profiles`, {
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page
+        });
     }
 
     /**
@@ -594,13 +676,13 @@ export class PeopleModule extends BaseModule {
      *   to a person's profile when a match is found. The contacts are added as non-primary 
      *   to preserve existing primary contacts.
      * 
-     * @example
+     * @gmail.com
      * ```typescript
      * // Basic find or create
      * const person = await client.people.findOrCreate({
      *   firstName: 'John',
      *   lastName: 'Doe',
-     *   email: 'john@example.com',
+     *   email: 'john@gmail.com',
      *   phone: '+1234567890'
      * });
      * 
@@ -608,7 +690,7 @@ export class PeopleModule extends BaseModule {
      * const person = await client.people.findOrCreate({
      *   firstName: 'Jane',
      *   lastName: 'Smith',
-     *   email: 'jane@example.com',
+     *   email: 'jane@gmail.com',
      *   phone: '+1987654321',
      *   addMissingContactInfo: true  // Will add phone if person only has email
      * });
@@ -616,7 +698,8 @@ export class PeopleModule extends BaseModule {
      * 
      * @returns The found or newly created person
      */
-    async findOrCreate(options: PersonMatchOptions): Promise<PersonResource> {
+    async findOrCreate(options: PersonMatchOptions) {
+        this.debugLog('people.findOrCreate', { options });
         return this.personMatcher.findOrCreate(options);
     }
 
@@ -629,8 +712,10 @@ export class PeopleModule extends BaseModule {
         phone?: string;
         status?: string;
         perPage?: number;
-    }): Promise<{ data: PersonResource[]; meta?: any; links?: any }> {
-        const where: Record<string, any> = {};
+        page?: number;
+    }) {
+        this.debugLog('people.search', { criteria });
+        const where: PersonWhereClause = {};
 
         // Use flexible search when we have multiple criteria or want broader matching
         if (criteria.email || criteria.phone) {
@@ -649,9 +734,17 @@ export class PeopleModule extends BaseModule {
             where.status = criteria.status;
         }
 
+        // If pagination options are provided, use getPage instead of getAll
+        if (criteria.perPage !== undefined || criteria.page !== undefined) {
+            return this.getPage({
+                where,
+                perPage: criteria.perPage,
+                page: criteria.page,
+            });
+        }
+
         return this.getAll({
             where,
-            perPage: criteria.perPage || 25,
         });
     }
 
@@ -660,84 +753,96 @@ export class PeopleModule extends BaseModule {
     /**
      * Get person's emails
      */
-    async getEmails(personId: string): Promise<{ data: EmailResource[]; meta?: any; links?: any }> {
+    async getEmails(personId: string) {
+        this.debugLog('people.getEmails', { personId });
         return this.getList<EmailResource>(`/people/${personId}/emails`);
     }
 
     /**
      * Add an email to a person
      */
-    async addEmail(personId: string, data: EmailAttributes): Promise<EmailResource> {
+    async addEmail(personId: string, data: EmailAttributes) {
+        this.debugLog('people.addEmail', { personId, data });
         return this.createResource<EmailResource>(`/people/${personId}/emails`, data);
     }
 
     /**
      * Update a person's email
      */
-    async updateEmail(personId: string, emailId: string, data: Partial<EmailAttributes>): Promise<EmailResource> {
+    async updateEmail(personId: string, emailId: string, data: Partial<EmailAttributes>) {
+        this.debugLog('people.updateEmail', { personId, emailId, data });
         return this.updateResource<EmailResource>(`/people/${personId}/emails/${emailId}`, data);
     }
 
     /**
      * Delete a person's email
      */
-    async deleteEmail(personId: string, emailId: string): Promise<void> {
+    async deleteEmail(personId: string, emailId: string) {
+        this.debugLog('people.deleteEmail', { personId, emailId });
         return this.deleteResource(`/people/${personId}/emails/${emailId}`);
     }
 
     /**
      * Get person's phone numbers
      */
-    async getPhoneNumbers(personId: string): Promise<{ data: PhoneNumberResource[]; meta?: any; links?: any }> {
+    async getPhoneNumbers(personId: string) {
+        this.debugLog('people.getPhoneNumbers', { personId });
         return this.getList<PhoneNumberResource>(`/people/${personId}/phone_numbers`);
     }
 
     /**
      * Add a phone number to a person
      */
-    async addPhoneNumber(personId: string, data: PhoneNumberAttributes): Promise<PhoneNumberResource> {
+    async addPhoneNumber(personId: string, data: PhoneNumberAttributes) {
+        this.debugLog('people.addPhoneNumber', { personId, data });
         return this.createResource<PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
     }
 
     /**
      * Update a person's phone number
      */
-    async updatePhoneNumber(personId: string, phoneId: string, data: Partial<PhoneNumberAttributes>): Promise<PhoneNumberResource> {
+    async updatePhoneNumber(personId: string, phoneId: string, data: Partial<PhoneNumberAttributes>) {
+        this.debugLog('people.updatePhoneNumber', { personId, phoneId, data });
         return this.updateResource<PhoneNumberResource>(`/people/${personId}/phone_numbers/${phoneId}`, data);
     }
 
     /**
      * Delete a person's phone number
      */
-    async deletePhoneNumber(personId: string, phoneId: string): Promise<void> {
+    async deletePhoneNumber(personId: string, phoneId: string) {
+        this.debugLog('people.deletePhoneNumber', { personId, phoneId });
         return this.deleteResource(`/people/${personId}/phone_numbers/${phoneId}`);
     }
 
     /**
      * Get person's addresses
      */
-    async getAddresses(personId: string): Promise<{ data: AddressResource[]; meta?: any; links?: any }> {
+    async getAddresses(personId: string) {
+        this.debugLog('people.getAddresses', { personId });
         return this.getList<AddressResource>(`/people/${personId}/addresses`);
     }
 
     /**
      * Add an address to a person
      */
-    async addAddress(personId: string, data: AddressAttributes): Promise<AddressResource> {
+    async addAddress(personId: string, data: AddressAttributes) {
+        this.debugLog('people.addAddress', { personId, data });
         return this.createResource<AddressResource>(`/people/${personId}/addresses`, data);
     }
 
     /**
      * Update a person's address
      */
-    async updateAddress(personId: string, addressId: string, data: Partial<AddressAttributes>): Promise<AddressResource> {
+    async updateAddress(personId: string, addressId: string, data: Partial<AddressAttributes>) {
+        this.debugLog('people.updateAddress', { personId, addressId, data });
         return this.updateResource<AddressResource>(`/people/${personId}/addresses/${addressId}`, data);
     }
 
     /**
      * Delete a person's address
      */
-    async deleteAddress(personId: string, addressId: string): Promise<void> {
+    async deleteAddress(personId: string, addressId: string) {
+        this.debugLog('people.deleteAddress', { personId, addressId });
         return this.deleteResource(`/people/${personId}/addresses/${addressId}`);
     }
 
@@ -745,21 +850,24 @@ export class PeopleModule extends BaseModule {
     /**
      * Add a social profile to a person
      */
-    async addSocialProfile(personId: string, data: SocialProfileAttributes): Promise<SocialProfileResource> {
+    async addSocialProfile(personId: string, data: SocialProfileAttributes) {
+        this.debugLog('people.addSocialProfile', { personId, data });
         return this.createResource<SocialProfileResource>(`/people/${personId}/social_profiles`, data);
     }
 
     /**
      * Update a person's social profile
      */
-    async updateSocialProfile(personId: string, profileId: string, data: Partial<SocialProfileAttributes>): Promise<SocialProfileResource> {
+    async updateSocialProfile(personId: string, profileId: string, data: Partial<SocialProfileAttributes>) {
+        this.debugLog('people.updateSocialProfile', { personId, profileId, data });
         return this.updateResource<SocialProfileResource>(`/people/${personId}/social_profiles/${profileId}`, data);
     }
 
     /**
      * Delete a person's social profile
      */
-    async deleteSocialProfile(personId: string, profileId: string): Promise<void> {
+    async deleteSocialProfile(personId: string, profileId: string) {
+        this.debugLog('people.deleteSocialProfile', { personId, profileId });
         return this.deleteResource(`/people/${personId}/social_profiles/${profileId}`);
     }
 
@@ -779,8 +887,14 @@ export class PeopleModule extends BaseModule {
         phone?: PhoneNumberResource;
         address?: AddressResource;
     }> {
+        this.debugLog('people.createWithContacts', { personData, contacts });
         const person = await this.create(personData);
-        const result: any = { person };
+        const result: {
+            person: PersonResource;
+            email?: EmailResource;
+            phone?: PhoneNumberResource;
+            address?: AddressResource;
+        } = { person };
 
         if (contacts?.email) {
             result.email = await this.addEmail(person.id, contacts.email);

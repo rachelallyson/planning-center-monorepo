@@ -1,117 +1,74 @@
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
-import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationOptions, PaginationResult } from '@rachelallyson/planning-center-base-ts';
 import type {
     ServiceTimeResource,
     ServiceTimeAttributes,
     ServiceTimesList,
 } from '../types';
+import type { ServiceTimeListOptions, ServiceTimePageOptions } from '../types/api-options';
 
 /**
  * ServiceTime module for managing service time-related operations
  * ServiceTimes are campus-scoped resources
  */
 export class ServiceTimeModule extends BaseModule {
-    constructor(
-        httpClient: PcoHttpClient,
-        paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
-    ) {
-        super(httpClient, paginationHelper, eventEmitter);
-    }
-
     /**
      * Get all service times for a specific campus across all pages
      */
-    async getAll(campusId: string, params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-        page?: number;
-    }): Promise<ServiceTimesList> {
-        const queryParams: Record<string, any> = {};
+    async getAll(campusId: string, params?: ServiceTimeListOptions) {
+        this.debugLog('serviceTime.getAll', { campusId, params });
+        return this.getAllPages<ServiceTimeResource>(`/campuses/${campusId}/service_times`, {
+            where: params?.where,
+            include: params?.include,
+            order: params?.order
+        });
+    }
 
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        // Note: per_page and page options are ignored when getting all pages
-        // Use getAllPagesPaginated() if you need pagination control
-
-        const result = await this.getAllPages<ServiceTimeResource>(`/campuses/${campusId}/service_times`, queryParams);
-        
-        // Return in the same format as before for backward compatibility
-        return {
-            data: result.data,
-            meta: { total_count: result.totalCount },
-            links: {}
-        } as ServiceTimesList;
+    /**
+     * Get a single page of service times for a campus with optional filtering and pagination control
+     * Use this when you need a specific page or want to limit the number of results
+     * @param campusId - The campus ID
+     * @param params - List parameters including where, include, perPage, page, and order
+     * @returns A single page of results with meta and links for pagination
+     */
+    async getPage(campusId: string, params?: ServiceTimePageOptions) {
+        return this.getList<ServiceTimeResource>(`/campuses/${campusId}/service_times`, {
+            where: params?.where,
+            include: params?.include,
+            per_page: params?.perPage,
+            page: params?.page,
+            order: params?.order
+        });
     }
 
     /**
      * Get a specific service time by ID for a campus
      */
-    async getById(campusId: string, id: string, include?: string[]): Promise<ServiceTimeResource> {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-        return this.getSingle<ServiceTimeResource>(`/campuses/${campusId}/service_times/${id}`, params);
+    async getById(campusId: string, id: string, include?: string[]) {
+        this.debugLog('serviceTime.getById', { campusId, id, include });
+        return this.getSingle<ServiceTimeResource>(`/campuses/${campusId}/service_times/${id}`, include);
     }
 
     /**
      * Create a new service time for a campus
      */
-    async create(campusId: string, data: ServiceTimeAttributes): Promise<ServiceTimeResource> {
+    async create(campusId: string, data: ServiceTimeAttributes) {
+        this.debugLog('serviceTime.create', { campusId, data });
         return this.createResource<ServiceTimeResource>(`/campuses/${campusId}/service_times`, data);
     }
 
     /**
      * Update an existing service time for a campus
      */
-    async update(campusId: string, id: string, data: Partial<ServiceTimeAttributes>): Promise<ServiceTimeResource> {
+    async update(campusId: string, id: string, data: Partial<ServiceTimeAttributes>) {
+        this.debugLog('serviceTime.update', { campusId, id, data });
         return this.updateResource<ServiceTimeResource>(`/campuses/${campusId}/service_times/${id}`, data);
     }
 
     /**
      * Delete a service time for a campus
      */
-    async delete(campusId: string, id: string): Promise<void> {
+    async delete(campusId: string, id: string) {
+        this.debugLog('serviceTime.delete', { campusId, id });
         return this.deleteResource(`/campuses/${campusId}/service_times/${id}`);
-    }
-
-    /**
-     * Get all service times for a campus with pagination support
-     */
-    async getAllPagesPaginated(campusId: string, params?: {
-        where?: Record<string, any>;
-        include?: string[];
-        per_page?: number;
-    }, paginationOptions?: PaginationOptions): Promise<PaginationResult<ServiceTimeResource>> {
-        const queryParams: Record<string, any> = {};
-
-        if (params?.where) {
-            Object.entries(params.where).forEach(([key, value]) => {
-                queryParams[`where[${key}]`] = value;
-            });
-        }
-
-        if (params?.include) {
-            queryParams.include = params.include.join(',');
-        }
-
-        if (params?.per_page) {
-            queryParams.per_page = params.per_page;
-        }
-
-        return this.getAllPages<ServiceTimeResource>(`/campuses/${campusId}/service_times`, queryParams, paginationOptions);
     }
 }
