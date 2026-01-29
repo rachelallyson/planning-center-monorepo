@@ -5,31 +5,47 @@
  * with large datasets and high-volume API operations.
  */
 
-import type { PcoClientState } from './core';
-import { getPeople, getPersonEmails, getPersonPhoneNumbers } from './people';
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
+import type { PcoClient } from './client';
 import type {
   EmailResource,
   PersonResource,
   PhoneNumberResource,
+  PeopleList,
+  EmailsList,
+  PhoneNumbersList,
 } from './types';
+import type { PersonListOptions, PersonWhereClause } from './types/api-options';
 
 // ===== Batch Processing =====
 
 /**
- * Process items in batches to avoid overwhelming the API
+ * Process items in batches to avoid overwhelming the API.
+ * Pass `client` in options to log batch progress when debug is enabled.
  */
 export async function processInBatches<T, R>(
   items: T[],
   batchSize: number,
-  processor: (batch: T[]) => Promise<R[]>
+  processor: (batch: T[]) => Promise<R[]>,
+  options?: { client?: PcoClient }
 ): Promise<R[]> {
+  const logger =
+    options?.client && typeof (options.client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? createDebugLogger((options.client as PcoClient).getConfig())
+      : null;
+  if (logger?.enabled) {
+    logger.log('performance.processInBatches', { itemCount: items.length, batchSize, batchCount: Math.ceil(items.length / batchSize) });
+  }
+
   const results: R[] = [];
 
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
+    const batchIndex = Math.floor(i / batchSize) + 1;
+    if (logger?.enabled) logger.log('performance.processInBatches batch start', { batchIndex, batchSize: batch.length });
     const batchResults = await processor(batch);
-
     results.push(...batchResults);
+    if (logger?.enabled) logger.log('performance.processInBatches batch complete', { batchIndex, resultCount: batchResults.length, totalSoFar: results.length });
 
     // Add a small delay between batches to respect rate limits
     if (i + batchSize < items.length) {
@@ -44,7 +60,7 @@ export async function processInBatches<T, R>(
  * Batch fetch person details with related data
  */
 export async function batchFetchPersonDetails(
-  client: PcoClientState,
+  client: PcoClient,
   personIds: string[],
   options: {
     includeEmails?: boolean;
@@ -61,44 +77,47 @@ export async function batchFetchPersonDetails(
     }
   >
 > {
+  const logger = createDebugLogger(
+    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? (client as PcoClient).getConfig()
+      : undefined
+  );
+  if (logger.enabled) logger.log('performance.batchFetchPersonDetails', { personCount: personIds.length, options });
+
   const {
     batchSize = 10,
     includeEmails = true,
     includePhones = true,
   } = options;
-  const results = new Map();
+  type PersonDetails = { person: PersonResource; emails?: EmailResource[]; phoneNumbers?: PhoneNumberResource[] };
+  const results = new Map<string, PersonDetails>();
 
   await processInBatches(personIds, batchSize, async batch => {
     const batchResults = await Promise.all(
       batch.map(async personId => {
-        const personPromise = getPeople(client, {
-          per_page: 1,
-          where: { id: personId },
-        });
+        const personPromise = client.people.getById(personId);
+        const emailPromise = includeEmails ? client.people.getEmails(personId) : null;
+        const phonePromise = includePhones ? client.people.getPhoneNumbers(personId) : null;
 
-        const promises_array: Promise<any>[] = [personPromise];
+        const promises: Promise<unknown>[] = [personPromise];
+        if (emailPromise) promises.push(emailPromise);
+        if (phonePromise) promises.push(phonePromise);
 
-        if (includeEmails) {
-          promises_array.push(getPersonEmails(client, personId));
-        }
-
-        if (includePhones) {
-          promises_array.push(getPersonPhoneNumbers(client, personId));
-        }
-
-        const responses = await Promise.all(promises_array);
-        const person = responses[0].data[0];
+        const responses = await Promise.all(promises);
+        const person = responses[0] as PersonResource;
 
         if (!person) return null;
 
-        const result: any = { person };
+        const result: PersonDetails = { person };
 
-        if (includeEmails) {
-          result.emails = responses[1]?.data || [];
+        if (includeEmails && emailPromise) {
+          const emailsResponse = await emailPromise;
+          result.emails = (emailsResponse as EmailsList).data || [];
         }
 
-        if (includePhones) {
-          result.phoneNumbers = responses[includeEmails ? 2 : 1]?.data || [];
+        if (includePhones && phonePromise) {
+          const phonesResponse = await phonePromise;
+          result.phoneNumbers = (phonesResponse as PhoneNumbersList).data || [];
         }
 
         return { personId, result };
@@ -112,7 +131,7 @@ export async function batchFetchPersonDetails(
     });
 
     return batchResults; // Return for processInBatches
-  });
+  }, { client });
 
   return results;
 }
@@ -164,11 +183,18 @@ export class ApiCache {
  * Cached version of getPeople with configurable TTL
  */
 export async function getCachedPeople(
-  client: PcoClientState,
+  client: PcoClient,
   cache: ApiCache,
-  params: any = {},
+  params: PersonListOptions = {},
   ttlMs = 300000
-): Promise<any> {
+): Promise<PeopleList> {
+  const logger = createDebugLogger(
+    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? (client as PcoClient).getConfig()
+      : undefined
+  );
+  if (logger.enabled) logger.log('performance.getCachedPeople', { params, ttlMs });
+
   const cacheKey = `people:${JSON.stringify(params)}`;
 
   const cached = cache.get(cacheKey);
@@ -177,11 +203,11 @@ export async function getCachedPeople(
     return cached;
   }
 
-  const result = await getPeople(client, params);
+  const result = await client.people.getAll(params);
 
   cache.set(cacheKey, result, ttlMs);
 
-  return result;
+  return result as PeopleList;
 }
 
 // ===== Pagination Optimization =====
@@ -190,7 +216,7 @@ export async function getCachedPeople(
  * Efficiently fetch all pages of data with progress tracking
  */
 export async function fetchAllPages<T>(
-  client: PcoClientState,
+  client: PcoClient,
   fetchFunction: (
     page: number,
     perPage: number
@@ -205,6 +231,13 @@ export async function fetchAllPages<T>(
     onProgress?: (current: number, total: number) => void;
   } = {}
 ): Promise<T[]> {
+  const logger = createDebugLogger(
+    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? (client as PcoClient).getConfig()
+      : undefined
+  );
+  if (logger.enabled) logger.log('performance.fetchAllPages', { options });
+
   const { maxPages = 1000, onProgress, perPage = 100 } = options;
   const allData: T[] = [];
   let page = 1;
@@ -240,14 +273,21 @@ export async function fetchAllPages<T>(
  * Stream large datasets with backpressure control
  */
 export async function* streamPeopleData(
-  client: PcoClientState,
+  client: PcoClient,
   options: {
     perPage?: number;
     maxConcurrent?: number;
-    where?: Record<string, any>;
+    where?: PersonWhereClause;
     include?: string[];
   } = {}
 ): AsyncGenerator<PersonResource[], void, unknown> {
+  const logger = createDebugLogger(
+    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? (client as PcoClient).getConfig()
+      : undefined
+  );
+  if (logger.enabled) logger.log('performance.streamPeopleData', { options });
+
   const { include = [], maxConcurrent = 3, perPage = 50, where = {} } = options;
   let page = 1;
   let hasMore = true;
@@ -257,10 +297,10 @@ export async function* streamPeopleData(
     await semaphore.acquire();
 
     try {
-      const response = await getPeople(client, {
-        include,
+      const response = await client.people.getPage({
+        include: include as any,
         page,
-        per_page: perPage,
+        perPage,
         where,
       });
 
@@ -314,7 +354,7 @@ class Semaphore {
  * Process large datasets without loading everything into memory
  */
 export async function processLargeDataset<T, R>(
-  client: PcoClientState,
+  client: PcoClient,
   fetchFunction: (
     page: number,
     perPage: number
@@ -329,6 +369,13 @@ export async function processLargeDataset<T, R>(
     onBatchProcessed?: (results: R[]) => void;
   } = {}
 ): Promise<R[]> {
+  const logger = createDebugLogger(
+    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
+      ? (client as PcoClient).getConfig()
+      : undefined
+  );
+  if (logger.enabled) logger.log('performance.processLargeDataset', { options });
+
   const { maxMemoryItems = 1000, onBatchProcessed, perPage = 100 } = options;
   const allResults: R[] = [];
   let page = 1;

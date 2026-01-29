@@ -2,17 +2,28 @@
  * v2.0.0 Person Match Scoring
  */
 
-import type { PersonResource } from '../types';
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
+import type { PcoClientConfig } from '@rachelallyson/planning-center-base-ts';
+import type { PersonResource, FlattenedPersonResource } from '../types';
 import type { PersonMatchOptions, PeopleModule } from '../modules/people';
 import { matchesAgeCriteria, calculateAgeSafe, normalizeEmail, normalizePhone } from '../helpers';
 
 export class MatchScorer {
-    constructor(private peopleModule: PeopleModule) {}
+    private getConfig?: () => PcoClientConfig;
+
+    constructor(private peopleModule: PeopleModule, getConfig?: () => PcoClientConfig) {
+        this.getConfig = getConfig;
+    }
+
+    private debugLog(message: string, data?: unknown): void {
+        const logger = createDebugLogger(this.getConfig?.());
+        if (logger.enabled) logger.log(message, data);
+    }
 
     /**
      * Score a person match based on various criteria
      */
-    async scoreMatch(person: PersonResource, options: PersonMatchOptions): Promise<number> {
+    async scoreMatch(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<number> {
         let totalScore = 0;
         let maxScore = 0;
 
@@ -55,7 +66,7 @@ export class MatchScorer {
     /**
      * Get a human-readable reason for the match
      */
-    async getMatchReason(person: PersonResource, options: PersonMatchOptions): Promise<string> {
+    async getMatchReason(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<string> {
         const reasons: string[] = [];
 
         if (options.email) {
@@ -84,7 +95,7 @@ export class MatchScorer {
         // Add age-based match reasons
         const ageScore = this.scoreAgeMatch(person, options);
         if (ageScore > 0.8) {
-            const age = calculateAgeSafe(person.attributes?.birthdate);
+            const age = calculateAgeSafe(person.birthdate);
             if (age !== null) {
                 if (options.agePreference === 'adults') {
                     reasons.push('adult age match');
@@ -106,19 +117,19 @@ export class MatchScorer {
     /**
      * Score email matching - verifies actual email matches
      */
-    async scoreEmailMatch(person: PersonResource, email: string): Promise<number> {
+    async scoreEmailMatch(person: FlattenedPersonResource, email: string): Promise<number> {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
             const normalizedSearchEmail = normalizeEmail(email);
             
             // Check if any of the person's emails match
             const emails = personEmails.data?.map(e => 
-                normalizeEmail(e.attributes?.address || '')
+                normalizeEmail(e.address || '')
             ).filter(Boolean) || [];
             
             return emails.includes(normalizedSearchEmail) ? 1.0 : 0.0;
         } catch (error) {
-            console.warn(`Failed to verify email match for person ${person.id}:`, error);
+            this.debugLog('scoring  failed to verify email match', { personId: person.id, error: String(error) });
             return 0.0;
         }
     }
@@ -126,17 +137,17 @@ export class MatchScorer {
     /**
      * Score phone matching - verifies actual phone matches
      */
-    async scorePhoneMatch(person: PersonResource, phone: string): Promise<number> {
+    async scorePhoneMatch(person: FlattenedPersonResource, phone: string): Promise<number> {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
             const normalizedSearchPhone = normalizePhone(phone);
             const phones = personPhones.data?.map(p => 
-                normalizePhone(p.attributes?.number || '')
+                normalizePhone(p.number || '')
             ).filter(Boolean) || [];
             
             return phones.includes(normalizedSearchPhone) ? 1.0 : 0.0;
         } catch (error) {
-            console.warn(`Failed to verify phone match for person ${person.id}:`, error);
+            this.debugLog('scoring  failed to verify phone match', { personId: person.id, error: String(error) });
             return 0.0;
         }
     }
@@ -144,21 +155,18 @@ export class MatchScorer {
     /**
      * Score name matching - only exact matches
      */
-    private scoreNameMatch(person: PersonResource, options: PersonMatchOptions): number {
-        const attrs = person.attributes;
-        if (!attrs) return 0;
-
+    private scoreNameMatch(person: FlattenedPersonResource, options: PersonMatchOptions): number {
         let score = 0;
 
         // First name matching - exact match only
-        if (options.firstName && attrs.first_name) {
-            const firstNameMatch = options.firstName.toLowerCase() === attrs.first_name.toLowerCase();
+        if (options.firstName && person.first_name) {
+            const firstNameMatch = options.firstName.toLowerCase() === person.first_name.toLowerCase();
             score += firstNameMatch ? 0.5 : 0;
         }
 
         // Last name matching - exact match only
-        if (options.lastName && attrs.last_name) {
-            const lastNameMatch = options.lastName.toLowerCase() === attrs.last_name.toLowerCase();
+        if (options.lastName && person.last_name) {
+            const lastNameMatch = options.lastName.toLowerCase() === person.last_name.toLowerCase();
             score += lastNameMatch ? 0.5 : 0;
         }
 
@@ -168,8 +176,8 @@ export class MatchScorer {
     /**
      * Score age matching
      */
-    private scoreAgeMatch(person: PersonResource, options: PersonMatchOptions): number {
-        const birthdate = person.attributes?.birthdate;
+    private scoreAgeMatch(person: FlattenedPersonResource, options: PersonMatchOptions): number {
+        const birthdate = person.birthdate;
 
         // If no age criteria specified, return neutral score
         if (!options.agePreference &&
@@ -225,7 +233,7 @@ export class MatchScorer {
     /**
      * Score additional criteria
      */
-    private scoreAdditionalCriteria(person: PersonResource, options: PersonMatchOptions): number {
+    private scoreAdditionalCriteria(person: FlattenedPersonResource, options: PersonMatchOptions): number {
         // Add scoring for other criteria like campus, status, etc.
         return 0;
     }

@@ -2,13 +2,15 @@
  * v2.0.0 Person Matching Logic
  */
 
+import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
+import type { PcoClientConfig } from '@rachelallyson/planning-center-base-ts';
 import type { PeopleModule } from '../modules/people';
-import type { PersonResource } from '../types';
-import { 
-    PersonMatchOptions, 
+import type { PersonResource, FlattenedPersonResource } from '../types';
+import {
+    PersonMatchOptions,
     RetryConfig,
     DEFAULT_INITIAL_RETRY_CONFIG,
-    DEFAULT_AGGRESSIVE_RETRY_CONFIG 
+    DEFAULT_AGGRESSIVE_RETRY_CONFIG
 } from '../modules/people';
 import { MatchStrategies } from './strategies';
 import { MatchScorer } from './scoring';
@@ -23,7 +25,7 @@ import {
 } from '../helpers';
 
 export interface MatchResult {
-    person: PersonResource;
+    person: FlattenedPersonResource;
     score: number;
     reason: string;
     isVerifiedContactMatch?: boolean; // True if email/phone actually matches
@@ -32,10 +34,18 @@ export interface MatchResult {
 export class PersonMatcher {
     private strategies: MatchStrategies;
     private scorer: MatchScorer;
+    private getConfig?: () => PcoClientConfig;
 
-    constructor(private peopleModule: PeopleModule) {
+    constructor(private peopleModule: PeopleModule, getConfig?: () => PcoClientConfig) {
+        this.getConfig = getConfig;
         this.strategies = new MatchStrategies();
-        this.scorer = new MatchScorer(peopleModule);
+        this.scorer = new MatchScorer(peopleModule, getConfig);
+    }
+
+    /** Log only when client config has debug enabled; no-op otherwise */
+    private debugLog(message: string, data?: unknown): void {
+        const logger = createDebugLogger(this.getConfig?.());
+        if (logger.enabled) logger.log(message, data);
     }
 
     /**
@@ -72,7 +82,7 @@ export class PersonMatcher {
      * @param options.retryConfig - Configuration for retry logic to handle PCO contact verification delays
      * @param options.searchStrategy - 'single' for standard search, 'multi-step' for trying multiple strategies
      */
-    async findOrCreate(options: PersonMatchOptions): Promise<PersonResource> {
+    async findOrCreate(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
         const { 
             createIfNotFound = true, 
             matchStrategy = 'fuzzy', 
@@ -158,7 +168,7 @@ export class PersonMatcher {
             DEFAULT_AGGRESSIVE_RETRY_CONFIG
         );
         
-        console.log(`[PERSON_MATCH] Starting aggressive final search before create`, {
+        this.debugLog(`findOrCreate  aggressive final search before create`, {
             maxWaitTime: aggressiveConfig.maxWaitTime,
             maxRetries: aggressiveConfig.maxRetries,
         });
@@ -176,7 +186,7 @@ export class PersonMatcher {
                 }
                 
                 if (match) {
-                    console.log(`[PERSON_MATCH] Aggressive search found person (would have created duplicate)`, {
+                    this.debugLog(`findOrCreate  aggressive search found person (would have created duplicate)`, {
                         personId: match.person.id,
                         attempt,
                         totalWaitTime,
@@ -184,7 +194,7 @@ export class PersonMatcher {
                     return match;
                 }
             } catch (error) {
-                console.warn(`[PERSON_MATCH] Aggressive search attempt ${attempt} failed:`, error);
+                this.debugLog(`findOrCreate  aggressive search attempt ${attempt} failed`, { error: String(error) });
             }
             
             // Don't wait on the last attempt
@@ -206,7 +216,7 @@ export class PersonMatcher {
             await new Promise(resolve => setTimeout(resolve, delay));
         }
         
-        console.log(`[PERSON_MATCH] Aggressive search completed - no match found, safe to create`, {
+        this.debugLog(`findOrCreate  aggressive search completed - no match found, safe to create`, {
             totalWaitTime,
             maxRetries: aggressiveConfig.maxRetries,
         });
@@ -259,7 +269,7 @@ export class PersonMatcher {
                 const match = await this.findMatch(searchOptions);
                 
                 if (match) {
-                    console.log(`[PERSON_MATCH] Multi-step search found match using ${strategy.description}`, {
+                    this.debugLog(`findOrCreate  multi-step search found match using ${strategy.description}`, {
                         personId: match.person.id,
                         score: match.score,
                         reason: match.reason,
@@ -268,7 +278,7 @@ export class PersonMatcher {
                 }
             } catch (error) {
                 // Log but continue to next strategy
-                console.warn(`[PERSON_MATCH] Multi-step strategy "${strategy.description}" failed:`, error);
+                this.debugLog(`findOrCreate  multi-step strategy "${strategy.description}" failed`, { error: String(error) });
             }
         }
         
@@ -285,7 +295,7 @@ export class PersonMatcher {
      * - initial: Quick search (default 30s)
      * - aggressive: Final search before create (default 60s)
      */
-    private async findOrCreateWithRetry(options: PersonMatchOptions): Promise<PersonResource> {
+    private async findOrCreateWithRetry(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
         const { 
             createIfNotFound = false, 
             matchStrategy = 'fuzzy', 
@@ -329,7 +339,7 @@ export class PersonMatcher {
                     
                     // Log success if we had to retry
                     if (attempt > 1) {
-                        console.log(`[PERSON_MATCH] Found person after ${attempt} attempts (waited ${totalWaitTime}ms)`, {
+                        this.debugLog(`findOrCreate  found person after ${attempt} attempts (waited ${totalWaitTime}ms)`, {
                             personId: person.id,
                             attempt,
                             totalWaitTime,
@@ -360,7 +370,7 @@ export class PersonMatcher {
 
             // Check if we've exceeded max wait time
             if (totalWaitTime + delay > maxWaitTime) {
-                console.warn(`[PERSON_MATCH] Max wait time (${maxWaitTime}ms) exceeded, stopping retries`, {
+                this.debugLog(`findOrCreate  max wait time (${maxWaitTime}ms) exceeded, stopping retries`, {
                     attempt,
                     totalWaitTime,
                     remainingDelay: maxWaitTime - totalWaitTime
@@ -371,7 +381,7 @@ export class PersonMatcher {
             totalWaitTime += delay;
 
             // Log retry attempt
-            console.log(`[PERSON_MATCH] Attempt ${attempt} failed, retrying in ${delay}ms`, {
+            this.debugLog(`findOrCreate  attempt ${attempt} failed, retrying in ${delay}ms`, {
                 attempt,
                 delay,
                 totalWaitTime,
@@ -403,22 +413,20 @@ export class PersonMatcher {
         } = options;
 
         // Step 1: Try email/phone search first
-        const emailPhoneMatches: PersonResource[] = [];
-        const nameOnlyMatches: PersonResource[] = [];
+        const emailPhoneMatches: FlattenedPersonResource[] = [];
+        const nameOnlyMatches: FlattenedPersonResource[] = [];
 
         // Search by email (with normalization and validation)
         if (email) {
             // Validate email format to avoid wasted API calls
-            if (!isValidEmail(email)) {
-                console.warn('Invalid email format, skipping email search:', email);
-            } else {
+            if (isValidEmail(email)) {
                 try {
                     // Normalize email before search to improve PCO search results
                     const normalizedEmail = normalizeEmail(email);
                     const emailResults = await this.peopleModule.search({ email: normalizedEmail });
                     emailPhoneMatches.push(...emailResults.data);
-                } catch (error) {
-                    console.warn('Email search failed:', error);
+                } catch {
+                    // Email search failed, continue without email results
                 }
             }
         }
@@ -430,8 +438,8 @@ export class PersonMatcher {
                 const normalizedPhone = normalizePhone(phone);
                 const phoneResults = await this.peopleModule.search({ phone: normalizedPhone });
                 emailPhoneMatches.push(...phoneResults.data);
-            } catch (error) {
-                console.warn('Phone search failed:', error);
+            } catch {
+                // Phone search failed, continue without phone results
             }
         }
 
@@ -441,7 +449,7 @@ export class PersonMatcher {
         );
 
         // Step 2: Verify email/phone actually match
-        const verifiedMatches: PersonResource[] = [];
+        const verifiedMatches: FlattenedPersonResource[] = [];
         for (const candidate of uniqueEmailPhoneMatches) {
             let emailMatches = false;
             let phoneMatches = false;
@@ -472,7 +480,7 @@ export class PersonMatcher {
                     });
                     nameOnlyMatches.push(...nameResults.data);
                 } catch (error) {
-                    console.warn('Name search failed:', error);
+                    this.debugLog('findMatch  name search failed', { error: String(error) });
                 }
             }
         }
@@ -567,8 +575,6 @@ export class PersonMatcher {
         options: PersonMatchOptions
     ): Promise<MatchResult | null> {
         try {
-            console.log(`[PERSON_MATCH] Attempting name-based search fallback for ${firstName} ${lastName}`);
-            
             const nameResults = await this.peopleModule.search({
                 name: `${firstName} ${lastName}`
             });
@@ -590,12 +596,6 @@ export class PersonMatcher {
                     const score = await this.scorer.scoreMatch(candidate, options);
                     const reason = await this.scorer.getMatchReason(candidate, options);
                     
-                    console.log(`[PERSON_MATCH] Name-based search found validated match`, {
-                        personId: candidate.id,
-                        validationStrategy,
-                        score,
-                    });
-                    
                     return {
                         person: candidate,
                         score,
@@ -605,14 +605,8 @@ export class PersonMatcher {
                 }
             }
             
-            console.log(`[PERSON_MATCH] Name-based search found candidates but none passed contact validation`, {
-                candidateCount: nameResults.data.length,
-                validationStrategy,
-            });
-            
             return null;
-        } catch (error) {
-            console.warn('[PERSON_MATCH] Name-based search fallback failed:', error);
+        } catch {
             return null;
         }
     }
@@ -621,7 +615,7 @@ export class PersonMatcher {
      * Validate a candidate's contact info based on the validation strategy
      */
     private async validateCandidateContact(
-        candidate: PersonResource,
+        candidate: FlattenedPersonResource,
         searchEmail: string | undefined,
         searchPhone: string | undefined,
         validationStrategy: 'strict' | 'domain' | 'similarity'
@@ -630,10 +624,10 @@ export class PersonMatcher {
             // Get person's contact info
             const [personEmails, personPhones] = await Promise.all([
                 this.peopleModule.getEmails(candidate.id).then(r => 
-                    r.data?.map(e => e.attributes?.address || '').filter(Boolean) || []
+                    r.data?.map(e => e.address || '').filter(Boolean) || []
                 ).catch(() => []),
                 this.peopleModule.getPhoneNumbers(candidate.id).then(r => 
-                    r.data?.map(p => p.attributes?.number || '').filter(Boolean) || []
+                    r.data?.map(p => p.number || '').filter(Boolean) || []
                 ).catch(() => []),
             ]);
             
@@ -679,7 +673,7 @@ export class PersonMatcher {
                     return validation.isValid;
             }
         } catch (error) {
-            console.warn(`[PERSON_MATCH] Contact validation failed for person ${candidate.id}:`, error);
+            this.debugLog(`findMatch  contact validation failed for person ${candidate.id}`, { error: String(error) });
             return false;
         }
     }
@@ -688,8 +682,8 @@ export class PersonMatcher {
      * Get potential matching candidates
      * @deprecated Use findMatch which has improved logic for separating verified matches from name-only matches
      */
-    private async getCandidates(options: PersonMatchOptions): Promise<PersonResource[]> {
-        const candidates: PersonResource[] = [];
+    private async getCandidates(options: PersonMatchOptions): Promise<FlattenedPersonResource[]> {
+        const candidates: FlattenedPersonResource[] = [];
         const { email, phone, firstName, lastName } = options;
 
         // Strategy 1: Exact email match
@@ -698,7 +692,7 @@ export class PersonMatcher {
                 const emailMatches = await this.peopleModule.search({ email });
                 candidates.push(...emailMatches.data);
             } catch (error) {
-                console.warn('Email search failed:', error);
+                this.debugLog('findMatch  email search failed', { error: String(error) });
             }
         }
 
@@ -708,7 +702,7 @@ export class PersonMatcher {
                 const phoneMatches = await this.peopleModule.search({ phone });
                 candidates.push(...phoneMatches.data);
             } catch (error) {
-                console.warn('Phone search failed:', error);
+                this.debugLog('findMatch  phone search failed', { error: String(error) });
             }
         }
 
@@ -720,7 +714,7 @@ export class PersonMatcher {
                 });
                 candidates.push(...nameMatches.data);
             } catch (error) {
-                console.warn('Name search failed:', error);
+                this.debugLog('findMatch  name search failed', { error: String(error) });
             }
         }
 
@@ -732,7 +726,7 @@ export class PersonMatcher {
                 });
                 candidates.push(...broadMatches.data);
             } catch (error) {
-                console.warn('Broad search failed:', error);
+                this.debugLog('findMatch  broad search failed', { error: String(error) });
             }
         }
 
@@ -750,12 +744,12 @@ export class PersonMatcher {
     /**
      * Verify if a person's email actually matches the search email
      */
-    private async verifyEmailMatch(person: PersonResource, email: string): Promise<boolean> {
+    private async verifyEmailMatch(person: FlattenedPersonResource, email: string): Promise<boolean> {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
             const normalizedSearchEmail = normalizeEmail(email);
             const emails = personEmails.data?.map(e => 
-                normalizeEmail(e.attributes?.address || '')
+                normalizeEmail(e.address || '')
             ).filter(Boolean) || [];
             return emails.includes(normalizedSearchEmail);
         } catch {
@@ -766,12 +760,12 @@ export class PersonMatcher {
     /**
      * Verify if a person's phone actually matches the search phone
      */
-    private async verifyPhoneMatch(person: PersonResource, phone: string): Promise<boolean> {
+    private async verifyPhoneMatch(person: FlattenedPersonResource, phone: string): Promise<boolean> {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
             const normalizedSearchPhone = normalizePhone(phone);
             const phones = personPhones.data?.map(p => 
-                normalizePhone(p.attributes?.number || '')
+                normalizePhone(p.number || '')
             ).filter(Boolean) || [];
             return phones.includes(normalizedSearchPhone);
         } catch {
@@ -782,7 +776,7 @@ export class PersonMatcher {
     /**
      * Add missing contact information to a person's profile
      */
-    private async addMissingContactInfo(person: PersonResource, options: PersonMatchOptions): Promise<void> {
+    private async addMissingContactInfo(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<void> {
         const { email, phone } = options;
 
         // Check and add email if provided and missing
@@ -797,7 +791,7 @@ export class PersonMatcher {
                     });
                 }
             } catch (error) {
-                console.warn(`Failed to add email contact for person ${person.id}:`, error);
+                this.debugLog(`addMissingContactInfo  failed to add email for person ${person.id}`, { error: String(error) });
             }
         }
 
@@ -813,7 +807,7 @@ export class PersonMatcher {
                     });
                 }
             } catch (error) {
-                console.warn(`Failed to add phone contact for person ${person.id}:`, error);
+                this.debugLog(`addMissingContactInfo  failed to add phone for person ${person.id}`, { error: String(error) });
             }
         }
     }
@@ -821,7 +815,7 @@ export class PersonMatcher {
     /**
      * Filter candidates by age preferences
      */
-    private filterByAgePreferences(candidates: PersonResource[], options: PersonMatchOptions): PersonResource[] {
+    private filterByAgePreferences(candidates: FlattenedPersonResource[], options: PersonMatchOptions): FlattenedPersonResource[] {
         // If no age criteria specified, return all candidates
         if (!options.agePreference &&
             options.minAge === undefined &&
@@ -831,7 +825,7 @@ export class PersonMatcher {
         }
 
         return candidates.filter(person => {
-            const birthdate = person.attributes?.birthdate;
+            const birthdate = person.birthdate;
             return matchesAgeCriteria(birthdate, {
                 agePreference: options.agePreference,
                 minAge: options.minAge,
@@ -845,17 +839,20 @@ export class PersonMatcher {
     /**
      * Create a new person
      */
-    private async createPerson(options: PersonMatchOptions): Promise<PersonResource> {
+    private async createPerson(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
         // Validate firstName is required for person creation
         if (!options.firstName?.trim()) {
             throw new Error('First name is required to create a person');
         }
 
         // Create basic person data (only name fields)
-        const personData: any = {};
+        // Use camelCase as expected by PersonCreateOptions
+        const personData: Partial<import('../modules/people').PersonCreateOptions> = {};
 
-        if (options.firstName) personData.first_name = options.firstName;
-        if (options.lastName) personData.last_name = options.lastName;
+        if (options.firstName) personData.firstName = options.firstName;
+        if (options.lastName) personData.lastName = options.lastName;
+        // Status is required by the API
+        personData.status = 'active';
 
         // Create the person first
         const person = await this.peopleModule.create(personData);
@@ -869,7 +866,7 @@ export class PersonMatcher {
                     primary: true
                 });
             } catch (error) {
-                console.warn(`Failed to create email contact for person ${person.id}:`, error);
+                this.debugLog(`createPerson  failed to create email for person ${person.id}`, { error: String(error) });
             }
         }
 
@@ -882,20 +879,17 @@ export class PersonMatcher {
                     primary: true
                 });
             } catch (error) {
-                console.warn(`Failed to create phone contact for person ${person.id}:`, error);
+                this.debugLog(`createPerson  failed to create phone for person ${person.id}`, { error: String(error) });
             }
         }
 
         // Set campus if provided
         if (options.campusId) {
-            try {
-                await this.peopleModule.setPrimaryCampus(person.id, options.campusId);
-            } catch (error) {
-                console.warn(`Failed to set campus for person ${person.id}:`, error);
-            }
+            await this.peopleModule.setPrimaryCampus(person.id, options.campusId);
         }
 
-        return person;
+        // Return the flattened person resource to match the type expected by the rest of the code
+        return this.peopleModule.getById(person.id);
     }
 
     /**
@@ -905,15 +899,15 @@ export class PersonMatcher {
         // Use the improved matching logic from findMatch
         const { matchStrategy = 'fuzzy', email, phone, firstName, lastName } = options;
 
-        const emailPhoneMatches: PersonResource[] = [];
-        const nameOnlyMatches: PersonResource[] = [];
+        const emailPhoneMatches: FlattenedPersonResource[] = [];
+        const nameOnlyMatches: FlattenedPersonResource[] = [];
 
         if (email) {
             try {
                 const emailResults = await this.peopleModule.search({ email });
                 emailPhoneMatches.push(...emailResults.data);
             } catch (error) {
-                console.warn('Email search failed:', error);
+                this.debugLog('findMatch  email search failed', { error: String(error) });
             }
         }
 
@@ -922,7 +916,7 @@ export class PersonMatcher {
                 const phoneResults = await this.peopleModule.search({ phone });
                 emailPhoneMatches.push(...phoneResults.data);
             } catch (error) {
-                console.warn('Phone search failed:', error);
+                this.debugLog('findMatch  phone search failed', { error: String(error) });
             }
         }
 
@@ -930,7 +924,7 @@ export class PersonMatcher {
             (person, index, self) => index === self.findIndex(p => p.id === person.id)
         );
 
-        const verifiedMatches: PersonResource[] = [];
+        const verifiedMatches: FlattenedPersonResource[] = [];
         for (const candidate of uniqueEmailPhoneMatches) {
             let emailMatches = false;
             let phoneMatches = false;
@@ -956,7 +950,7 @@ export class PersonMatcher {
                     });
                     nameOnlyMatches.push(...nameResults.data);
                 } catch (error) {
-                    console.warn('Name search failed:', error);
+                    this.debugLog('findMatch  name search failed', { error: String(error) });
                 }
             }
         }
