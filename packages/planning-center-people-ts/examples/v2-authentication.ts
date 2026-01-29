@@ -109,7 +109,7 @@ async function demonstrateUsage() {
 
         // Example: Add an email to the person
         const email = await client.people.addEmail(newPerson.id, {
-            address: 'test@example.com',
+            address: 'test@gmail.com',
             location: 'Home',
             primary: true,
         });

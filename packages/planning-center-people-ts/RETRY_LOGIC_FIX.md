@@ -38,7 +38,7 @@ Retry delays: 10s → 15s → 22.5s → 33.75s → 50.6s (total ~131s, capped at
 // Retry logic automatically activates when createIfNotFound: false
 // and email/phone are provided
 const person = await client.people.findOrCreate({
-  email: 'test@example.com',
+  email: 'test@gmail.com',
   phone: '+1234567890',
   firstName: 'John',
   lastName: 'Doe',
@@ -51,7 +51,7 @@ const person = await client.people.findOrCreate({
 
 ```typescript
 const person = await client.people.findOrCreate({
-  email: 'test@example.com',
+  email: 'test@gmail.com',
   phone: '+1234567890',
   firstName: 'John',
   lastName: 'Doe',
@@ -70,7 +70,7 @@ const person = await client.people.findOrCreate({
 
 ```typescript
 const person = await client.people.findOrCreate({
-  email: 'test@example.com',
+  email: 'test@gmail.com',
   phone: '+1234567890',
   firstName: 'John',
   lastName: 'Doe',

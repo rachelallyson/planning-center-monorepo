@@ -5,7 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-01-28
+
+### Added
+
+- **Debug logging**: Set `config.debug: true` (or an options object) when creating the client to see detailed logs (rate limiting, retries, each request, and each module call). Helpers `createDebugLogger`, `attachDebugListener`, and `formatDebugEvent` are exported; see `docs/DEBUG_LOGGING.md` if present.
+- **Person create/update with snake_case**: You can pass snake_case attributes (e.g. `first_name`, `last_name`) to `client.people.create()` and `client.people.update()` in addition to camelCase; both are accepted.
+- **Stricter list options**: List and page options (e.g. `PersonListOptions`, `WorkflowPageOptions`) are fully typed per endpoint. Types such as `PersonInclude`, `PersonOrderField`, `PersonWhereClause` (and equivalents for other resources) are exported for better autocomplete and type safety.
+- **Included-data helpers**: `findIncluded`, `resolveIncluded`, and `createIncludedLookup` are exported for working with JSON:API `included` data.
+- **Event types**: When you use `client.on('request:start', ...)` (and other events), TypeScript narrows the handler argument to the correct event type via overloads.
+- **`getPage()`** on all list-capable modules for single-page fetching (e.g. `client.people.getPage({ perPage: 25, page: 1, where: { status: 'active' } })`).
+
+### Changed
+
+- **Responses with `include`**: When you request related data (e.g. `getById(id, ['primary_campus'])`), that data now appears at the top level (e.g. `person.primary_campus`) as well as in the response structure.
+- **Contacts create methods** now require the person ID as the first argument (API is person-scoped): `createEmail(personId, data)`, `createPhoneNumber(personId, data)`, `createAddress(personId, data)`, `createSocialProfile(personId, data)`.
+- **Single-page fetching**: `getAllPagesPaginated()` has been removed from all modules. Use `getPage(options)` instead.
+- **Low-level HTTP helpers** are no longer exported: `del`, `getAllPages`, `getList`, `getSingle`, `patch`, `post`. Use module methods or `createPcoClient` / `getRateLimitInfo` from core.
+- **Function-style API** has been removed: standalone functions such as `createPerson`, `getPerson`, `getHouseholds`, `getLists` are no longer exported. Use the client and its modules (e.g. `client.people.create`, `client.contacts.createEmail(personId, data)`, `client.households.getAll()`).
+- **`buildQueryParams`** is no longer exported from this package; use module methods and the exported option types. It remains available from `@rachelallyson/planning-center-base-ts` if needed.
+- **Modules**: All 11 modules now receive a config getter for debug and pass option objects into base for query building. See `MODULE_CHANGES.md` for a per-module summary.
+
+### Breaking changes
+
+- **Response shape (flattened data)**: All methods now return **flattened** resources (from base `mapIncludedToRelationships`). Use `resource.first_name` instead of `resource.attributes.first_name`, and `resource.emails` instead of `resource.relationships.emails.data` and `response.included`. Applies to getById, getPage, getAll, create, and update responses.
+- **Contacts**: If you use `client.contacts.createEmail(data)` (or the same for phone/address/social profile), you must switch to `createEmail(personId, data)` (and similarly for `createPhoneNumber`, `createAddress`, `createSocialProfile`).
+- **Function API**: If you import the old function API (`createPerson`, `getPerson`, `getHouseholds`, `getLists`, etc.), replace those calls with the module API on a `PcoClient` instance.
+
+### Dependency
+
+- This release depends on `@rachelallyson/planning-center-base-ts` `^1.1.1`. It is installed automatically when you install the people package.
+
 ## [2.14.1] - 2026-01-21
+
+### ✨ **New Features**
+
+- **Strictly Typed API Options**: Added comprehensive TypeScript types for all endpoint parameters
+  - Created `api-options.ts` with strict types for Include, OrderField, WhereClause, and ListOptions
+  - Fully typed: Person, FieldDefinition, Workflow, Note, List, Household endpoints
+  - Basic structure for: Campus, Form, Report, ServiceTime (can be enhanced with full API doc extraction)
+  - All types exported from main index for easy import
+  - Replaces `Record<string, any>` with strict interfaces for better type safety and IDE autocomplete
+  - Added `order` parameter support to people, workflows, notes, lists, households modules
 
 ### 🔧 **Bug Fixes**
 
@@ -17,10 +58,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed `getAll()` Methods to Actually Get All Pages**: All `getAll()` methods now fetch all pages instead of just one
   - Fixed: `people.getAll()`, `workflows.getAll()`, `notes.getAll()`, `lists.getAll()`, `households.getAll()`, `campus.getAll()`, `forms.getAll()`, `reports.getAll()`, `service-time.getAll()`
   - Previously used `getList()` (one page), now uses `getAllPages()` (all pages)
-  - Note: `perPage` and `page` options are ignored when using `getAll()` - use `getAllPagesPaginated()` for pagination control
+  - Note: `perPage` and `page` options are ignored when using `getAll()` - it automatically fetches all pages
+
+- **Removed `getAllPagesPaginated()` Methods**: Removed redundant `getAllPagesPaginated()` methods from all modules
+  - `getAll()` now handles fetching all pages automatically
+  - Removed from: `people`, `workflows`, `notes`, `lists`, `households`, `campus`, `forms`, `reports`, `service-time` modules
+
+- **Added `getPage()` Methods for Single Page Fetching**: Added `getPage()` methods to all modules for fetching a single page with full pagination control
+  - Use `getAll()` when you need all pages automatically
+  - Use `getPage()` when you need a specific page, custom per_page, or want to limit results
+  - Available on: `people.getPage()`, `workflows.getPage()`, `notes.getPage()`, `lists.getPage()`, `households.getPage()`, `campus.getPage()`, `forms.getPage()`, `reports.getPage()`, `service-time.getPage()`
+  - Example: `client.people.getPage({ perPage: 25, page: 1, where: { status: 'active' } })`
 
 - **Fixed `getAllFieldDefinitions()` Pagination**: Changed `include: ['tab']` to `include: 'tab'` to properly fetch all pages
   - `getAllPages()` expects query params where `include` is a comma-separated string, not an array
+
+- **Made `getAllFieldDefinitions()` Include Parameter Optional**: `getAllFieldDefinitions()` now accepts an optional `include` parameter
+  - Defaults to `['tab']` if not provided (maintains backward compatibility)
+  - Can pass custom include array: `getAllFieldDefinitions(['tab', 'field_options'])`
+  - Can pass empty array to exclude relationships: `getAllFieldDefinitions([])`
+
+- **Added `where` Filtering, `order`, and `includeDeleted` Option to `getAllFieldDefinitions()`**: Enhanced `getAllFieldDefinitions()` with full API parameter support
+  - Added `where` parameter for filtering: `getAllFieldDefinitions(['tab'], { where: { tab_id: '123', data_type: 'string' } })`
+  - Added `order` parameter for sorting: `getAllFieldDefinitions(['tab'], { order: 'sequence' })` or `{ order: '-name' }` for descending
+  - Added `includeDeleted` option: `getAllFieldDefinitions(['tab'], { includeDeleted: true })`
+  - Valid where keys: `config`, `data_type`, `deleted_at`, `name`, `sequence`, `slug`, `tab_id`
+  - Valid order values: `config`, `data_type`, `deleted_at`, `name`, `sequence`, `slug`, `tab_id` (prefix with `-` for descending)
 
 ### 📦 **Exports**
 
@@ -526,11 +589,11 @@ No breaking changes - this is a type enhancement release:
 // Existing code continues to work
 const fields = await client.people.getFieldDefinitions();
 
-// New type safety benefits
+// New type safety benefits (flattened resources: attributes at top level)
 fields.data.forEach(field => {
-  if (field.attributes.data_type === 'select') {
+  if (field.data_type === 'select') {
     // TypeScript knows this is a select field
-    console.log('Select field:', field.attributes.name);
+    console.log('Select field:', field.name);
   }
 });
 ```
@@ -564,7 +627,7 @@ No breaking changes - this is a bug fix release:
 const person = await client.people.findOrCreate({
     firstName: 'John',
     lastName: 'Doe',
-    email: 'john@example.com',
+    email: 'john@gmail.com
     phone: '555-1234',
     campusId: 'campus-123'  // NEW: Campus assignment support
 });
@@ -894,7 +957,6 @@ This release adds three high-priority modules to extend the Planning Center Peop
 - `client.serviceTime.create(campusId, data)` - Create new service time
 - `client.serviceTime.update(campusId, id, data)` - Update existing service time
 - `client.serviceTime.delete(campusId, id)` - Delete service time
-- `client.serviceTime.getAllPagesPaginated(campusId, params?)` - Get all service times with pagination
 
 **ServiceTime Resource Structure:**
 
@@ -944,7 +1006,6 @@ This release adds three high-priority modules to extend the Planning Center Peop
 - `client.reports.delete(id)` - Delete report
 - `client.reports.getCreatedBy(reportId)` - Get report creator
 - `client.reports.getUpdatedBy(reportId)` - Get report updater
-- `client.reports.getAllPagesPaginated(params?)` - Get all reports with pagination
 
 **Reports Resource Structure:**
 
@@ -1023,7 +1084,6 @@ This release adds comprehensive Campus management functionality to the Planning 
 - `client.campus.delete(id)` - Delete campus
 - `client.campus.getLists(campusId)` - Get lists for a specific campus
 - `client.campus.getServiceTimes(campusId)` - Get service times for a specific campus
-- `client.campus.getAllPagesPaginated()` - Get all campuses with automatic pagination
 
 #### **🏗️ Campus Resource Structure**
 

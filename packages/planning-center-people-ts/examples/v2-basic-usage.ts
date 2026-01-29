@@ -81,7 +81,7 @@ async function peopleOperations(client: PcoClient) {
     const person = await client.people.findOrCreate({
         firstName: 'John',
         lastName: 'Doe',
-        email: 'john@example.com',
+        email: 'john@gmail.com',
         phone: '555-1234',
         matchStrategy: 'fuzzy',
         createIfNotFound: true,
@@ -96,7 +96,7 @@ async function peopleOperations(client: PcoClient) {
     const adultPerson = await client.people.findOrCreate({
         firstName: 'Jane',
         lastName: 'Smith',
-        email: 'jane@example.com',
+        email: 'jane@gmail.com',
         agePreference: 'adults',
         matchStrategy: 'fuzzy',
     });
@@ -115,7 +115,7 @@ async function peopleOperations(client: PcoClient) {
     const youngAdult = await client.people.findOrCreate({
         firstName: 'Alice',
         lastName: 'Brown',
-        email: 'alice@example.com',
+        email: 'alice@gmail.com',
         minAge: 20,
         maxAge: 30,
         matchStrategy: 'fuzzy',
@@ -138,7 +138,7 @@ async function peopleOperations(client: PcoClient) {
             lastName: 'Smith',
         },
         {
-            email: { address: 'jane@example.com', primary: true },
+            email: { address: 'jane@gmail.com', primary: true },
             phone: { number: '555-5678', primary: true },
         }
     );
@@ -163,7 +163,7 @@ async function fieldOperations(client: PcoClient) {
         handleFileUploads: true,
     });
 
-    // Get all field definitions (cached)
+    // Get all field definitions
     const fieldDefinitions = await client.fields.getAllFieldDefinitions();
     console.log(`Found ${fieldDefinitions.length} field definitions`);
 }
@@ -205,7 +205,7 @@ async function batchOperations(client: PcoClient) {
             type: 'people.addEmail',
             personId: '$0.id', // Reference the person created in step 0
             data: {
-                address: 'john@example.com',
+                address: 'john@gmail.com',
                 primary: true,
             },
         },
@@ -265,7 +265,7 @@ async function completeWorkflow() {
         const person = await client.people.findOrCreate({
             firstName: 'John',
             lastName: 'Doe',
-            email: 'john@example.com',
+            email: 'john@gmail.com',
             matchStrategy: 'fuzzy',
         });
 

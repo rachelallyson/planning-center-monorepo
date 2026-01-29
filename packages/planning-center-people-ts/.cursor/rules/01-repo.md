@@ -131,7 +131,6 @@ describe('new feature', () => {
 
 - ❌ **Don't add database code** - This is not a database-backed library
 - ✅ **Use the HTTP client** - All data comes from Planning Center API
-- ✅ **Use in-memory caching** - For field definitions only
 
 ### Error Handling
 

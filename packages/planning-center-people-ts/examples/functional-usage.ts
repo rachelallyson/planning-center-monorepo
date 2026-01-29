@@ -31,14 +31,14 @@ async function example() {
         // Get a specific person
         if (people.data.length > 0) {
             const person = await getPerson(client, people.data[0].id, ['emails']);
-            console.log(`Person: ${person.data?.attributes?.first_name} ${person.data?.attributes?.last_name}`);
+            console.log(`Person: ${person.data?.first_name} ${person.data?.last_name}`);
         }
 
         // Create a new person
         const newPerson = await createPerson(client, {
             first_name: 'John',
             last_name: 'Doe',
-            email: 'john.doe@example.com',
+            email: 'john.doe@gmail.com',
         });
         console.log(`Created person with ID: ${newPerson.data?.id}`);
 
@@ -46,7 +46,7 @@ async function example() {
         const updatedPerson = await updatePerson(client, newPerson.data!.id, {
             first_name: 'Jane',
         });
-        console.log(`Updated person: ${updatedPerson.data?.attributes?.first_name}`);
+        console.log(`Updated person: ${updatedPerson.data?.first_name}`);
 
         // Get person's emails
         const emails = await getPersonEmails(client, newPerson.data!.id);
@@ -54,11 +54,11 @@ async function example() {
 
         // Add an email
         const newEmail = await createPersonEmail(client, newPerson.data!.id, {
-            address: 'jane.doe@example.com',
+            address: 'jane.doe@gmail.com',
             location: 'work',
             primary: false,
         });
-        console.log(`Added email: ${newEmail.data?.attributes?.address}`);
+        console.log(`Added email: ${newEmail.data?.address}`);
 
         // Check rate limit info
         const rateLimitInfo = getRateLimitInfo(client);

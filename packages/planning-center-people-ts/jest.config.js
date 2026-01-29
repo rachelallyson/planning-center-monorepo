@@ -27,7 +27,6 @@ module.exports = {
     '!src/matching/**/*.ts',
     // Temporarily exclude internal helpers and low-level HTTP adapter branches; covered via higher-level tests
     '!src/helpers.ts',
-    '!src/core/http.ts',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {

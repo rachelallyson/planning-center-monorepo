@@ -61,7 +61,7 @@ const person = await getPerson(client, 'person-id', ['emails']);
 const newPerson = await createPerson(client, {
     first_name: 'John',
     last_name: 'Doe',
-    email: 'john.doe@example.com',
+    email: 'john.doe@gmail.com',
 });
 
 // Update a person
@@ -85,6 +85,44 @@ await createPersonFieldData(
 ```
 
 ## Configuration
+
+### Debug logging
+
+Turn logs on or off to see everything that happens inside the package (requests, auth, rate limit, cache, errors). Debug is provided by the base package and shared across all PCO clients. Enable at creation or at runtime:
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+// Enable at creation
+const client = new PcoClient({
+  auth: { type: 'personal_access_token', personalAccessToken: '...' },
+  debug: true,
+});
+
+// Or with options
+const client = new PcoClient({
+  auth: { ... },
+  debug: {
+    prefix: '[MyApp]',
+    includePayloads: false,  // set true to log request/response bodies (avoid in production)
+    onLog: (message, data) => myLogger.info(message, data),
+  },
+});
+
+// Toggle at runtime
+client.updateConfig({ debug: true });
+client.updateConfig({ debug: false });
+```
+
+With `debug: true`, every event is logged with a clear prefix (default `[PCO People]`), including:
+
+- `→` request start (method, endpoint, requestId)
+- `←` request complete (status, duration)
+- `✗` request error
+- auth success/failure/refresh
+- rate limit and rate available
+- cache hit/miss/set/invalidate
+- generic errors
 
 ### Authentication
 
@@ -364,10 +402,10 @@ const people = await getPeople(client, { per_page: 10 }, {
 All functions are fully typed with TypeScript:
 
 ```typescript
-// TypeScript knows exactly what properties are available
+// TypeScript knows exactly what properties are available (flattened: attributes at top level)
 const person = await getPerson(client, 'person-id');
-console.log(person.data?.attributes?.first_name); // ✅ TypeScript knows this exists
-console.log(person.data?.attributes?.invalid_prop); // ❌ TypeScript error
+console.log(person.data?.first_name); // ✅ TypeScript knows this exists
+console.log(person.data?.invalid_prop); // ❌ TypeScript error
 
 // Creating resources is type-safe
 const newPerson = await createPerson(client, {

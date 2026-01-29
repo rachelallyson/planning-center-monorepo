@@ -73,7 +73,7 @@ async function customMockExample() {
     const person = await client.people.findOrCreate({
         firstName: 'John',
         lastName: 'Doe',
-        email: 'john@example.com',
+        email: 'john@gmail.com',
     });
     console.log('Found/created person:', person.id);
 
@@ -150,7 +150,7 @@ async function integrationTestExample() {
     });
 
     const email = await client.people.addEmail(person.id, {
-        address: 'integration@example.com',
+        address: 'integration@gmail.com',
         primary: true,
     });
 

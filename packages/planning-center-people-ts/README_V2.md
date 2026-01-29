@@ -47,13 +47,13 @@ const person = await client.people.findOrCreate(
   {
     firstName: 'John',
     lastName: 'Doe',
-    email: 'john@example.com',
+    email: 'john@gmail.com
     matchStrategy: 'fuzzy'
   },
   {
     firstName: 'John',
     lastName: 'Doe',
-    email: 'john@example.com',
+    email: 'john@gmail.com
     status: 'active'
   }
 );
@@ -62,7 +62,7 @@ const person = await client.people.findOrCreate(
 const adultPerson = await client.people.findOrCreate({
   firstName: 'Jane',
   lastName: 'Smith',
-  email: 'jane@example.com',
+  email: 'jane@gmail.com
   agePreference: 'adults',
   agePreferenceLenient: true, // Include profiles without birthdates
   matchStrategy: 'fuzzy'
@@ -97,7 +97,7 @@ const millennial = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   firstName: 'Jane',
   lastName: 'Smith',
-  email: 'jane@example.com',
+  email: 'jane@gmail.com
   phone: '+1987654321',
   addMissingContactInfo: true  // Adds phone if person only has email, or email if person only has phone
 });
@@ -107,7 +107,7 @@ const person = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   firstName: 'John',
   lastName: 'Doe',
-  email: 'john@example.com',
+  email: 'john@gmail.com
   searchStrategy: 'multi-step', // Tries: fuzzy+age, fuzzy, exact+age, exact
   agePreference: 'adults',
   createIfNotFound: true
@@ -118,7 +118,7 @@ const person = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   firstName: 'John',
   lastName: 'Doe',
-  email: 'john@example.com',
+  email: 'john@gmail.com
   fallbackToNameSearch: true,
   contactValidation: 'domain'  // 'strict' | 'domain' | 'similarity'
 });
@@ -127,7 +127,7 @@ const person = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   firstName: 'John',
   lastName: 'Doe',
-  email: 'john@example.com',
+  email: 'john@gmail.com
   searchStrategy: 'multi-step',
   retryConfigs: {
     initial: { maxRetries: 3, maxWaitTime: 30000 },    // Quick search
@@ -163,9 +163,9 @@ phoneNumbersSimilar('15551234567', '5551234567'); // true
 
 // Validate contact similarity for name-based matches
 const validation = validateContactSimilarity(
-  'jane@example.com',
+  'jane@gmail.com
   '+15551234567',
-  ['john@example.com', 'john@work.com'],  // Person's emails
+  ['john@gmail.com@work.com'],  // Person's emails
   ['+15551234567']  // Person's phones
 );
 // { emailMatch: true, phoneMatch: true, isValid: true }
@@ -198,7 +198,7 @@ const results = await client.batch.execute([
     type: 'create', 
     resourceType: 'Email', 
     endpoint: '/emails', 
-    data: { address: 'john@example.com' },
+    data: { address: 'john@gmail.com
     dependencies: ['create-person']
   }
 ]);
@@ -312,21 +312,21 @@ const person = await client.people.create({
 
 // Add contact information
 const email = await client.people.addEmail(person.id, {
-  address: 'jane@example.com',
+  address: 'jane@gmail.com
   primary: true
 });
 
 // Smart person matching
 const foundOrCreated = await client.people.findOrCreate(
-  { firstName: 'John', lastName: 'Doe', email: 'john@example.com' },
-  { firstName: 'John', lastName: 'Doe', email: 'john@example.com' }
+  { firstName: 'John', lastName: 'Doe', email: 'john@gmail.com
+  { firstName: 'John', lastName: 'Doe', email: 'john@gmail.com
 );
 ```
 
 ### Working with Fields
 
 ```typescript
-// Get all field definitions (cached automatically)
+// Get all field definitions
 const fieldDefs = await client.fields.getAllFieldDefinitions();
 
 // Set person field by slug
@@ -386,7 +386,7 @@ const results = await client.batch.execute([
     type: 'create',
     resourceType: 'Email',
     endpoint: '/emails',
-    data: { address: 'john@example.com' },
+    data: { address: 'john@gmail.com
     dependencies: ['create-person']
   }
 ], {

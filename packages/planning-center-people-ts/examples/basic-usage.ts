@@ -33,14 +33,14 @@ async function basicExample() {
         // Get a specific person
         if (people.data.length > 0) {
             const person = await getPerson(client, people.data[0].id);
-            console.log(`First person: ${person.data?.attributes?.first_name} ${person.data?.attributes?.last_name}`);
+            console.log(`First person: ${person.data?.first_name} ${person.data?.last_name}`);
         }
 
         // Create a new person
         const newPerson = await createPerson(client, {
             first_name: 'John',
             last_name: 'Doe',
-            email: 'john.doe@example.com',
+            email: 'john.doe@gmail.com',
         });
 
         console.log(`Created person with ID: ${newPerson.data?.id}`);
@@ -50,7 +50,7 @@ async function basicExample() {
             first_name: 'Jane',
         });
 
-        console.log(`Updated person: ${updatedPerson.data?.attributes?.first_name}`);
+        console.log(`Updated person: ${updatedPerson.data?.first_name}`);
 
         // Delete the person
         await deletePerson(client, newPerson.data!.id);
