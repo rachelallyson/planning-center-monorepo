@@ -28,6 +28,8 @@ export interface RequestStartEvent extends BaseEvent {
     endpoint: string;
     method: string;
     requestId: string;
+    /** Query params sent (e.g. per_page, order). Omitted if none. */
+    params?: Record<string, unknown>;
 }
 
 export interface RequestCompleteEvent extends BaseEvent {
@@ -37,6 +39,16 @@ export interface RequestCompleteEvent extends BaseEvent {
     status: number;
     duration: number;
     requestId: string;
+    /** Query params sent. Omitted if none. */
+    params?: Record<string, unknown>;
+    /** Number of retries (0 = first attempt succeeded). Present when > 0. */
+    retryCount?: number;
+    /** Rate limit remaining from response headers. Present when API sends it. */
+    rateLimitRemaining?: number;
+    /** Rate limit cap from response headers. Present when API sends it. */
+    rateLimitLimit?: number;
+    /** Brief summary of response: list count, or single resource id. Omitted for empty/204. */
+    responseSummary?: string;
 }
 
 export interface RequestErrorEvent extends BaseEvent {
@@ -45,6 +57,10 @@ export interface RequestErrorEvent extends BaseEvent {
     method: string;
     error: Error;
     requestId: string;
+    /** Query params sent. Omitted if none. */
+    params?: Record<string, unknown>;
+    /** Number of retries before final failure. Present when > 0. */
+    retryCount?: number;
 }
 
 export interface AuthSuccessEvent extends BaseEvent {

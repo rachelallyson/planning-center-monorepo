@@ -107,6 +107,7 @@ client.on('request:start', (event) => {
   // event.requestId: 'req_1234567890_1'
   // event.endpoint: '/people/v2/people'
   // event.method: 'GET'
+  // event.params?: { per_page: 25, order: 'created_at' }  (when query params were sent)
   console.log(`[${event.requestId}] ${event.method} ${event.endpoint}`);
 });
 ```
@@ -117,6 +118,7 @@ client.on('request:start', (event) => {
 - `requestId`: Unique request identifier
 - `endpoint`: API endpoint path
 - `method`: HTTP method (GET, POST, PUT, DELETE, PATCH)
+- `params` *(optional)*: Query params sent (e.g. `per_page`, `order`). Omitted when none.
 
 #### `request:complete`
 
@@ -131,7 +133,12 @@ client.on('request:complete', (event) => {
   // event.method: 'GET'
   // event.status: 200
   // event.duration: 150 (milliseconds)
-  console.log(`[${event.requestId}] ${event.status} in ${event.duration}ms`);
+  // event.params?: query params sent (when present)
+  // event.retryCount?: number of retries before success (when > 0)
+  // event.rateLimitRemaining?: from response headers (when API sends it)
+  // event.rateLimitLimit?: from response headers (when API sends it)
+  // event.responseSummary?: e.g. '25 items' or 'Person:abc123' (when derivable from response)
+  console.log(`[${event.requestId}] ${event.status} in ${event.duration}ms${event.responseSummary ? ` ${event.responseSummary}` : ''}`);
 });
 ```
 
@@ -143,6 +150,11 @@ client.on('request:complete', (event) => {
 - `method`: HTTP method
 - `status`: HTTP status code (200, 201, etc.)
 - `duration`: Request duration in milliseconds
+- `params` *(optional)*: Query params sent. Omitted when none.
+- `retryCount` *(optional)*: Number of retries before success (e.g. after 429/401). Present only when &gt; 0.
+- `rateLimitRemaining` *(optional)*: Rate limit remaining from response headers. Present when the API sends it.
+- `rateLimitLimit` *(optional)*: Rate limit cap from response headers. Present when the API sends it.
+- `responseSummary` *(optional)*: Brief summary of the response—e.g. `"25 items"` for a list, `"Person:abc123"` for a single resource. Omitted for empty or non-JSON responses.
 
 #### `request:error`
 
@@ -156,6 +168,7 @@ client.on('request:error', (event) => {
   // event.endpoint: '/people/v2/people'
   // event.method: 'GET'
   // event.error: Error object
+  // event.params?: query params sent (when present)
   console.error(`[${event.requestId}] Error:`, event.error);
 });
 ```
@@ -167,6 +180,7 @@ client.on('request:error', (event) => {
 - `endpoint`: API endpoint path
 - `method`: HTTP method
 - `error`: Error object (may be `PcoApiError` or `PcoError`)
+- `params` *(optional)*: Query params sent. Omitted when none.
 
 ### Authentication Events
 
@@ -387,7 +401,7 @@ client.on('error', (event) => {
 
 ### Request Logging
 
-Log all requests with timing information:
+Log all requests with timing and context. Use the optional event fields for richer logs:
 
 ```typescript
 const requestLog: Array<{ id: string; method: string; endpoint: string; duration?: number; status?: number }> = [];
@@ -405,14 +419,20 @@ client.on('request:complete', (event) => {
   if (logEntry) {
     logEntry.duration = event.duration;
     logEntry.status = event.status;
-    console.log(`✓ ${event.method} ${event.endpoint} - ${event.status} (${event.duration}ms)`);
+    const parts = [`✓ ${event.method} ${event.endpoint} - ${event.status} (${event.duration}ms)`];
+    if (event.responseSummary) parts.push(event.responseSummary);
+    if (event.params && Object.keys(event.params).length > 0) parts.push(JSON.stringify(event.params));
+    if (event.retryCount != null && event.retryCount > 0) parts.push(`retries: ${event.retryCount}`);
+    if (event.rateLimitRemaining != null) parts.push(`rate ${event.rateLimitRemaining}/${event.rateLimitLimit ?? '?'}`);
+    console.log(parts.join('  '));
   }
 });
 
 client.on('request:error', (event) => {
   const logEntry = requestLog.find(log => log.id === event.requestId);
   if (logEntry) {
-    console.error(`✗ ${event.method} ${event.endpoint} - Error: ${event.error.message}`);
+    const paramsStr = event.params && Object.keys(event.params).length > 0 ? ` ${JSON.stringify(event.params)}` : '';
+    console.error(`✗ ${event.method} ${event.endpoint}${paramsStr} - Error: ${event.error.message}`);
   }
 });
 ```

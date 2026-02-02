@@ -40,12 +40,27 @@ function output(options: PcoDebugOptions, line: string, data?: unknown): void {
 function formatEvent(event: PcoEvent, includePayloads: boolean): string {
     const ts = 'timestamp' in event ? event.timestamp : '';
     switch (event.type) {
-        case 'request:start':
-            return `→ ${event.method} ${event.endpoint}  (requestId: ${event.requestId}) ${ts}`;
-        case 'request:complete':
-            return `← ${event.method} ${event.endpoint}  ${event.status}  ${event.duration}ms  (requestId: ${event.requestId}) ${ts}`;
-        case 'request:error':
-            return `✗ ${event.method} ${event.endpoint}  ERROR  (requestId: ${event.requestId}) ${ts}`;
+        case 'request:start': {
+            const paramsStr = event.params && Object.keys(event.params).length > 0
+                ? `  params=${JSON.stringify(event.params)}`
+                : '';
+            return `→ ${event.method} ${event.endpoint}${paramsStr}  (requestId: ${event.requestId}) ${ts}`;
+        }
+        case 'request:complete': {
+            const parts = [`← ${event.method} ${event.endpoint}  ${event.status}  ${event.duration}ms`];
+            if (event.params && Object.keys(event.params).length > 0) parts.push(`params=${JSON.stringify(event.params)}`);
+            if (event.retryCount != null && event.retryCount > 0) parts.push(`retries=${event.retryCount}`);
+            if (event.rateLimitRemaining != null) parts.push(`rate=${event.rateLimitRemaining}/${event.rateLimitLimit ?? '?'}`);
+            if (event.responseSummary) parts.push(event.responseSummary);
+            parts.push(`(requestId: ${event.requestId})`, ts);
+            return parts.join('  ');
+        }
+        case 'request:error': {
+            const paramsStr = event.params && Object.keys(event.params).length > 0
+                ? `  params=${JSON.stringify(event.params)}`
+                : '';
+            return `✗ ${event.method} ${event.endpoint}${paramsStr}  ERROR  (requestId: ${event.requestId}) ${ts}`;
+        }
         case 'auth:success':
             return `auth:success  type=${event.authType} ${ts}`;
         case 'auth:failure':

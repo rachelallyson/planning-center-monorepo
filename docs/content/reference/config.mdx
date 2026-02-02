@@ -198,8 +198,8 @@ const client = new PcoClient({
 
 - `onError`: Fired on any error
 - `onAuthFailure`: Fired on authentication failures
-- `onRequestStart`: Fired when request starts
-- `onRequestComplete`: Fired when request completes successfully
+- `onRequestStart`: Fired when request starts (event includes `endpoint`, `method`, optional `params`)
+- `onRequestComplete`: Fired when request completes successfully (event includes `status`, `duration`, optional `params`, `responseSummary`, `retryCount`, `rateLimitRemaining`/`rateLimitLimit`)
 - `onRateLimit`: Fired when approaching rate limit
 
 **Example**:

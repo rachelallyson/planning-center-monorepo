@@ -23,6 +23,8 @@ export interface HttpResponse<T = any> {
     headers: Record<string, string>;
     requestId: string;
     duration: number;
+    /** Set when the request succeeded after one or more retries (e.g. 429/401). */
+    retryCount?: number;
 }
 
 export class PcoHttpClient {
@@ -61,6 +63,7 @@ export class PcoHttpClient {
             method: options.method,
             requestId,
             timestamp: new Date().toISOString(),
+            ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
         });
 
         try {
@@ -78,6 +81,10 @@ export class PcoHttpClient {
             this.updateRateLimitTracking(options.endpoint, response.headers);
 
             // Emit request complete event
+            const headers = response.headers;
+            const rateLimitRemaining = this.getRateLimitRemaining(headers);
+            const rateLimitLimit = this.getRateLimitLimit(headers);
+            const responseSummary = this.getResponseSummary(response.data);
             this.eventEmitter.emit({
                 type: 'request:complete',
                 endpoint: options.endpoint,
@@ -86,6 +93,11 @@ export class PcoHttpClient {
                 duration,
                 requestId,
                 timestamp: new Date().toISOString(),
+                ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
+                ...(response.retryCount != null && response.retryCount > 0 && { retryCount: response.retryCount }),
+                ...(rateLimitRemaining != null && { rateLimitRemaining }),
+                ...(rateLimitLimit != null && { rateLimitLimit }),
+                ...(responseSummary && { responseSummary }),
             });
 
             this.debugLog('http  request complete', {
@@ -111,6 +123,7 @@ export class PcoHttpClient {
                 error: error as Error,
                 requestId,
                 timestamp: new Date().toISOString(),
+                ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
             });
 
             throw error;
@@ -268,6 +281,7 @@ export class PcoHttpClient {
                     headers: this.extractHeaders(response),
                     requestId,
                     duration: 0, // Will be set by caller
+                    ...(retryCount > 0 && { retryCount }),
                 };
             }
 
@@ -329,6 +343,7 @@ export class PcoHttpClient {
                 headers: this.extractHeaders(response),
                 requestId,
                 duration: 0, // Will be set by caller
+                ...(retryCount > 0 && { retryCount }),
             };
         } catch (error) {
             clearTimeout(timeoutId);
@@ -391,6 +406,33 @@ export class PcoHttpClient {
         }
 
         return pascalCase;
+    }
+
+    /** Build a short summary of JSON:API response for logging (e.g. "25 items", "person:abc123"). */
+    private getResponseSummary(data: any): string | undefined {
+        if (!data || typeof data !== 'object') return undefined;
+        const payload = data.data;
+        if (Array.isArray(payload)) return `${payload.length} items`;
+        if (payload && typeof payload === 'object' && payload.id != null) {
+            const type = payload.type ?? 'resource';
+            return `${type}:${payload.id}`;
+        }
+        if (data.meta?.total_count != null) return `total ${data.meta.total_count}`;
+        return undefined;
+    }
+
+    private getRateLimitRemaining(headers: Record<string, string>): number | undefined {
+        const raw = headers['x-pco-api-request-rate-count'] ?? headers['X-PCO-API-Request-Rate-Count'];
+        if (raw == null) return undefined;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? undefined : n;
+    }
+
+    private getRateLimitLimit(headers: Record<string, string>): number | undefined {
+        const raw = headers['x-pco-api-request-rate-limit'] ?? headers['X-PCO-API-Request-Rate-Limit'];
+        if (raw == null) return undefined;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? undefined : n;
     }
 
     private extractHeaders(response: Response): Record<string, string> {

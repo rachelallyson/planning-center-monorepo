@@ -407,6 +407,120 @@ describe('PcoHttpClient', () => {
         })
       );
     });
+
+    it('should include params in request:start and request:complete when provided', async () => {
+      const emitSpy = jest.spyOn(eventEmitter, 'emit');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: [{ id: '1', type: 'person' }] }),
+      } as unknown as Response);
+
+      await httpClient.request({
+        method: 'GET',
+        endpoint: '/people',
+        params: { per_page: 25, order: 'created_at' },
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:start',
+          endpoint: '/people',
+          params: { per_page: 25, order: 'created_at' },
+        })
+      );
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:complete',
+          endpoint: '/people',
+          params: { per_page: 25, order: 'created_at' },
+        })
+      );
+    });
+
+    it('should include responseSummary in request:complete for list response', async () => {
+      const emitSpy = jest.spyOn(eventEmitter, 'emit');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: [1, 2, 3].map((i) => ({ id: String(i), type: 'person' })) }),
+      } as unknown as Response);
+
+      await httpClient.request({ method: 'GET', endpoint: '/people' });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:complete',
+          responseSummary: '3 items',
+        })
+      );
+    });
+
+    it('should include responseSummary in request:complete for single resource', async () => {
+      const emitSpy = jest.spyOn(eventEmitter, 'emit');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: () => Promise.resolve({ data: { id: 'abc123', type: 'Person' } }),
+      } as unknown as Response);
+
+      await httpClient.request({ method: 'GET', endpoint: '/people/abc123' });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:complete',
+          responseSummary: 'Person:abc123',
+        })
+      );
+    });
+
+    it('should include rate limit headers in request:complete when present', async () => {
+      const emitSpy = jest.spyOn(eventEmitter, 'emit');
+      const headers = new Map([
+        ['content-type', 'application/json'],
+        ['x-pco-api-request-rate-limit', '100'],
+        ['x-pco-api-request-rate-count', '95'],
+      ]);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers,
+        json: () => Promise.resolve({ data: [] }),
+      } as unknown as Response);
+
+      await httpClient.request({ method: 'GET', endpoint: '/people' });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:complete',
+          rateLimitRemaining: 95,
+          rateLimitLimit: 100,
+        })
+      );
+    });
+
+    it('should include params in request:error when provided', async () => {
+      const emitSpy = jest.spyOn(eventEmitter, 'emit');
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(
+        httpClient.request({
+          method: 'GET',
+          endpoint: '/people',
+          params: { per_page: 10 },
+        })
+      ).rejects.toThrow();
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'request:error',
+          params: { per_page: 10 },
+        })
+      );
+    });
   });
 
   describe('additional error scenarios', () => {

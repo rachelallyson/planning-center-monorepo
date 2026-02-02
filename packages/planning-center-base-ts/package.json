@@ -1,6 +1,6 @@
 {
     "name": "@rachelallyson/planning-center-base-ts",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Base TypeScript client library for Planning Center Online APIs - shared infrastructure for building PCO API clients",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

@@ -5,6 +5,17 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-02-02
+
+### ✨ **New Features**
+
+- **Richer request events**: Request events now include optional context for better observability and logging:
+  - **`request:start`** / **`request:complete`** / **`request:error`**: Optional **`params`** (query params sent, e.g. `per_page`, `order`).
+  - **`request:complete`**: Optional **`responseSummary`** (e.g. `"25 items"` for lists, `"Person:abc123"` for single resources), **`retryCount`** (when the request succeeded after retries), **`rateLimitRemaining`** and **`rateLimitLimit`** from response headers when the API sends them.
+  - **`request:error`**: Optional **`params`**.
+- **Debug formatter**: When `config.debug` is enabled, request log lines now include params, retries, rate limit, and response summary when present.
+- **HttpResponse**: Optional **`retryCount`** on the response object when the request succeeded after one or more retries (e.g. 429/401).
+
 ## [1.1.1] - 2026-01-28
 
 ### 🔧 **Fixed**
