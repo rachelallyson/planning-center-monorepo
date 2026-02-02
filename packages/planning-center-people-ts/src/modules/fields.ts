@@ -229,7 +229,7 @@ export class FieldsModule extends BaseModule {
                 const fieldDefData = datum.field_definition;
                 if (fieldDefData && typeof fieldDefData === 'object' && 'id' in fieldDefData) {
                     // Compare as strings to handle number/string ID mismatches
-                    return String(fieldDefData.id) === String(fieldDefinitionId);
+                    return String((fieldDefData as { id: string }).id) === String(fieldDefinitionId);
                 }
                 // Fallback: check if field_definition_id is available as an attribute
                 // (some API responses might include this even though it's not in the type definition)

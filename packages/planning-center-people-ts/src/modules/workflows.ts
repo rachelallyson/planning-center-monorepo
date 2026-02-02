@@ -118,8 +118,10 @@ export class WorkflowsModule extends BaseModule {
         if (skipIfExists || skipIfActive) {
             const existingCards = await this.getPersonWorkflowCards(personId);
             const existingCard = existingCards.data.find(card => {
-                const workflowData = card?.workflow?.data;
-                return workflowData && !Array.isArray(workflowData) && workflowData.id === workflowId;
+                // workflow may be Relationship (with .data) or flattened resource/identifier; support both
+                const raw = card?.workflow as { data?: { id?: string } | { id?: string }[]; id?: string } | null | undefined;
+                const workflowData = raw && 'id' in raw ? raw : raw?.data;
+                return workflowData && !Array.isArray(workflowData) && (workflowData as { id?: string }).id === workflowId;
             });
 
             if (existingCard) {

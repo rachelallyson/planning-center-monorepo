@@ -663,12 +663,13 @@ export async function getPeopleByHousehold(
         data: result.data.filter((p) => {
             const household = p.household;
             if (!household) return false;
-            // household can be a HouseholdResource or ResourceIdentifier (both have id)
+            // household can be a HouseholdResource, ResourceIdentifier, or array at runtime (types say to-one only)
             if (Array.isArray(household)) {
-                return household.some((h) => h && 'id' in h && h.id === householdId);
+                return (household as Array<{ id?: string }>).some((h) => h && 'id' in h && h.id === householdId);
             }
             // Check if it has an id property (both ResourceIdentifier and HouseholdResource have it)
-            return 'id' in household && household.id === householdId;
+            const h = household as { id?: string };
+            return 'id' in h && h.id === householdId;
         })
     };
     return filtered;

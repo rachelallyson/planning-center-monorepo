@@ -427,7 +427,7 @@ export class PeopleModule extends BaseModule {
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in campusData && 'type' in campusData) {
             // Get the full campus resource
-            return this.getSingle<CampusResource>(`/campuses/${campusData.id}`);
+            return this.getSingle<CampusResource>(`/campuses/${(campusData as { id: string }).id}`);
         }
         
         // If it's already a full resource, return it
@@ -468,7 +468,7 @@ export class PeopleModule extends BaseModule {
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in householdData && 'type' in householdData) {
             // Get the full household resource
-            return this.getSingle<HouseholdResource>(`/households/${householdData.id}`);
+            return this.getSingle<HouseholdResource>(`/households/${(householdData as { id: string }).id}`);
         }
         
         // If it's already a full resource, return it
