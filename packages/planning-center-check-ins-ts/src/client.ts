@@ -87,13 +87,13 @@ export class PcoCheckInsClient implements EventEmitter {
         this.setupEventHandlers();
     }
 
-    // EventEmitter implementation
+    // EventEmitter implementation (call generic overload explicitly to avoid overload resolution picking 'error' only)
     on<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
-        this.eventEmitter.on(eventType, handler);
+        (this.eventEmitter.on as <E extends PcoEvent>(t: E['type'], h: EventHandler<E>) => void)(eventType, handler);
     }
 
     off<T extends PcoEvent>(eventType: T['type'], handler: EventHandler<T>): void {
-        this.eventEmitter.off(eventType, handler);
+        (this.eventEmitter.off as <E extends PcoEvent>(t: E['type'], h: EventHandler<E>) => void)(eventType, handler);
     }
 
     emit<T extends PcoEvent>(event: T): void {
