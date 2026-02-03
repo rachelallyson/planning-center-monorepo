@@ -1,6 +1,6 @@
 {
     "name": "@rachelallyson/planning-center-check-ins-ts",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "description": "A strictly typed TypeScript client for Planning Center Online Check-Ins API with batch operations and enhanced developer experience",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -9,10 +9,10 @@
         "dev": "tsc --watch",
         "clean": "rm -rf dist",
         "prebuild": "npm run clean",
-        "test": "jest --testPathIgnorePatterns=integration.test.ts",
-        "test:watch": "jest --watch --testPathIgnorePatterns=integration.test.ts",
-        "test:coverage": "jest --coverage --testPathIgnorePatterns=integration.test.ts",
-        "test:ci": "jest --ci --coverage --watchAll=false --testPathIgnorePatterns=integration.test.ts",
+        "test": "dotenv -e .env.test -- jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "test:ci": "jest --ci --coverage --watchAll=false",
         "test:integration": "dotenv -e .env.test -- jest --testPathPatterns=integration/.*.integration.test.ts --setupFilesAfterEnv='<rootDir>/tests/integration-setup.ts' --testTimeout=60000",
         "docs": "typedoc",
         "docs:watch": "typedoc --watch",
@@ -70,6 +70,6 @@
         "access": "public"
     },
     "dependencies": {
-        "@rachelallyson/planning-center-base-ts": "^1.0.0"
+        "@rachelallyson/planning-center-base-ts": "^1.1.2"
     }
 }
