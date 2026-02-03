@@ -34,33 +34,28 @@ describe('PreChecksModule', () => {
     it('should fetch all pre-checks with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'PreCheck', attributes: { name: 'Check 1' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
-      await module.getAll();
+      const result = await module.getAll();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result.data).toHaveLength(1);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/pre_checks', {}, undefined);
     });
 
     it('should fetch pre-checks with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'PreCheck' }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 50,
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const options = {
         where: { status: 'active' },
@@ -69,9 +64,15 @@ describe('PreChecksModule', () => {
         page: 1,
       };
 
-      await module.getAll(options);
+      const result = await module.getAll(options);
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result.data).toHaveLength(1);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/pre_checks', expect.objectContaining({
+        'where[status]': 'active',
+        include: 'event',
+        per_page: 10,
+        page: 1,
+      }), undefined);
     });
   });
 

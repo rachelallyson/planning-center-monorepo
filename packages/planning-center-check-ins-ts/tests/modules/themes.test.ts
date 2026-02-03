@@ -22,29 +22,35 @@ describe('ThemesModule', () => {
   });
 
   describe('getAll', () => {
-    it('should get all themes with default parameters', async () => {
+    it('should get all themes across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Theme', attributes: { name: 'Test Theme' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (themesModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const result = await themesModule.getAll();
 
       expect(result).toEqual(mockResponse);
-      expect((themesModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/themes', {});
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/themes', {}, undefined);
     });
 
     it('should get all themes with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Theme', attributes: { name: 'Test Theme' } }],
-        meta: { total_count: 1 },
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
+        meta: {},
         links: {},
       };
 
-      (themesModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const options = {
         where: { status: 'active' },
@@ -56,12 +62,31 @@ describe('ThemesModule', () => {
       const result = await themesModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((themesModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/themes', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/themes', {
         'where[status]': 'active',
         include: 'theme_colors',
         per_page: 10,
         page: 1,
-      });
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should get a single page of themes', async () => {
+      mockHttpClient.request.mockResolvedValueOnce({
+        data: { data: [{ id: '1', type: 'Theme', attributes: { name: 'Test Theme' } }] },
+        status: 200,
+        headers: {},
+        requestId: 'test',
+        duration: 100,
+      } as any);
+
+      await themesModule.getPage({ perPage: 25, page: 1 });
+
+      expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/themes',
+        params: expect.objectContaining({ per_page: 25, page: 1 }),
+      }));
     });
   });
 
@@ -74,7 +99,7 @@ describe('ThemesModule', () => {
       const result = await themesModule.getById('1');
 
       expect(result).toEqual(mockResponse);
-      expect((themesModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/themes/1', {});
+      expect((themesModule as any).getSingle).toHaveBeenCalledWith('/themes/1', {});
     });
 
     it('should get a theme by ID with include', async () => {
@@ -85,7 +110,7 @@ describe('ThemesModule', () => {
       const result = await themesModule.getById('1', ['theme_colors']);
 
       expect(result).toEqual(mockResponse);
-      expect((themesModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/themes/1', {
+      expect((themesModule as any).getSingle).toHaveBeenCalledWith('/themes/1', {
         include: 'theme_colors',
       });
     });

@@ -35,50 +35,65 @@ describe('HeadcountsModule', () => {
   });
 
   describe('getAll', () => {
-    it('should fetch all headcounts with default parameters', async () => {
+    it('should fetch all headcounts across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Headcount', attributes: { total: 100 } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
+        meta: {},
+        links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
-      await module.getAll();
+      const result = await module.getAll();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(mockResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/headcounts', {}, undefined);
     });
 
     it('should fetch headcounts with filtering options', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const mockResponse = { data: [], totalCount: 0, pagesFetched: 1, duration: 50, meta: {}, links: {} };
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       await module.getAll({ where: { total: 100 }, perPage: 50, page: 2 });
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/headcounts', {
+        'where[total]': 100,
+        per_page: 50,
+        page: 2,
+      }, undefined);
     });
 
     it('should handle include parameter', async () => {
+      const mockResponse = { data: [], totalCount: 0, pagesFetched: 1, duration: 50, meta: {}, links: {} };
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
+
+      await module.getAll({ include: ['event'] });
+
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/headcounts', {
+        include: 'event',
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should fetch a single page of headcounts', async () => {
       mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
+        data: { data: [{ id: '1', type: 'Headcount', attributes: { total: 100 } }] },
         status: 200,
         headers: {},
         requestId: 'test',
         duration: 100,
-      });
+      } as any);
 
-      await module.getAll({ include: ['event'] });
+      await module.getPage({ perPage: 25, page: 1 });
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/headcounts',
+        params: expect.objectContaining({ per_page: 25, page: 1 }),
+      }));
     });
   });
 
@@ -100,7 +115,7 @@ describe('HeadcountsModule', () => {
 
       expect(mockHttpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/headcounts/1',
+        endpoint: '/headcounts/1',
         params: {},
       });
     });
@@ -118,7 +133,7 @@ describe('HeadcountsModule', () => {
 
       expect(mockHttpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/headcounts/1',
+        endpoint: '/headcounts/1',
         params: {
           include: 'event',
         },

@@ -76,15 +76,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
                 relationships: {}
             };
 
-            mockRequest.mockResolvedValueOnce({
-                data: {
-                    data: [mockEvent],
-                    meta: { total_count: 1 },
-                    links: {}
-                },
-                status: 200,
-                headers: {},
-                requestId: 'test-request-id',
+            (mockPaginationHelper as any).getAllPages.mockResolvedValueOnce({
+                data: [mockEvent],
+                totalCount: 1,
+                pagesFetched: 1,
                 duration: 10
             });
 
@@ -94,11 +89,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
             expect(Array.isArray(result.data)).toBe(true);
             expect(result.data[0].type).toBe('Event');
             expect(result.data[0].id).toBe('event_1');
-            expect(mockRequest).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    method: 'GET',
-                    endpoint: '/check-ins/v2/events'
-                })
+            expect((mockPaginationHelper as any).getAllPages).toHaveBeenCalledWith(
+                '/events',
+                expect.anything(),
+                undefined
             );
         });
 
@@ -129,7 +123,7 @@ describe('Check-Ins Modules with Mocked Data', () => {
             expect(mockRequest).toHaveBeenCalledWith(
                 expect.objectContaining({
                     method: 'GET',
-                    endpoint: '/check-ins/v2/events/event_1'
+                    endpoint: '/events/event_1'
                 })
             );
         });
@@ -189,15 +183,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
                 relationships: {}
             };
 
-            mockRequest.mockResolvedValueOnce({
-                data: {
-                    data: [mockCheckIn],
-                    meta: { total_count: 1 },
-                    links: {}
-                },
-                status: 200,
-                headers: {},
-                requestId: 'test-request-id',
+            (mockPaginationHelper as any).getAllPages.mockResolvedValueOnce({
+                data: [mockCheckIn],
+                totalCount: 1,
+                pagesFetched: 1,
                 duration: 10
             });
 
@@ -208,11 +197,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
             expect(result.data[0].type).toBe('CheckIn');
-            expect(mockRequest).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    method: 'GET',
-                    endpoint: '/check-ins/v2/check_ins'
-                })
+            expect((mockPaginationHelper as any).getAllPages).toHaveBeenCalledWith(
+                '/check_ins',
+                expect.anything(),
+                undefined
             );
         });
 
@@ -252,23 +240,18 @@ describe('Check-Ins Modules with Mocked Data', () => {
         });
 
         it('should get all locations with mocked data', async () => {
-            mockRequest.mockResolvedValueOnce({
-                data: {
-                    data: [{
-                        type: 'Location',
-                        id: 'location_1',
-                        attributes: {
-                            name: 'Main Building',
-                            created_at: '2024-01-01T00:00:00Z',
-                        },
-                        relationships: {}
-                    }],
-                    meta: {},
-                    links: {}
-                },
-                status: 200,
-                headers: {},
-                requestId: 'test-request-id',
+            (mockPaginationHelper as any).getAllPages.mockResolvedValueOnce({
+                data: [{
+                    type: 'Location',
+                    id: 'location_1',
+                    attributes: {
+                        name: 'Main Building',
+                        created_at: '2024-01-01T00:00:00Z',
+                    },
+                    relationships: {}
+                }],
+                totalCount: 1,
+                pagesFetched: 1,
                 duration: 10
             });
 
@@ -277,11 +260,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
             expect(result.data[0].type).toBe('Location');
-            expect(mockRequest).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    method: 'GET',
-                    endpoint: '/check-ins/v2/locations'
-                })
+            expect((mockPaginationHelper as any).getAllPages).toHaveBeenCalledWith(
+                '/locations',
+                expect.anything(),
+                undefined
             );
         });
     });

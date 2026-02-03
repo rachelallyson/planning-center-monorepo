@@ -14,11 +14,28 @@ describe('LabelsModule', () => {
     module = new LabelsModule(mockHttpClient, mockPaginationHelper, mockEventEmitter);
   });
 
-  it('getAll builds params', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: [] } } as any);
+  it('getAll calls getAllPages with params', async () => {
+    mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [], totalCount: 0, pagesFetched: 1, duration: 0 } as any);
     await module.getAll({ where: { type: 'foo' }, include: ['bar'], perPage: 2, page: 1 });
+    expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/labels', {
+      'where[type]': 'foo',
+      include: 'bar',
+      per_page: 2,
+      page: 1,
+    }, undefined);
+  });
+
+  it('getPage calls getList (httpClient) with params', async () => {
+    mockHttpClient.request.mockResolvedValueOnce({ data: { data: [] } } as any);
+    await module.getPage({ where: { type: 'foo' }, include: ['bar'], perPage: 2, page: 1 });
     expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/labels', params: { 'where[type]': 'foo', include: 'bar', per_page: 2, page: 1 }
+      endpoint: '/labels',
+      params: expect.objectContaining({
+        'where[type]': 'foo',
+        include: 'bar',
+        per_page: 2,
+        page: 1,
+      }),
     }));
   });
 
@@ -26,7 +43,7 @@ describe('LabelsModule', () => {
     mockHttpClient.request.mockResolvedValueOnce({ data: { data: {} } } as any);
     await module.getById('l1', ['something']);
     expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/labels/l1', params: { include: 'something' }
+      endpoint: '/labels/l1', params: { include: 'something' }
     }));
   });
 });

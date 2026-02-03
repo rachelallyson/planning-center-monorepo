@@ -35,50 +35,65 @@ describe('StationsModule', () => {
   });
 
   describe('getAll', () => {
-    it('should fetch all stations with default parameters', async () => {
+    it('should fetch all stations across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Station', attributes: { name: 'Station 1' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
+        meta: {},
+        links: {},
       };
 
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: mockResponse,
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
-      await module.getAll();
+      const result = await module.getAll();
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(result).toEqual(mockResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/stations', {}, undefined);
     });
 
     it('should fetch stations with filtering options', async () => {
-      mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
-        status: 200,
-        headers: {},
-        requestId: 'test',
-        duration: 100,
-      });
+      const mockResponse = { data: [], totalCount: 0, pagesFetched: 1, duration: 50, meta: {}, links: {} };
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       await module.getAll({ where: { name: 'Test' }, perPage: 50, page: 2 });
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/stations', {
+        'where[name]': 'Test',
+        per_page: 50,
+        page: 2,
+      }, undefined);
     });
 
     it('should handle include parameter', async () => {
+      const mockResponse = { data: [], totalCount: 0, pagesFetched: 1, duration: 50, meta: {}, links: {} };
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
+
+      await module.getAll({ include: ['location'] });
+
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/stations', {
+        include: 'location',
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should fetch a single page of stations', async () => {
       mockHttpClient.request.mockResolvedValueOnce({
-        data: { data: [] },
+        data: { data: [{ id: '1', type: 'Station', attributes: { name: 'Station 1' } }] },
         status: 200,
         headers: {},
         requestId: 'test',
         duration: 100,
-      });
+      } as any);
 
-      await module.getAll({ include: ['location'] });
+      await module.getPage({ perPage: 25, page: 1 });
 
-      expect(mockHttpClient.request).toHaveBeenCalled();
+      expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/stations',
+        params: expect.objectContaining({ per_page: 25, page: 1 }),
+      }));
     });
   });
 
@@ -100,7 +115,7 @@ describe('StationsModule', () => {
 
       expect(mockHttpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/stations/1',
+        endpoint: '/stations/1',
         params: {},
       });
     });
@@ -118,7 +133,7 @@ describe('StationsModule', () => {
 
       expect(mockHttpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/stations/1',
+        endpoint: '/stations/1',
         params: {
           include: 'location',
         },

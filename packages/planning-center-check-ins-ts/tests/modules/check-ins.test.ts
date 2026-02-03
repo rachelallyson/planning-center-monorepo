@@ -22,29 +22,35 @@ describe('CheckInsModule', () => {
   });
 
   describe('getAll', () => {
-    it('should get all check-ins with default parameters', async () => {
+    it('should get all check-ins across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'CheckIn', attributes: { name: 'Test CheckIn' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (checkInsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const result = await checkInsModule.getAll();
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins', {});
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/check_ins', {}, undefined);
     });
 
     it('should get all check-ins with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'CheckIn', attributes: { name: 'Test CheckIn' } }],
-        meta: { total_count: 1 },
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
+        meta: {},
         links: {},
       };
 
-      (checkInsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const options = {
         where: { status: 'active' },
@@ -57,14 +63,33 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/check_ins', {
         'where[status]': 'active',
         include: 'check_in_group,person',
         per_page: 10,
         page: 1,
         attendee: 'true',
         volunteer: 'true',
-      });
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should get a single page of check-ins', async () => {
+      mockHttpClient.request.mockResolvedValueOnce({
+        data: { data: [{ id: '1', type: 'CheckIn', attributes: {} }] },
+        status: 200,
+        headers: {},
+        requestId: 'test',
+        duration: 100,
+      } as any);
+
+      await checkInsModule.getPage({ perPage: 25, page: 1 });
+
+      expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/check_ins',
+        params: expect.objectContaining({ per_page: 25, page: 1 }),
+      }));
     });
   });
 
@@ -77,7 +102,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getById('1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/1', {});
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/1', {});
     });
 
     it('should get a check-in by ID with include', async () => {
@@ -88,7 +113,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getById('1', ['check_in_group', 'person']);
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/1', {
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/1', {
         include: 'check_in_group,person',
       });
     });
@@ -103,7 +128,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getCheckInGroup('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/check_in_group');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/check_in_group');
     });
 
     it('should return null when check-in group not found', async () => {
@@ -140,7 +165,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getCheckInTimes('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/check_in_times');
+      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check_ins/checkin-1/check_in_times');
     });
   });
 
@@ -153,7 +178,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getCheckedInAt('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/checked_in_at');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/checked_in_at');
     });
 
     it('should return null when station not found', async () => {
@@ -177,7 +202,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getCheckedInBy('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/checked_in_by');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/checked_in_by');
     });
 
     it('should return null when person not found', async () => {
@@ -201,7 +226,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getCheckedOutBy('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/checked_out_by');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/checked_out_by');
     });
 
     it('should return null when person not found', async () => {
@@ -225,7 +250,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getEvent('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/event');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/event');
     });
   });
 
@@ -238,7 +263,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getEventPeriod('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/event_period');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/event_period');
     });
   });
 
@@ -255,7 +280,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getEventTimes('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/event_times');
+      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check_ins/checkin-1/event_times');
     });
   });
 
@@ -272,7 +297,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getLocations('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/locations');
+      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check_ins/checkin-1/locations');
     });
   });
 
@@ -289,7 +314,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getOptions('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/options');
+      expect((checkInsModule as any).getList).toHaveBeenCalledWith('/check_ins/checkin-1/options');
     });
   });
 
@@ -302,7 +327,7 @@ describe('CheckInsModule', () => {
       const result = await checkInsModule.getPerson('checkin-1');
 
       expect(result).toEqual(mockResponse);
-      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/check_ins/checkin-1/person');
+      expect((checkInsModule as any).getSingle).toHaveBeenCalledWith('/check_ins/checkin-1/person');
     });
 
     it('should return null when person not found', async () => {

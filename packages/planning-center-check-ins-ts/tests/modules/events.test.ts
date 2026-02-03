@@ -22,29 +22,35 @@ describe('EventsModule', () => {
   });
 
   describe('getAll', () => {
-    it('should get all events with default parameters', async () => {
+    it('should get all events across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Event', attributes: { name: 'Test Event' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse);
 
       const result = await eventsModule.getAll();
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events', {});
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/events', {}, undefined);
     });
 
     it('should get all events with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Event', attributes: { name: 'Test Event' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse);
 
       const options = {
         where: { status: 'active' },
@@ -56,38 +62,63 @@ describe('EventsModule', () => {
       const result = await eventsModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/events', {
         'where[status]': 'active',
         include: 'event_periods,event_times',
         per_page: 10,
         page: 1,
-      });
+      }, undefined);
     });
 
     it('should get all events with filter parameter (string)', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Event', attributes: { name: 'Test Event' } }],
-        meta: { total_count: 1 },
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
+        meta: {},
         links: {},
       };
 
-      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse);
 
-      const options = {
-        filter: 'not_archived',
-        perPage: 100,
-      };
+      const options = { filter: 'not_archived', perPage: 100 };
 
       const result = await eventsModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/events', {
         filter: 'not_archived',
         per_page: 100,
-      });
+      }, undefined);
     });
 
     it('should get all events with filter parameter (array)', async () => {
+      const mockResponse = {
+        data: [{ id: '1', type: 'Event', attributes: { name: 'Test Event' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
+        meta: {},
+        links: {},
+      };
+
+      mockPaginationHelper.getAllPages.mockResolvedValue(mockResponse);
+
+      const options = { filter: ['not_archived'], perPage: 100 };
+
+      const result = await eventsModule.getAll(options);
+
+      expect(result).toEqual(mockResponse);
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/events', {
+        filter: 'not_archived',
+        per_page: 100,
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should get a single page of events', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Event', attributes: { name: 'Test Event' } }],
         meta: { total_count: 1 },
@@ -96,17 +127,12 @@ describe('EventsModule', () => {
 
       (eventsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
 
-      const options = {
-        filter: ['not_archived'],
-        perPage: 100,
-      };
-
-      const result = await eventsModule.getAll(options);
+      const result = await eventsModule.getPage({ perPage: 25, page: 1 });
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events', {
-        filter: 'not_archived',
-        per_page: 100,
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events', {
+        per_page: 25,
+        page: 1,
       });
     });
   });
@@ -120,7 +146,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getById('1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/events/1', {});
+      expect((eventsModule as any).getSingle).toHaveBeenCalledWith('/events/1', {});
     });
 
     it('should get an event by ID with include', async () => {
@@ -131,7 +157,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getById('1', ['event_periods', 'event_times']);
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/events/1', {
+      expect((eventsModule as any).getSingle).toHaveBeenCalledWith('/events/1', {
         include: 'event_periods,event_times',
       });
     });
@@ -152,7 +178,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getAttendanceTypes('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/attendance_types');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/attendance_types');
     });
   });
 
@@ -169,7 +195,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getCheckIns('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/check_ins', {});
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/check_ins', {});
     });
 
     it('should get check-ins for an event with filters', async () => {
@@ -184,7 +210,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getCheckIns('event-1', { filter: ['attendee', 'volunteer'] });
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/check_ins', {
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/check_ins', {
         attendee: 'true',
         volunteer: 'true',
       });
@@ -204,7 +230,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getCurrentEventTimes('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/current_event_times');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/current_event_times');
     });
   });
 
@@ -221,7 +247,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getEventLabels('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/event_labels');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/event_labels');
     });
   });
 
@@ -238,7 +264,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getEventPeriods('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/event_periods');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/event_periods');
     });
   });
 
@@ -260,7 +286,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events/event-1/event_periods',
+        '/events/event-1/event_periods',
         {},
         { perPage: 100 }
       );
@@ -280,7 +306,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events/event-1/event_periods',
+        '/events/event-1/event_periods',
         {},
         { perPage: 100 }
       );
@@ -305,7 +331,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events',
+        '/events',
         {},
         { perPage: 100 }
       );
@@ -325,7 +351,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events',
+        '/events',
         { filter: 'not_archived' },
         { perPage: 100 }
       );
@@ -345,7 +371,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events',
+        '/events',
         { filter: 'not_archived' },
         { perPage: 100 }
       );
@@ -365,7 +391,7 @@ describe('EventsModule', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect((eventsModule as any).getAllPages).toHaveBeenCalledWith(
-        '/check-ins/v2/events',
+        '/events',
         {},
         { perPage: 100 }
       );
@@ -401,7 +427,7 @@ describe('EventsModule', () => {
       expect(result.links).toEqual(mockResponse.data.links);
       expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/events/event-1/event_periods/period-1/event_times',
+        endpoint: '/events/event-1/event_periods/period-1/event_times',
         params: {
           include: 'headcounts,headcounts.attendance_type',
           per_page: 100,
@@ -430,7 +456,7 @@ describe('EventsModule', () => {
       expect(result.data).toEqual(mockResponse.data.data);
       expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/events/event-1/event_periods/period-1/event_times',
+        endpoint: '/events/event-1/event_periods/period-1/event_times',
         params: {
           include: 'headcounts',
         },
@@ -456,7 +482,7 @@ describe('EventsModule', () => {
       expect(result.data).toEqual(mockResponse.data.data);
       expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
         method: 'GET',
-        endpoint: '/check-ins/v2/events/event-1/event_periods/period-1/event_times',
+        endpoint: '/events/event-1/event_periods/period-1/event_times',
         params: {},
       });
     });
@@ -475,7 +501,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getIntegrationLinks('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/integration_links');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/integration_links');
     });
   });
 
@@ -492,7 +518,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getLocations('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/locations');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/locations');
     });
   });
 
@@ -509,7 +535,7 @@ describe('EventsModule', () => {
       const result = await eventsModule.getPersonEvents('event-1');
 
       expect(result).toEqual(mockResponse);
-      expect((eventsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/events/event-1/person_events');
+      expect((eventsModule as any).getList).toHaveBeenCalledWith('/events/event-1/person_events');
     });
   });
 });

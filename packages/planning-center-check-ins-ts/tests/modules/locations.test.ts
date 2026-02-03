@@ -22,30 +22,35 @@ describe('LocationsModule', () => {
   });
 
   describe('getAll', () => {
-    it('should get all locations with default parameters', async () => {
+    it('should get all locations across all pages with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Location', attributes: { name: 'Test Location' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
         meta: { total_count: 1 },
         links: {},
       };
 
-      // Patch protected method by spying on http client behavior
-      (locationsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const result = await locationsModule.getAll();
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/locations', {});
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/locations', {}, undefined);
     });
 
     it('should get all locations with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Location', attributes: { name: 'Test Location' } }],
-        meta: { total_count: 1 },
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 10,
+        meta: {},
         links: {},
       };
 
-      (locationsModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const options = {
         where: { status: 'active' },
@@ -57,12 +62,31 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/locations', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/locations', {
         'where[status]': 'active',
         include: 'location_event_periods,location_labels',
         per_page: 10,
         page: 1,
-      });
+      }, undefined);
+    });
+  });
+
+  describe('getPage', () => {
+    it('should get a single page of locations', async () => {
+      mockHttpClient.request.mockResolvedValueOnce({
+        data: { data: [{ id: '1', type: 'Location', attributes: { name: 'Test Location' } }] },
+        status: 200,
+        headers: {},
+        requestId: 'test',
+        duration: 100,
+      } as any);
+
+      await locationsModule.getPage({ perPage: 25, page: 1 });
+
+      expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/locations',
+        params: expect.objectContaining({ per_page: 25, page: 1 }),
+      }));
     });
   });
 
@@ -75,7 +99,7 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getById('1');
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/locations/1', {});
+      expect((locationsModule as any).getSingle).toHaveBeenCalledWith('/locations/1', {});
     });
 
     it('should get a location by ID with include', async () => {
@@ -86,7 +110,7 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getById('1', ['location_event_periods', 'location_labels']);
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/locations/1', {
+      expect((locationsModule as any).getSingle).toHaveBeenCalledWith('/locations/1', {
         include: 'location_event_periods,location_labels',
       });
     });
@@ -105,7 +129,7 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getLocationEventPeriods('location-1');
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/locations/location-1/location_event_periods');
+      expect((locationsModule as any).getList).toHaveBeenCalledWith('/locations/location-1/location_event_periods');
     });
   });
 
@@ -122,7 +146,7 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getLocationEventTimes('location-1');
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/locations/location-1/location_event_times');
+      expect((locationsModule as any).getList).toHaveBeenCalledWith('/locations/location-1/location_event_times');
     });
   });
 
@@ -139,7 +163,7 @@ describe('LocationsModule', () => {
       const result = await locationsModule.getLocationLabels('location-1');
 
       expect(result).toEqual(mockResponse);
-      expect((locationsModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/locations/location-1/location_labels');
+      expect((locationsModule as any).getList).toHaveBeenCalledWith('/locations/location-1/location_labels');
     });
   });
 });

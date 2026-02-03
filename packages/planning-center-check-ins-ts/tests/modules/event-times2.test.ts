@@ -15,18 +15,21 @@ describe('EventTimesModule (coverage)', () => {
   });
 
   it('getAll builds params', async () => {
-    mockHttpClient.request.mockResolvedValueOnce({ data: { data: [] } } as any);
+    mockPaginationHelper.getAllPages.mockResolvedValueOnce({ data: [], totalCount: 0, pagesFetched: 1, duration: 0 } as any);
     await module.getAll({ where: { active: true }, include: ['event'], perPage: 10, page: 3 });
-    expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/event_times', params: { 'where[active]': true, include: 'event', per_page: 10, page: 3 }
-    }));
+    expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/event_times', {
+      'where[active]': true,
+      include: 'event',
+      per_page: 10,
+      page: 3,
+    }, undefined);
   });
 
   it('getEventPeriod calls correct endpoint', async () => {
     mockHttpClient.request.mockResolvedValueOnce({ data: { data: {} } } as any);
     await module.getEventPeriod('et1');
     expect(mockHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: '/check-ins/v2/event_times/et1/event_period'
+      endpoint: '/event_times/et1/event_period'
     }));
   });
 });

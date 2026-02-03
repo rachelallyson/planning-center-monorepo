@@ -12,15 +12,15 @@ describe('Modules request building (spot checks)', () => {
 
     await mod.getAll({ where: { status: 'active' }, include: ['event_periods', 'event_times'], perPage: 5, page: 2 });
 
+    // getAll uses getAllPages; first request has page 1 and default per_page from pagination
     expect(calls[0]).toMatchObject({
       method: 'GET',
-      endpoint: '/check-ins/v2/events',
-      params: {
+      endpoint: '/events',
+      params: expect.objectContaining({
         'where[status]': 'active',
         include: 'event_periods,event_times',
-        per_page: 5,
-        page: 2,
-      },
+        page: 1,
+      }),
     });
   });
 
@@ -34,7 +34,7 @@ describe('Modules request building (spot checks)', () => {
 
     expect(calls[0]).toMatchObject({
       method: 'GET',
-      endpoint: '/check-ins/v2/events/abc',
+      endpoint: '/events/abc',
       params: { include: 'event_times' },
     });
   });
@@ -53,17 +53,17 @@ describe('Modules request building (spot checks)', () => {
       filter: ['attendee', 'volunteer'],
     });
 
+    // getAll uses getAllPages; first request has page 1
     expect(calls[0]).toMatchObject({
       method: 'GET',
-      endpoint: '/check-ins/v2/check_ins',
-      params: {
+      endpoint: '/check_ins',
+      params: expect.objectContaining({
         'where[status]': 'closed',
         include: 'event',
-        per_page: 25,
-        page: 3,
         attendee: 'true',
         volunteer: 'true',
-      },
+        page: 1,
+      }),
     });
   });
 });

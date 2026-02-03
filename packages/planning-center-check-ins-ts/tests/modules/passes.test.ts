@@ -25,26 +25,32 @@ describe('PassesModule', () => {
     it('should get all passes with default parameters', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Pass', attributes: { name: 'Test Pass' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 100,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (passesModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const result = await passesModule.getAll();
 
       expect(result).toEqual(mockResponse);
-      expect((passesModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/passes', {});
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/passes', {}, undefined);
     });
 
     it('should get all passes with filtering options', async () => {
       const mockResponse = {
         data: [{ id: '1', type: 'Pass', attributes: { name: 'Test Pass' } }],
+        totalCount: 1,
+        pagesFetched: 1,
+        duration: 50,
         meta: { total_count: 1 },
         links: {},
       };
 
-      (passesModule as any).getList = jest.fn().mockResolvedValue(mockResponse);
+      mockPaginationHelper.getAllPages.mockResolvedValueOnce(mockResponse as any);
 
       const options = {
         where: { status: 'active' },
@@ -56,12 +62,12 @@ describe('PassesModule', () => {
       const result = await passesModule.getAll(options);
 
       expect(result).toEqual(mockResponse);
-      expect((passesModule as any).getList).toHaveBeenCalledWith('/check-ins/v2/passes', {
+      expect(mockPaginationHelper.getAllPages).toHaveBeenCalledWith('/passes', {
         'where[status]': 'active',
         include: 'pass_events',
         per_page: 10,
         page: 1,
-      });
+      }, undefined);
     });
   });
 
@@ -74,7 +80,7 @@ describe('PassesModule', () => {
       const result = await passesModule.getById('1');
 
       expect(result).toEqual(mockResponse);
-      expect((passesModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/passes/1', {});
+      expect((passesModule as any).getSingle).toHaveBeenCalledWith('/passes/1', {});
     });
 
     it('should get a pass by ID with include', async () => {
@@ -85,7 +91,7 @@ describe('PassesModule', () => {
       const result = await passesModule.getById('1', ['pass_events']);
 
       expect(result).toEqual(mockResponse);
-      expect((passesModule as any).getSingle).toHaveBeenCalledWith('/check-ins/v2/passes/1', {
+      expect((passesModule as any).getSingle).toHaveBeenCalledWith('/passes/1', {
         include: 'pass_events',
       });
     });
