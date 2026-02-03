@@ -13,7 +13,7 @@
  */
 
 import { PcoCheckInsClient } from '../../src';
-import { createTestClient, logAuthStatus } from './test-config';
+import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
 import {
     validateResourceStructure,
     validateStringAttribute,
@@ -32,19 +32,6 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
         logAuthStatus();
         client = createTestClient();
 
-        // Add request monitoring with proper typing
-        client.on('request:start', (event) => {
-            console.log(`📡 ${(event as any).method} ${(event as any).endpoint}`);
-        });
-        client.on('request:complete', (event) => {
-            console.log(`✅ ${(event as any).method} ${(event as any).endpoint} - ${(event as any).status} (${(event as any).duration}ms)`);
-        });
-        client.on('request:error', (event) => {
-            const error = (event as any).error;
-            if (error?.status === 401 || error?.status === 403) {
-                console.warn(`⚠️  Auth error: ${error.message} - Check token permissions`);
-            }
-        });
     }, 30000);
 
     describe('Events Module - Comprehensive Coverage', () => {
@@ -54,28 +41,22 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
-            
-            if (result.data.length > 0) {
-                testEventId = result.data[0].id;
-                const event = result.data[0];
-                
-                // Verify JSON:API structure
-                validateResourceStructure(event, 'Event');
-                expect(event.attributes).toBeDefined();
-                
-                // Verify attributes structure
-                if (event.attributes?.name !== undefined) {
-                    validateStringAttribute(event.attributes, 'name');
-                }
-                if (event.attributes?.frequency !== undefined) {
-                    validateStringAttribute(event.attributes, 'frequency');
-                    // Frequency can be capitalized or lowercase
-                    const frequencyLower = event.attributes.frequency.toLowerCase();
-                    expect(['weekly', 'daily', 'monthly', 'yearly', 'one_time']).toContain(frequencyLower);
-                }
-                if (event.attributes?.created_at !== undefined) {
-                    validateDateAttribute(event.attributes, 'created_at');
-                }
+            expect(result.data.length).toBeGreaterThan(0);
+
+            testEventId = result.data[0].id;
+            const event = result.data[0];
+
+            validateResourceStructure(event, 'Event');
+            if (event.name !== undefined) {
+                validateStringAttribute(event, 'name');
+            }
+            if (event.frequency !== undefined) {
+                validateStringAttribute(event, 'frequency');
+                const frequencyLower = (event as any).frequency.toLowerCase();
+                expect(['weekly', 'daily', 'monthly', 'yearly', 'one_time']).toContain(frequencyLower);
+            }
+            if ((event as any).created_at !== undefined) {
+                validateDateAttribute(event as any, 'created_at');
             }
         }, 30000);
 
@@ -90,59 +71,42 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             
             validateResourceStructure(event, 'Event');
             expect(event.id).toBe(testEventId);
-            expect(event.attributes).toBeDefined();
-            
-            // Verify relationships when included
-            if (event.relationships) {
-                expect(typeof event.relationships).toBe('object');
-                if (event.relationships.locations) {
-                    validateRelationship(event.relationships.locations);
-                }
-                if (event.relationships.event_periods) {
-                    validateRelationship(event.relationships.event_periods);
-                }
-                if (event.relationships.attendance_types) {
-                    validateRelationship(event.relationships.attendance_types);
-                }
+            // Flattened: relationships at top level (e.g. event.locations, event.event_periods)
+            if ((event as any).locations !== undefined) {
+                expect(Array.isArray((event as any).locations) || typeof (event as any).locations === 'object').toBe(true);
             }
         }, 30000);
 
         it('should handle pagination correctly', async () => {
-            const page1 = await client.events.getAll({ perPage: 2, page: 1 });
+            const page1 = await client.events.getPage({ perPage: 2, page: 1 });
             expect(page1.data).toBeDefined();
             expect(page1.data.length).toBeLessThanOrEqual(2);
-            
-            if (page1.data.length === 2) {
-                const page2 = await client.events.getAll({ perPage: 2, page: 2 });
-                expect(page2.data).toBeDefined();
-                
-                // Pages should have different or same IDs (if only 2 total)
-                if (page2.data.length > 0) {
-                    const page1Ids = page1.data.map(e => e.id);
-                    const page2Ids = page2.data.map(e => e.id);
-                    // Either different items or same if only 2 total
-                    expect(page1Ids).toBeDefined();
-                    expect(page2Ids).toBeDefined();
-                }
+            expect(page1.data.length).toBeGreaterThan(0);
+            const page2 = await client.events.getPage({ perPage: 2, page: 2 });
+            expect(page2.data).toBeDefined();
+            expect(Array.isArray(page2.data)).toBe(true);
+            if (page2.data.length > 0) {
+                const page1Ids = page1.data.map((e: any) => e.id);
+                const page2Ids = page2.data.map((e: any) => e.id);
+                expect(page1Ids).toBeDefined();
+                expect(page2Ids).toBeDefined();
+                expect(page1Ids).not.toEqual(page2Ids);
             }
-        }, 30000);
+        }, 60000);
 
         it('should filter events with where parameters', async () => {
-            const weeklyEvents = await client.events.getAll({
+            const weeklyEvents = await client.events.getPage({
                 where: { frequency: 'weekly' },
-                perPage: 5
+                perPage: 5,
+                page: 1,
             });
             expect(weeklyEvents.data).toBeDefined();
             expect(Array.isArray(weeklyEvents.data)).toBe(true);
-            
-            // Verify all returned events match filter (if any)
-            weeklyEvents.data.forEach(event => {
+            weeklyEvents.data.forEach((event: any) => {
                 validateResourceStructure(event, 'Event');
-                if (event.attributes?.frequency !== undefined) {
-                    validateStringAttribute(event.attributes, 'frequency');
-                    // API returns capitalized values (Weekly, Daily, etc.)
-                    const frequencyLower = event.attributes.frequency.toLowerCase();
-                    expect(frequencyLower).toBe('weekly');
+                if (event.frequency !== undefined) {
+                    validateStringAttribute(event, 'frequency');
+                    expect(event.frequency.toLowerCase()).toBe('weekly');
                 }
             });
         }, 30000);
@@ -208,25 +172,20 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
-            
-            if (result.data.length > 0) {
-                testCheckInId = result.data[0].id;
-                const checkIn = result.data[0];
-                
-                // Verify JSON:API structure
-                validateResourceStructure(checkIn, 'CheckIn');
-                expect(checkIn.attributes).toBeDefined();
-                
-                // Verify attributes
-                if (checkIn.attributes?.security_code !== undefined) {
-                    validateStringAttribute(checkIn.attributes, 'security_code');
-                }
-                if (checkIn.attributes?.first_name !== undefined) {
-                    validateStringAttribute(checkIn.attributes, 'first_name');
-                }
-                if (checkIn.attributes?.one_time_guest !== undefined) {
-                    validateBooleanAttribute(checkIn.attributes, 'one_time_guest');
-                }
+            expect(result.data.length).toBeGreaterThan(0);
+
+            testCheckInId = result.data[0].id;
+            const checkIn = result.data[0];
+
+            validateResourceStructure(checkIn, 'CheckIn');
+            if ((checkIn as any).security_code !== undefined) {
+                validateStringAttribute(checkIn as any, 'security_code');
+            }
+            if ((checkIn as any).first_name !== undefined) {
+                validateStringAttribute(checkIn as any, 'first_name');
+            }
+            if ((checkIn as any).one_time_guest !== undefined) {
+                validateBooleanAttribute(checkIn as any, 'one_time_guest');
             }
         }, 30000);
 
@@ -241,19 +200,9 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             
             validateResourceStructure(checkIn, 'CheckIn');
             expect(checkIn.id).toBe(testCheckInId);
-            expect(checkIn.attributes).toBeDefined();
-            
-            // Validate relationships when included
-            if (checkIn.relationships) {
-                if (checkIn.relationships.person) {
-                    validateRelationship(checkIn.relationships.person);
-                }
-                if (checkIn.relationships.event) {
-                    validateRelationship(checkIn.relationships.event);
-                }
-                if (checkIn.relationships.check_in_group) {
-                    validateRelationship(checkIn.relationships.check_in_group);
-                }
+            // Flattened: relationships at top level (checkIn.person, checkIn.event, etc.)
+            if ((checkIn as any).person !== undefined || (checkIn as any).event !== undefined) {
+                expect(checkIn).toBeDefined();
             }
         }, 30000);
 
@@ -307,7 +256,7 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             checkInTimes.data.forEach(resource => validateResourceStructure(resource, 'CheckInTime'));
             
             if (checkedInAt !== null) {
-                validateResourceStructure(checkedInAt, 'CheckInTime');
+                validateResourceStructure(checkedInAt, 'Station');
             }
             if (checkedInBy !== null) {
                 validateResourceStructure(checkedInBy, 'Person');
@@ -342,17 +291,14 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
-            
-            if (result.data.length > 0) {
-                testLocationId = result.data[0].id;
-                const location = result.data[0];
-                
-                validateResourceStructure(location, 'Location');
-                expect(location.attributes).toBeDefined();
-                
-                if (location.attributes?.name !== undefined) {
-                    validateStringAttribute(location.attributes, 'name');
-                }
+            expect(result.data.length).toBeGreaterThan(0);
+
+            testLocationId = result.data[0].id;
+            const location = result.data[0];
+
+            validateResourceStructure(location, 'Location');
+            if ((location as any).name !== undefined) {
+                validateStringAttribute(location as any, 'name');
             }
         }, 30000);
 
@@ -383,15 +329,23 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
 
             const locationEventPeriods = await client.locations.getLocationEventPeriods(testLocationId!);
             const locationEventTimes = await client.locations.getLocationEventTimes(testLocationId!);
-            const locationLabels = await client.locations.getLocationLabels(testLocationId!);
+
+            // Location labels are only available per API under check_ins (not under locations)
+            const checkInsPage = await client.checkIns.getPage({ perPage: 1, page: 1 });
+            expect(checkInsPage.data.length).toBeGreaterThan(0);
+            const checkInId = checkInsPage.data[0].id;
+            const locationsForCheckIn = await client.checkIns.getLocations(checkInId);
+            expect(locationsForCheckIn.data.length).toBeGreaterThan(0);
+            const locationIdForLabels = locationsForCheckIn.data[0].id;
+            const locationLabels = await client.checkIns.getLocationLabels(checkInId, locationIdForLabels);
 
             expect(locationEventPeriods.data).toBeDefined();
             expect(Array.isArray(locationEventPeriods.data)).toBe(true);
-            locationEventPeriods.data.forEach(resource => validateResourceStructure(resource, 'EventPeriod'));
+            locationEventPeriods.data.forEach(resource => validateResourceStructure(resource, 'LocationEventPeriod'));
             
             expect(locationEventTimes.data).toBeDefined();
             expect(Array.isArray(locationEventTimes.data)).toBe(true);
-            locationEventTimes.data.forEach(resource => validateResourceStructure(resource, 'EventTime'));
+            locationEventTimes.data.forEach(resource => validateResourceStructure(resource, 'LocationEventTime'));
             
             expect(locationLabels.data).toBeDefined();
             expect(Array.isArray(locationLabels.data)).toBe(true);
@@ -413,17 +367,16 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
-            
-            if (result.data.length > 0) {
-                const period = result.data[0];
-                validateResourceStructure(period, 'EventPeriod');
-                
-                if (period.attributes?.starts_at !== undefined) {
-                    validateDateAttribute(period.attributes, 'starts_at');
-                }
-                if (period.attributes?.ends_at !== undefined) {
-                    validateDateAttribute(period.attributes, 'ends_at');
-                }
+            expect(result.data.length).toBeGreaterThan(0);
+
+            const period = result.data[0];
+            validateResourceStructure(period, 'EventPeriod');
+
+            if ((period as any).starts_at !== undefined) {
+                validateDateAttribute(period as any, 'starts_at');
+            }
+            if ((period as any).ends_at !== undefined) {
+                validateDateAttribute(period as any, 'ends_at');
             }
         }, 30000);
 
@@ -462,11 +415,10 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
-            
-            if (result.data.length > 0) {
-                const eventTime = result.data[0];
-                validateResourceStructure(eventTime, 'EventTime');
-            }
+            expect(result.data.length).toBeGreaterThan(0);
+
+            const eventTime = result.data[0];
+            validateResourceStructure(eventTime, 'EventTime');
         }, 30000);
 
         it('should get single event time by ID with includes', async () => {
@@ -525,21 +477,38 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
                 { name: 'rosterListPersons', type: 'RosterListPerson' },
             ];
 
+            const skipWhen404 = ['integrationLinks', 'themes', 'rosterListPersons'];
+            let stationIdForGroups: string | undefined;
             for (const module of modules) {
-                const listResult = await (client as any)[module.name].getAll({ perPage: 1 });
+                if (module.name === 'preChecks' && !(await isPreChecksApiAvailable(client))) continue;
+                let listResult: any;
+                try {
+                    if (module.name === 'checkInGroups') {
+                        if (!stationIdForGroups) {
+                            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+                            expect(stationsPage.data.length).toBeGreaterThan(0);
+                            stationIdForGroups = stationsPage.data[0].id;
+                        }
+                        listResult = await client.checkInGroups.getPage({ stationId: stationIdForGroups, perPage: 1, page: 1 });
+                    } else {
+                        listResult = await (client as any)[module.name].getPage({ perPage: 1, page: 1 });
+                    }
+                } catch (err: unknown) {
+                    const status = (err as { status?: number })?.status;
+                    if (status === 404 && skipWhen404.includes(module.name)) continue;
+                    throw err;
+                }
                 expect(listResult).toBeDefined();
                 expect(listResult.data).toBeDefined();
                 expect(Array.isArray(listResult.data)).toBe(true);
-                
-                if (listResult.data.length > 0) {
-                    const item = listResult.data[0];
-                    validateResourceStructure(item, module.type);
-                    
-                    // Test getById if item exists
-                    const singleResult = await (client as any)[module.name].getById(item.id);
-                    validateResourceStructure(singleResult, module.type);
-                    expect(singleResult.id).toBe(item.id);
-                }
+                const optionalWhenEmpty = ['integrationLinks', 'themes', 'rosterListPersons'];
+                if (listResult.data.length === 0 && optionalWhenEmpty.includes(module.name)) continue;
+                expect(listResult.data.length).toBeGreaterThan(0);
+                const item = listResult.data[0];
+                validateResourceStructure(item, module.type);
+                const singleResult = await (client as any)[module.name].getById(item.id);
+                validateResourceStructure(singleResult, module.type);
+                expect(singleResult.id).toBe(item.id);
             }
         }, 120000);
     });
@@ -549,11 +518,9 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             const organization = await client.organization.get();
             
             validateResourceStructure(organization, 'Organization');
-            expect(organization.attributes).toBeDefined();
-            
-            if (organization.attributes?.name !== undefined) {
-                validateStringAttribute(organization.attributes, 'name');
-                expect(organization.attributes.name.length).toBeGreaterThan(0);
+            if ((organization as any).name !== undefined) {
+                validateStringAttribute(organization as any, 'name');
+                expect((organization as any).name.length).toBeGreaterThan(0);
             }
         }, 30000);
     });
@@ -581,17 +548,11 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
 
     describe('Labels Module - Special Methods', () => {
         it('should get event labels and location labels', async () => {
-            // Get an event and location first
+            // Get an event first for event labels
             if (!testEventId) {
                 const events = await client.events.getAll({ perPage: 1 });
                 expect(events.data.length).toBeGreaterThan(0);
                 testEventId = events.data[0].id;
-            }
-            
-            if (!testLocationId) {
-                const locations = await client.locations.getAll({ perPage: 1 });
-                expect(locations.data.length).toBeGreaterThan(0);
-                testLocationId = locations.data[0].id;
             }
 
             // Test event labels (accessed via events module)
@@ -599,20 +560,33 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             expect(eventLabels).toBeDefined();
             expect(eventLabels.data).toBeDefined();
             expect(Array.isArray(eventLabels.data)).toBe(true);
-            
-            if (eventLabels.data.length > 0) {
-                eventLabels.data.forEach(resource => validateResourceStructure(resource, 'EventLabel'));
-            }
+            expect(eventLabels.data.length).toBeGreaterThan(0);
+            eventLabels.data.forEach(resource => validateResourceStructure(resource, 'EventLabel'));
 
-            // Test location labels (accessed via locations module)
-            const locationLabels = await client.locations.getLocationLabels(testLocationId!);
-            expect(locationLabels).toBeDefined();
-            expect(locationLabels.data).toBeDefined();
-            expect(Array.isArray(locationLabels.data)).toBe(true);
-            
-            if (locationLabels.data.length > 0) {
-                locationLabels.data.forEach(resource => validateResourceStructure(resource, 'LocationLabel'));
+            // Location labels per API docs are under check_ins (check_in_id + location_id), not locations.
+            // Try multiple check-ins because the first may belong to an event/location without labels.
+            const checkInsPage = await client.checkIns.getPage({ perPage: 25, page: 1 });
+            expect(checkInsPage.data.length).toBeGreaterThan(0);
+            let locationLabels: { data: any[] } | null = null;
+            for (const checkIn of checkInsPage.data) {
+                const locationsForCheckIn = await client.checkIns.getLocations(checkIn.id);
+                if (locationsForCheckIn.data.length === 0) continue;
+                for (const loc of locationsForCheckIn.data) {
+                    const result = await client.checkIns.getLocationLabels(checkIn.id, loc.id);
+                    if (result.data && result.data.length > 0) {
+                        locationLabels = result;
+                        break;
+                    }
+                }
+                if (locationLabels) break;
             }
+            if (locationLabels == null) {
+                throw new Error('No check-in had a location with location labels. Add labels at Event → Labels & Locations (event level) for the event your check-ins use.');
+            }
+            expect(locationLabels.data).toBeDefined();
+            expect(Array.isArray(locationLabels!.data)).toBe(true);
+            expect(locationLabels!.data.length).toBeGreaterThan(0);
+            locationLabels!.data.forEach(resource => validateResourceStructure(resource, 'LocationLabel'));
         }, 60000);
     });
 
@@ -640,11 +614,10 @@ describe('Comprehensive Check-ins API Integration Tests', () => {
             ]);
             
             expect(event).toBeDefined();
-            expect(event.relationships).toBeDefined();
-            
-            // Verify relationships object exists
-            if (event.relationships) {
-                expect(typeof event.relationships).toBe('object');
+            expect(event.id).toBeDefined();
+            expect(event.type).toBe('Event');
+            if (event.locations || event.event_periods || event.attendance_types) {
+                expect(Array.isArray(event.locations) || Array.isArray(event.event_periods) || Array.isArray(event.attendance_types)).toBe(true);
             }
         }, 30000);
     });

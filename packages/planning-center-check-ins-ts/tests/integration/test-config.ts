@@ -21,6 +21,9 @@ export function createTestClient(): PcoCheckInsClient {
         auth: {
             type: 'personal_access_token',
             personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
+            ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
+                personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
+            }),
         },
     } : hasOAuthToken ? {
         auth: {
@@ -48,6 +51,9 @@ export function createTestClient(): PcoCheckInsClient {
         auth: {
             type: 'personal_access_token',
             personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
+            ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
+                personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
+            }),
         },
     };
 
@@ -78,6 +84,21 @@ export function getTokenStatus(): {
         hasPersonalAccessToken,
         tokenTypes,
     };
+}
+
+/**
+ * Check if the Pre-checks API is available (not 404).
+ * Pre-checks can return 404 when the Church Center PreCheck feature is not enabled for the org.
+ */
+export async function isPreChecksApiAvailable(client: PcoCheckInsClient): Promise<boolean> {
+    try {
+        await client.preChecks.getPage({ perPage: 1, page: 1 });
+        return true;
+    } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        if (status === 404) return false;
+        throw err;
+    }
 }
 
 /**

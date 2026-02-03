@@ -46,6 +46,9 @@ describe('Check-Ins Core API Integration Tests', () => {
                 auth: {
                     type: 'personal_access_token',
                     personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
+                    ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
+                        personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
+                    }),
                 },
                 retry: {
                     enabled: true,
@@ -55,12 +58,6 @@ describe('Check-Ins Core API Integration Tests', () => {
                 events: {
                     onError: (event) => {
                         console.error('PCO Error:', event.error.message);
-                    },
-                    onRequestStart: (event) => {
-                        console.log(`Starting ${event.method} ${event.endpoint}`);
-                    },
-                    onRequestComplete: (event) => {
-                        console.log(`Completed ${event.method} ${event.endpoint} in ${event.duration}ms`);
                     },
                 },
             }
@@ -105,42 +102,23 @@ describe('Check-Ins Core API Integration Tests', () => {
 
     describe('Events Module - Real API', () => {
         it('should get all events from real API', async () => {
-            try {
-                const result = await client.events.getAll();
+            const result = await client.events.getAll();
 
-                expect(result).toBeDefined();
-                expect(result.data).toBeDefined();
-                expect(Array.isArray(result.data)).toBe(true);
+            expect(result).toBeDefined();
+            expect(result.data).toBeDefined();
+            expect(Array.isArray(result.data)).toBe(true);
+            expect(result.data.length).toBeGreaterThan(0);
 
-                // If there are events, verify structure
-                if (result.data.length > 0) {
-                    const event = result.data[0];
-                    expect(event.type).toBe('Event');
-                    expect(event.id).toBeDefined();
-                    expect(event.attributes).toBeDefined();
-
-                    // Verify common attributes
-                    if (event.attributes?.name) {
-                        expect(typeof event.attributes.name).toBe('string');
-                    }
-                }
-
-                console.log(`✅ Successfully retrieved ${result.data.length} events`);
-            } catch (error: any) {
-                // 404 is acceptable - means API is accessible but no events exist
-                if (error.status === 404) {
-                    console.log('ℹ️  404 response - API accessible but no events found (this is OK)');
-                    expect(error.status).toBe(404);
-                    expect(error.message).toMatch(/could not be found|not found/i);
-                } else {
-                    // Re-throw other errors (401, 403, etc.)
-                    throw error;
-                }
+            const event = result.data[0];
+            expect(event.type).toBe('Event');
+            expect(event.id).toBeDefined();
+            if (event.name !== undefined) {
+                expect(typeof event.name).toBe('string');
             }
         }, 30000);
 
-        it('should get events with pagination', async () => {
-            const result = await client.events.getAll({
+        it('should get events with getPage (single page)', async () => {
+            const result = await client.events.getPage({
                 perPage: 5,
                 page: 1
             });
@@ -149,51 +127,37 @@ describe('Check-Ins Core API Integration Tests', () => {
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
             expect(result.data.length).toBeLessThanOrEqual(5);
-            
-            // Check for pagination meta/links if available
             if (result.meta) {
                 expect(typeof result.meta).toBe('object');
             }
         }, 30000);
 
-        it('should get a single event by ID if events exist', async () => {
-            // First get all events to find an ID
+        it('should get a single event by ID', async () => {
             const allEvents = await client.events.getAll();
+            expect(allEvents.data.length).toBeGreaterThan(0);
 
-            if (allEvents.data.length > 0) {
-                const eventId = allEvents.data[0].id;
-                const event = await client.events.getById(eventId);
+            const eventId = allEvents.data[0].id;
+            const event = await client.events.getById(eventId);
 
-                expect(event).toBeDefined();
-                expect(event.type).toBe('Event');
-                expect(event.id).toBe(eventId);
-                expect(event.attributes).toBeDefined();
-            } else {
-                console.log('Skipping test: No events found in account');
-            }
+            expect(event).toBeDefined();
+            expect(event.type).toBe('Event');
+            expect(event.id).toBe(eventId);
         }, 30000);
 
-        it('should get check-ins for an event if events exist', async () => {
-            // First get all events to find an ID
+        it('should get check-ins for an event', async () => {
             const allEvents = await client.events.getAll();
+            expect(allEvents.data.length).toBeGreaterThan(0);
 
-            if (allEvents.data.length > 0) {
-                const eventId = allEvents.data[0].id;
-                const checkIns = await client.events.getCheckIns(eventId);
+            const eventId = allEvents.data[0].id;
+            const checkIns = await client.events.getCheckIns(eventId);
 
-                expect(checkIns).toBeDefined();
-                expect(checkIns.data).toBeDefined();
-                expect(Array.isArray(checkIns.data)).toBe(true);
-
-                // If there are check-ins, verify structure
-                if (checkIns.data.length > 0) {
-                    const checkIn = checkIns.data[0];
-                    expect(checkIn.type).toBe('CheckIn');
-                    expect(checkIn.id).toBeDefined();
-                }
-            } else {
-                console.log('Skipping test: No events found in account');
-            }
+            expect(checkIns).toBeDefined();
+            expect(checkIns.data).toBeDefined();
+            expect(Array.isArray(checkIns.data)).toBe(true);
+            expect(checkIns.data.length).toBeGreaterThan(0);
+            const checkIn = checkIns.data[0];
+            expect(checkIn.type).toBe('CheckIn');
+            expect(checkIn.id).toBeDefined();
         }, 30000);
     });
 
@@ -204,18 +168,13 @@ describe('Check-Ins Core API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
+            expect(result.data.length).toBeGreaterThan(0);
 
-            // If there are check-ins, verify structure
-            if (result.data.length > 0) {
-                const checkIn = result.data[0];
-                expect(checkIn.type).toBe('CheckIn');
-                expect(checkIn.id).toBeDefined();
-                expect(checkIn.attributes).toBeDefined();
-                
-                // Verify common attributes
-                if (checkIn.attributes?.security_code) {
-                    expect(typeof checkIn.attributes.security_code).toBe('string');
-                }
+            const checkIn = result.data[0];
+            expect(checkIn.type).toBe('CheckIn');
+            expect(checkIn.id).toBeDefined();
+            if (checkIn.security_code !== undefined) {
+                expect(typeof checkIn.security_code).toBe('string');
             }
         }, 30000);
 
@@ -229,21 +188,16 @@ describe('Check-Ins Core API Integration Tests', () => {
             expect(Array.isArray(result.data)).toBe(true);
         }, 30000);
 
-        it('should get a single check-in by ID if check-ins exist', async () => {
-            // First get all check-ins to find an ID
+        it('should get a single check-in by ID', async () => {
             const allCheckIns = await client.checkIns.getAll();
+            expect(allCheckIns.data.length).toBeGreaterThan(0);
 
-            if (allCheckIns.data.length > 0) {
-                const checkInId = allCheckIns.data[0].id;
-                const checkIn = await client.checkIns.getById(checkInId);
+            const checkInId = allCheckIns.data[0].id;
+            const checkIn = await client.checkIns.getById(checkInId);
 
-                expect(checkIn).toBeDefined();
-                expect(checkIn.type).toBe('CheckIn');
-                expect(checkIn.id).toBe(checkInId);
-                expect(checkIn.attributes).toBeDefined();
-            } else {
-                console.log('Skipping test: No check-ins found in account');
-            }
+            expect(checkIn).toBeDefined();
+            expect(checkIn.type).toBe('CheckIn');
+            expect(checkIn.id).toBe(checkInId);
         }, 30000);
     });
 
@@ -254,14 +208,11 @@ describe('Check-Ins Core API Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
+            expect(result.data.length).toBeGreaterThan(0);
 
-            // If there are locations, verify structure
-            if (result.data.length > 0) {
-                const location = result.data[0];
-                expect(location.type).toBe('Location');
-                expect(location.id).toBeDefined();
-                expect(location.attributes).toBeDefined();
-            }
+            const location = result.data[0];
+            expect(location.type).toBe('Location');
+            expect(location.id).toBeDefined();
         }, 30000);
     });
 
@@ -272,33 +223,27 @@ describe('Check-Ins Core API Integration Tests', () => {
             expect(organization).toBeDefined();
             expect(organization.type).toBe('Organization');
             expect(organization.id).toBeDefined();
-            expect(organization.attributes).toBeDefined();
-            
-            // Organization should always have a name
-            expect(organization.attributes?.name).toBeDefined();
-            expect(typeof organization.attributes.name).toBe('string');
+            expect(organization.name).toBeDefined();
+            expect(typeof organization.name).toBe('string');
         }, 30000);
     });
 
     describe('Event Periods Module - Real API', () => {
         it('should get event periods from real API via event associations', async () => {
-            // Event periods must be accessed through events
-            const events = await client.events.getAll({ perPage: 1 });
+            const events = await client.events.getPage({ perPage: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
-            
+
             const eventId = events.data[0].id;
             const result = await client.events.getEventPeriods(eventId);
 
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
+            expect(result.data.length).toBeGreaterThan(0);
 
-            // If there are event periods, verify structure
-            if (result.data.length > 0) {
-                const period = result.data[0];
-                expect(period.type).toBe('EventPeriod');
-                expect(period.id).toBeDefined();
-            }
+            const period = result.data[0];
+            expect(period.type).toBe('EventPeriod');
+            expect(period.id).toBeDefined();
         }, 30000);
     });
 });
