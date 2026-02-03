@@ -25,8 +25,8 @@ export class OrganizationModule extends BaseModule {
      * Get organization information
      */
     async get(): Promise<OrganizationResource> {
-        // The organization endpoint is at /check-ins/v2 (not /check-ins/v2/organization)
-        return this.getSingle<OrganizationResource>('/check-ins/v2');
+        // Organization is the root of the Check-Ins API (baseURL is .../check-ins/v2)
+        return this.getSingle<OrganizationResource>('/');
     }
 }
 

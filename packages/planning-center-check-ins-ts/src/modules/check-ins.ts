@@ -3,10 +3,13 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
+import type {
+    PcoHttpClient,
+    PaginationHelper,
     PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     CheckInResource,
@@ -17,6 +20,7 @@ import type {
     EventPeriodResource,
     EventTimeResource,
     LocationResource,
+    LocationLabelResource,
     OptionResource,
 } from '../types';
 
@@ -38,37 +42,36 @@ export class CheckInsModule extends BaseModule {
     }
 
     /**
-     * Get all check-ins with optional filtering
+     * Get all check-ins across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: CheckInsListOptions = {}): Promise<{ data: CheckInResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
+    async getAll(options: CheckInsListOptions = {}): Promise<PaginationResult<CheckInResource>> {
+        const params = this.buildCheckInsListParams(options);
+        return this.getAllPages<CheckInResource>('/check_ins', params);
+    }
 
+    /**
+     * Get a single page of check-ins with optional filtering and pagination.
+     */
+    async getPage(options: CheckInsListOptions = {}): Promise<{ data: CheckInResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildCheckInsListParams(options);
+        return this.getList<CheckInResource>('/check_ins', params);
+    }
+
+    private buildCheckInsListParams(options: CheckInsListOptions): Record<string, any> {
+        const params: Record<string, any> = {};
         if (options.where) {
             Object.entries(options.where).forEach(([key, value]) => {
                 params[`where[${key}]`] = value;
             });
         }
-
-        if (options.include) {
-            params.include = options.include.join(',');
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        if (options.filter?.length) {
+            options.filter.forEach(filter => { params[filter] = 'true'; });
         }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        // Apply filters if provided
-        if (options.filter && options.filter.length > 0) {
-            options.filter.forEach(filter => {
-                params[filter] = 'true';
-            });
-        }
-
-        return this.getList<CheckInResource>('/check-ins/v2/check_ins', params);
+        return params;
     }
 
     /**
@@ -80,7 +83,7 @@ export class CheckInsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<CheckInResource>(`/check-ins/v2/check_ins/${id}`, params);
+        return this.getSingle<CheckInResource>(`/check_ins/${id}`, params);
     }
 
     // ===== Associations =====
@@ -90,7 +93,7 @@ export class CheckInsModule extends BaseModule {
      */
     async getCheckInGroup(checkInId: string): Promise<CheckInGroupResource | null> {
         try {
-            return await this.getSingle<CheckInGroupResource>(`/check-ins/v2/check_ins/${checkInId}/check_in_group`);
+            return await this.getSingle<CheckInGroupResource>(`/check_ins/${checkInId}/check_in_group`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -103,7 +106,7 @@ export class CheckInsModule extends BaseModule {
      * Get check-in times for a check-in
      */
     async getCheckInTimes(checkInId: string): Promise<{ data: CheckInTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<CheckInTimeResource>(`/check-ins/v2/check_ins/${checkInId}/check_in_times`);
+        return this.getList<CheckInTimeResource>(`/check_ins/${checkInId}/check_in_times`);
     }
 
     /**
@@ -111,7 +114,7 @@ export class CheckInsModule extends BaseModule {
      */
     async getCheckedInAt(checkInId: string): Promise<StationResource | null> {
         try {
-            return await this.getSingle<StationResource>(`/check-ins/v2/check_ins/${checkInId}/checked_in_at`);
+            return await this.getSingle<StationResource>(`/check_ins/${checkInId}/checked_in_at`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -125,7 +128,7 @@ export class CheckInsModule extends BaseModule {
      */
     async getCheckedInBy(checkInId: string): Promise<any | null> {
         try {
-            return await this.getSingle<any>(`/check-ins/v2/check_ins/${checkInId}/checked_in_by`);
+            return await this.getSingle<any>(`/check_ins/${checkInId}/checked_in_by`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -139,7 +142,7 @@ export class CheckInsModule extends BaseModule {
      */
     async getCheckedOutBy(checkInId: string): Promise<any | null> {
         try {
-            return await this.getSingle<any>(`/check-ins/v2/check_ins/${checkInId}/checked_out_by`);
+            return await this.getSingle<any>(`/check_ins/${checkInId}/checked_out_by`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -152,35 +155,44 @@ export class CheckInsModule extends BaseModule {
      * Get event for a check-in
      */
     async getEvent(checkInId: string): Promise<EventResource> {
-        return this.getSingle<EventResource>(`/check-ins/v2/check_ins/${checkInId}/event`);
+        return this.getSingle<EventResource>(`/check_ins/${checkInId}/event`);
     }
 
     /**
      * Get event period for a check-in
      */
     async getEventPeriod(checkInId: string): Promise<EventPeriodResource> {
-        return this.getSingle<EventPeriodResource>(`/check-ins/v2/check_ins/${checkInId}/event_period`);
+        return this.getSingle<EventPeriodResource>(`/check_ins/${checkInId}/event_period`);
     }
 
     /**
      * Get event times for a check-in
      */
     async getEventTimes(checkInId: string): Promise<{ data: EventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<EventTimeResource>(`/check-ins/v2/check_ins/${checkInId}/event_times`);
+        return this.getList<EventTimeResource>(`/check_ins/${checkInId}/event_times`);
     }
 
     /**
      * Get locations for a check-in
      */
     async getLocations(checkInId: string): Promise<{ data: LocationResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationResource>(`/check-ins/v2/check_ins/${checkInId}/locations`);
+        return this.getList<LocationResource>(`/check_ins/${checkInId}/locations`);
+    }
+
+    /**
+     * Get location labels for a check-in at a specific location.
+     * Per API docs, location_labels are only available under check_ins, not under locations.
+     * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/location_label
+     */
+    async getLocationLabels(checkInId: string, locationId: string): Promise<{ data: LocationLabelResource[]; meta?: any; links?: any }> {
+        return this.getList<LocationLabelResource>(`/check_ins/${checkInId}/locations/${locationId}/location_labels`);
     }
 
     /**
      * Get options for a check-in
      */
     async getOptions(checkInId: string): Promise<{ data: OptionResource[]; meta?: any; links?: any }> {
-        return this.getList<OptionResource>(`/check-ins/v2/check_ins/${checkInId}/options`);
+        return this.getList<OptionResource>(`/check_ins/${checkInId}/options`);
     }
 
     /**
@@ -188,7 +200,7 @@ export class CheckInsModule extends BaseModule {
      */
     async getPerson(checkInId: string): Promise<any | null> {
         try {
-            return await this.getSingle<any>(`/check-ins/v2/check_ins/${checkInId}/person`);
+            return await this.getSingle<any>(`/check_ins/${checkInId}/person`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;

@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    HeadcountResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { HeadcountResource } from '../types';
 
 export interface HeadcountsListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,29 @@ export class HeadcountsModule extends BaseModule {
     }
 
     /**
-     * Get all headcounts with optional filtering
+     * Get all headcounts across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: HeadcountsListOptions = {}): Promise<{ data: HeadcountResource[]; meta?: any; links?: any }> {
+    async getAll(options: HeadcountsListOptions = {}): Promise<PaginationResult<HeadcountResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<HeadcountResource>('/headcounts', params);
+    }
+
+    /**
+     * Get a single page of headcounts with optional filtering and pagination.
+     */
+    async getPage(options: HeadcountsListOptions = {}): Promise<{ data: HeadcountResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<HeadcountResource>('/headcounts', params);
+    }
+
+    private buildParams(options: HeadcountsListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<HeadcountResource>('/check-ins/v2/headcounts', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +64,7 @@ export class HeadcountsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<HeadcountResource>(`/check-ins/v2/headcounts/${id}`, params);
+        return this.getSingle<HeadcountResource>(`/headcounts/${id}`, params);
     }
 }
 

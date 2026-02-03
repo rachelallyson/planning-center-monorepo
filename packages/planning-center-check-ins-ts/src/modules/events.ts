@@ -3,13 +3,14 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
+import type {
+    PcoHttpClient,
+    PaginationHelper,
     PcoEventEmitter,
     ResourceObject,
     Meta,
     TopLevelLinks,
+    PaginationResult,
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     EventResource,
@@ -42,41 +43,40 @@ export class EventsModule extends BaseModule {
     }
 
     /**
-     * Get all events with optional filtering
+     * Get all events across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: EventsListOptions = {}): Promise<{ data: EventResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        const params: Record<string, any> = {};
+    async getAll(options: EventsListOptions = {}): Promise<PaginationResult<EventResource>> {
+        const params = this.buildEventsListParams(options);
+        return this.getAllPages<EventResource>('/events', params);
+    }
 
+    /**
+     * Get a single page of events with optional filtering and pagination.
+     */
+    async getPage(options: EventsListOptions = {}): Promise<{ data: EventResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildEventsListParams(options);
+        return this.getList<EventResource>('/events', params);
+    }
+
+    private buildEventsListParams(options: EventsListOptions): Record<string, any> {
+        const params: Record<string, any> = {};
         if (options.where) {
             Object.entries(options.where).forEach(([key, value]) => {
                 params[`where[${key}]`] = value;
             });
         }
-
         if (options.filter) {
-            // Support both string and array formats
             if (Array.isArray(options.filter)) {
-                options.filter.forEach(filter => {
-                    params.filter = filter; // Use the last filter value, or combine them
-                });
+                options.filter.forEach(filter => { params.filter = filter; });
             } else {
                 params.filter = options.filter;
             }
         }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<EventResource>('/check-ins/v2/events', params);
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -88,7 +88,7 @@ export class EventsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<EventResource>(`/check-ins/v2/events/${id}`, params);
+        return this.getSingle<EventResource>(`/events/${id}`, params);
     }
 
     // ===== Associations =====
@@ -97,7 +97,7 @@ export class EventsModule extends BaseModule {
      * Get attendance types for an event
      */
     async getAttendanceTypes(eventId: string): Promise<{ data: AttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<AttendanceTypeResource>(`/check-ins/v2/events/${eventId}/attendance_types`);
+        return this.getList<AttendanceTypeResource>(`/events/${eventId}/attendance_types`);
     }
 
     /**
@@ -114,28 +114,28 @@ export class EventsModule extends BaseModule {
             });
         }
 
-        return this.getList<CheckInResource>(`/check-ins/v2/events/${eventId}/check_ins`, params);
+        return this.getList<CheckInResource>(`/events/${eventId}/check_ins`, params);
     }
 
     /**
      * Get current event times for an event
      */
     async getCurrentEventTimes(eventId: string): Promise<{ data: EventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<EventTimeResource>(`/check-ins/v2/events/${eventId}/current_event_times`);
+        return this.getList<EventTimeResource>(`/events/${eventId}/current_event_times`);
     }
 
     /**
      * Get event labels for an event
      */
     async getEventLabels(eventId: string): Promise<{ data: EventLabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<EventLabelResource>(`/check-ins/v2/events/${eventId}/event_labels`);
+        return this.getList<EventLabelResource>(`/events/${eventId}/event_labels`);
     }
 
     /**
      * Get event periods for an event (single page)
      */
     async getEventPeriods(eventId: string): Promise<{ data: EventPeriodResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<EventPeriodResource>(`/check-ins/v2/events/${eventId}/event_periods`);
+        return this.getList<EventPeriodResource>(`/events/${eventId}/event_periods`);
     }
 
     /**
@@ -143,7 +143,7 @@ export class EventsModule extends BaseModule {
      */
     async getAllEventPeriods(eventId: string, options?: { perPage?: number }): Promise<EventPeriodResource[]> {
         const result = await this.getAllPages<EventPeriodResource>(
-            `/check-ins/v2/events/${eventId}/event_periods`,
+            `/events/${eventId}/event_periods`,
             {},
             { perPage: options?.perPage || 100 }
         );
@@ -165,7 +165,7 @@ export class EventsModule extends BaseModule {
         }
 
         const result = await this.getAllPages<EventResource>(
-            '/check-ins/v2/events',
+            '/events',
             params,
             { perPage: options?.perPage || 100 }
         );
@@ -206,7 +206,7 @@ export class EventsModule extends BaseModule {
             links?: TopLevelLinks;
         }>({
             method: 'GET',
-            endpoint: `/check-ins/v2/events/${eventId}/event_periods/${periodId}/event_times`,
+            endpoint: `/events/${eventId}/event_periods/${periodId}/event_times`,
             params,
         });
 
@@ -222,21 +222,21 @@ export class EventsModule extends BaseModule {
      * Get integration links for an event
      */
     async getIntegrationLinks(eventId: string): Promise<{ data: IntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<IntegrationLinkResource>(`/check-ins/v2/events/${eventId}/integration_links`);
+        return this.getList<IntegrationLinkResource>(`/events/${eventId}/integration_links`);
     }
 
     /**
      * Get locations for an event
      */
     async getLocations(eventId: string): Promise<{ data: LocationResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<LocationResource>(`/check-ins/v2/events/${eventId}/locations`);
+        return this.getList<LocationResource>(`/events/${eventId}/locations`);
     }
 
     /**
      * Get person events for an event
      */
     async getPersonEvents(eventId: string): Promise<{ data: PersonEventResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<PersonEventResource>(`/check-ins/v2/events/${eventId}/person_events`);
+        return this.getList<PersonEventResource>(`/events/${eventId}/person_events`);
     }
 }
 

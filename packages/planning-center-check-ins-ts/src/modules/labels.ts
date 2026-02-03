@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    LabelResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { LabelResource } from '../types';
 
 export interface LabelsListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,37 @@ export class LabelsModule extends BaseModule {
     }
 
     /**
-     * Get all labels with optional filtering
+     * Get all labels across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: LabelsListOptions = {}): Promise<{ data: LabelResource[]; meta?: any; links?: any }> {
-        const params: Record<string, any> = {};
+    async getAll(options: LabelsListOptions = {}): Promise<PaginationResult<LabelResource>> {
+        const params = this.buildLabelsParams(options);
+        return this.getAllPages<LabelResource>('/labels', params);
+    }
 
+    /**
+     * Get a single page of labels with optional filtering and pagination.
+     */
+    async getPage(options: LabelsListOptions = {}): Promise<{ data: LabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        return this.getList<LabelResource>('/labels', {
+            where: options.where,
+            include: options.include,
+            per_page: options.perPage,
+            page: options.page,
+        });
+    }
+
+    private buildLabelsParams(options: LabelsListOptions): Record<string, any> {
+        const params: Record<string, any> = {};
         if (options.where) {
             Object.entries(options.where).forEach(([key, value]) => {
                 params[`where[${key}]`] = value;
             });
         }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<LabelResource>('/check-ins/v2/labels', params);
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +72,7 @@ export class LabelsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<LabelResource>(`/check-ins/v2/labels/${id}`, params);
+        return this.getSingle<LabelResource>(`/labels/${id}`, params);
     }
 }
 

@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    PassResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { PassResource } from '../types';
 
 export interface PassesListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,29 @@ export class PassesModule extends BaseModule {
     }
 
     /**
-     * Get all passes with optional filtering
+     * Get all passes across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: PassesListOptions = {}): Promise<{ data: PassResource[]; meta?: any; links?: any }> {
+    async getAll(options: PassesListOptions = {}): Promise<PaginationResult<PassResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<PassResource>('/passes', params);
+    }
+
+    /**
+     * Get a single page of passes with optional filtering and pagination.
+     */
+    async getPage(options: PassesListOptions = {}): Promise<{ data: PassResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<PassResource>('/passes', params);
+    }
+
+    private buildParams(options: PassesListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<PassResource>('/check-ins/v2/passes', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +64,7 @@ export class PassesModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<PassResource>(`/check-ins/v2/passes/${id}`, params);
+        return this.getSingle<PassResource>(`/passes/${id}`, params);
     }
 }
 

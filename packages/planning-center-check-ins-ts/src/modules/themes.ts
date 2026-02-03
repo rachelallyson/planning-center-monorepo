@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    ThemeResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { ThemeResource } from '../types';
 
 export interface ThemesListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,29 @@ export class ThemesModule extends BaseModule {
     }
 
     /**
-     * Get all themes with optional filtering
+     * Get all themes across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: ThemesListOptions = {}): Promise<{ data: ThemeResource[]; meta?: any; links?: any }> {
+    async getAll(options: ThemesListOptions = {}): Promise<PaginationResult<ThemeResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<ThemeResource>('/themes', params);
+    }
+
+    /**
+     * Get a single page of themes with optional filtering and pagination.
+     */
+    async getPage(options: ThemesListOptions = {}): Promise<{ data: ThemeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<ThemeResource>('/themes', params);
+    }
+
+    private buildParams(options: ThemesListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<ThemeResource>('/check-ins/v2/themes', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +64,7 @@ export class ThemesModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<ThemeResource>(`/check-ins/v2/themes/${id}`, params);
+        return this.getSingle<ThemeResource>(`/themes/${id}`, params);
     }
 }
 

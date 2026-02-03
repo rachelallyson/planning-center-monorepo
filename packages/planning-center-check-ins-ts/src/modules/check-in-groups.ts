@@ -3,16 +3,19 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    CheckInGroupResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { CheckInGroupResource } from '../types';
 
 export interface CheckInGroupsListOptions {
+    /** Required: check-in groups are listed per station. */
+    stationId: string;
     where?: Record<string, any>;
     include?: string[];
     perPage?: number;
@@ -29,30 +32,31 @@ export class CheckInGroupsModule extends BaseModule {
     }
 
     /**
-     * Get all check-in groups with optional filtering
+     * Get all check-in groups for a station across all pages.
+     * Check-Ins API lists check-in groups under a station: GET /stations/:station_id/check_in_groups.
      */
-    async getAll(options: CheckInGroupsListOptions = {}): Promise<{ data: CheckInGroupResource[]; meta?: any; links?: any }> {
+    async getAll(options: CheckInGroupsListOptions): Promise<PaginationResult<CheckInGroupResource>> {
+        const { stationId, ...rest } = options;
+        const params = this.buildParams(rest);
+        return this.getAllPages<CheckInGroupResource>(`/stations/${stationId}/check_in_groups`, params);
+    }
+
+    /**
+     * Get a single page of check-in groups for a station.
+     */
+    async getPage(options: CheckInGroupsListOptions): Promise<{ data: CheckInGroupResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const { stationId, ...rest } = options;
+        const params = this.buildParams(rest);
+        return this.getList<CheckInGroupResource>(`/stations/${stationId}/check_in_groups`, params);
+    }
+
+    private buildParams(options: Omit<CheckInGroupsListOptions, 'stationId'>): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<CheckInGroupResource>('/check-ins/v2/check_in_groups', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +68,7 @@ export class CheckInGroupsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<CheckInGroupResource>(`/check-ins/v2/check_in_groups/${id}`, params);
+        return this.getSingle<CheckInGroupResource>(`/check_in_groups/${id}`, params);
     }
 }
 

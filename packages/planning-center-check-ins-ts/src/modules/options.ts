@@ -3,15 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    OptionResource,
-    CheckInResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { OptionResource, CheckInResource } from '../types';
 
 export interface OptionsListOptions {
     where?: Record<string, any>;
@@ -30,30 +30,29 @@ export class OptionsModule extends BaseModule {
     }
 
     /**
-     * Get all options with optional filtering
+     * Get all options across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: OptionsListOptions = {}): Promise<{ data: OptionResource[]; meta?: any; links?: any }> {
+    async getAll(options: OptionsListOptions = {}): Promise<PaginationResult<OptionResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<OptionResource>('/options', params);
+    }
+
+    /**
+     * Get a single page of options with optional filtering and pagination.
+     */
+    async getPage(options: OptionsListOptions = {}): Promise<{ data: OptionResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<OptionResource>('/options', params);
+    }
+
+    private buildParams(options: OptionsListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<OptionResource>('/check-ins/v2/options', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -65,7 +64,7 @@ export class OptionsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<OptionResource>(`/check-ins/v2/options/${id}`, params);
+        return this.getSingle<OptionResource>(`/options/${id}`, params);
     }
 }
 

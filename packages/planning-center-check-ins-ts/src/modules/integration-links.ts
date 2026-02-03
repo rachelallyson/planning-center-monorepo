@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    IntegrationLinkResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { IntegrationLinkResource } from '../types';
 
 export interface IntegrationLinksListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,29 @@ export class IntegrationLinksModule extends BaseModule {
     }
 
     /**
-     * Get all integration links with optional filtering
+     * Get all integration links across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: IntegrationLinksListOptions = {}): Promise<{ data: IntegrationLinkResource[]; meta?: any; links?: any }> {
+    async getAll(options: IntegrationLinksListOptions = {}): Promise<PaginationResult<IntegrationLinkResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<IntegrationLinkResource>('/integration_links', params);
+    }
+
+    /**
+     * Get a single page of integration links with optional filtering and pagination.
+     */
+    async getPage(options: IntegrationLinksListOptions = {}): Promise<{ data: IntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<IntegrationLinkResource>('/integration_links', params);
+    }
+
+    private buildParams(options: IntegrationLinksListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<IntegrationLinkResource>('/check-ins/v2/integration_links', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +64,7 @@ export class IntegrationLinksModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<IntegrationLinkResource>(`/check-ins/v2/integration_links/${id}`, params);
+        return this.getSingle<IntegrationLinkResource>(`/integration_links/${id}`, params);
     }
 }
 

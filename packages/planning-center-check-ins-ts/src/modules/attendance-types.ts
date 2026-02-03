@@ -3,14 +3,15 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
-    PcoEventEmitter,
-} from '@rachelallyson/planning-center-base-ts';
 import type {
-    AttendanceTypeResource,
-} from '../types';
+    PcoHttpClient,
+    PaginationHelper,
+    PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
+} from '@rachelallyson/planning-center-base-ts';
+import type { AttendanceTypeResource } from '../types';
 
 export interface AttendanceTypesListOptions {
     where?: Record<string, any>;
@@ -29,30 +30,29 @@ export class AttendanceTypesModule extends BaseModule {
     }
 
     /**
-     * Get all attendance types with optional filtering
+     * Get all attendance types across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: AttendanceTypesListOptions = {}): Promise<{ data: AttendanceTypeResource[]; meta?: any; links?: any }> {
+    async getAll(options: AttendanceTypesListOptions = {}): Promise<PaginationResult<AttendanceTypeResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<AttendanceTypeResource>('/attendance_types', params);
+    }
+
+    /**
+     * Get a single page of attendance types with optional filtering and pagination.
+     */
+    async getPage(options: AttendanceTypesListOptions = {}): Promise<{ data: AttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<AttendanceTypeResource>('/attendance_types', params);
+    }
+
+    private buildParams(options: AttendanceTypesListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<AttendanceTypeResource>('/check-ins/v2/attendance_types', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -64,7 +64,7 @@ export class AttendanceTypesModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<AttendanceTypeResource>(`/check-ins/v2/attendance_types/${id}`, params);
+        return this.getSingle<AttendanceTypeResource>(`/attendance_types/${id}`, params);
     }
 }
 

@@ -3,10 +3,13 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
+import type {
+    PcoHttpClient,
+    PaginationHelper,
     PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     LocationResource,
@@ -32,30 +35,29 @@ export class LocationsModule extends BaseModule {
     }
 
     /**
-     * Get all locations with optional filtering
+     * Get all locations across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: LocationsListOptions = {}): Promise<{ data: LocationResource[]; meta?: any; links?: any }> {
+    async getAll(options: LocationsListOptions = {}): Promise<PaginationResult<LocationResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<LocationResource>('/locations', params);
+    }
+
+    /**
+     * Get a single page of locations with optional filtering and pagination.
+     */
+    async getPage(options: LocationsListOptions = {}): Promise<{ data: LocationResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<LocationResource>('/locations', params);
+    }
+
+    private buildParams(options: LocationsListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<LocationResource>('/check-ins/v2/locations', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -67,7 +69,7 @@ export class LocationsModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<LocationResource>(`/check-ins/v2/locations/${id}`, params);
+        return this.getSingle<LocationResource>(`/locations/${id}`, params);
     }
 
     // ===== Associations =====
@@ -76,21 +78,24 @@ export class LocationsModule extends BaseModule {
      * Get location event periods for a location
      */
     async getLocationEventPeriods(locationId: string): Promise<{ data: LocationEventPeriodResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventPeriodResource>(`/check-ins/v2/locations/${locationId}/location_event_periods`);
+        return this.getList<LocationEventPeriodResource>(`/locations/${locationId}/location_event_periods`);
     }
 
     /**
      * Get location event times for a location
      */
     async getLocationEventTimes(locationId: string): Promise<{ data: LocationEventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventTimeResource>(`/check-ins/v2/locations/${locationId}/location_event_times`);
+        return this.getList<LocationEventTimeResource>(`/locations/${locationId}/location_event_times`);
     }
 
     /**
-     * Get location labels for a location
+     * Get location labels for a location.
+     * Note: The API docs list location_labels only under check_ins (check_in_id + location_id).
+     * If this returns empty or 404, use checkIns.getLocationLabels(checkInId, locationId) instead.
+     * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/location_label
      */
     async getLocationLabels(locationId: string): Promise<{ data: LocationLabelResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationLabelResource>(`/check-ins/v2/locations/${locationId}/location_labels`);
+        return this.getList<LocationLabelResource>(`/locations/${locationId}/location_labels`);
     }
 }
 

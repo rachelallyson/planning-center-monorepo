@@ -3,10 +3,13 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { 
-    PcoHttpClient, 
-    PaginationHelper, 
+import type {
+    PcoHttpClient,
+    PaginationHelper,
     PcoEventEmitter,
+    PaginationResult,
+    Meta,
+    TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     EventTimeResource,
@@ -33,30 +36,29 @@ export class EventTimesModule extends BaseModule {
     }
 
     /**
-     * Get all event times with optional filtering
+     * Get all event times across all pages with optional filtering.
+     * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: EventTimesListOptions = {}): Promise<{ data: EventTimeResource[]; meta?: any; links?: any }> {
+    async getAll(options: EventTimesListOptions = {}): Promise<PaginationResult<EventTimeResource>> {
+        const params = this.buildParams(options);
+        return this.getAllPages<EventTimeResource>('/event_times', params);
+    }
+
+    /**
+     * Get a single page of event times with optional filtering and pagination.
+     */
+    async getPage(options: EventTimesListOptions = {}): Promise<{ data: EventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+        const params = this.buildParams(options);
+        return this.getList<EventTimeResource>('/event_times', params);
+    }
+
+    private buildParams(options: EventTimesListOptions): Record<string, any> {
         const params: Record<string, any> = {};
-
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-
-        if (options.include) {
-            params.include = options.include.join(',');
-        }
-
-        if (options.perPage) {
-            params.per_page = options.perPage;
-        }
-
-        if (options.page) {
-            params.page = options.page;
-        }
-
-        return this.getList<EventTimeResource>('/check-ins/v2/event_times', params);
+        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
+        if (options.include) params.include = options.include.join(',');
+        if (options.perPage != null) params.per_page = options.perPage;
+        if (options.page != null) params.page = options.page;
+        return params;
     }
 
     /**
@@ -68,7 +70,7 @@ export class EventTimesModule extends BaseModule {
             params.include = include.join(',');
         }
 
-        return this.getSingle<EventTimeResource>(`/check-ins/v2/event_times/${id}`, params);
+        return this.getSingle<EventTimeResource>(`/event_times/${id}`, params);
     }
 
     // ===== Associations =====
@@ -77,28 +79,28 @@ export class EventTimesModule extends BaseModule {
      * Get event for an event time
      */
     async getEvent(eventTimeId: string): Promise<EventResource> {
-        return this.getSingle<EventResource>(`/check-ins/v2/event_times/${eventTimeId}/event`);
+        return this.getSingle<EventResource>(`/event_times/${eventTimeId}/event`);
     }
 
     /**
      * Get event period for an event time
      */
     async getEventPeriod(eventTimeId: string): Promise<EventPeriodResource> {
-        return this.getSingle<EventPeriodResource>(`/check-ins/v2/event_times/${eventTimeId}/event_period`);
+        return this.getSingle<EventPeriodResource>(`/event_times/${eventTimeId}/event_period`);
     }
 
     /**
      * Get location event times for an event time
      */
     async getLocationEventTimes(eventTimeId: string): Promise<{ data: LocationEventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventTimeResource>(`/check-ins/v2/event_times/${eventTimeId}/location_event_times`);
+        return this.getList<LocationEventTimeResource>(`/event_times/${eventTimeId}/location_event_times`);
     }
 
     /**
      * Get check-ins for an event time
      */
     async getCheckIns(eventTimeId: string): Promise<{ data: CheckInResource[]; meta?: any; links?: any }> {
-        return this.getList<CheckInResource>(`/check-ins/v2/event_times/${eventTimeId}/check_ins`);
+        return this.getList<CheckInResource>(`/event_times/${eventTimeId}/check_ins`);
     }
 }
 

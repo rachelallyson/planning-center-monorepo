@@ -17,6 +17,7 @@ export type { BatchOperation, BatchResult, BatchOptions, BatchSummary } from '@r
 // Core types (re-exported from base)
 export type {
   Paginated,
+  PaginationResult,
   Relationship,
   ResourceIdentifier,
   ResourceObject,

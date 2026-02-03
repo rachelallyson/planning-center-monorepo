@@ -116,7 +116,7 @@ export class PcoCheckInsClient implements EventEmitter {
         const { baseUrl, ...restConfig } = this.config;
         const fullConfig: any = {
             ...restConfig,
-            baseURL: baseUrl || 'https://api.planningcenteronline.com',
+            baseURL: baseUrl || 'https://api.planningcenteronline.com/check-ins/v2',
         };
         
         // Recreate HTTP client with new config
