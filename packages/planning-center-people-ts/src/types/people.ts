@@ -427,6 +427,31 @@ export interface ListStarResource
 export type ListStarsList = Paginated<ListStarResource>;
 export type ListStarSingle = Response<ListStarResource>;
 
+// ===== List Rule Resource =====
+// GET /people/v2/lists/:id/rules
+
+export interface ListRuleAttributes extends Attributes {
+  group?: string;
+  operator?: string;
+  value?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ListRuleRelationships {
+  list?: Relationship;
+}
+
+export interface ListRuleResource
+  extends ResourceObject<
+    'Rule',
+    ListRuleAttributes,
+    ListRuleRelationships
+  > { }
+
+export type ListRulesList = Paginated<ListRuleResource>;
+export type ListRuleSingle = Response<ListRuleResource>;
+
 // ===== Note Resource =====
 
 export interface NoteAttributes extends Attributes {

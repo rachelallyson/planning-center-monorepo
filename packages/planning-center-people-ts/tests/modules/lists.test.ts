@@ -184,6 +184,29 @@ describe('ListsModule - Real Integration Tests', () => {
     }, 30000);
   });
 
+  describe('getRules', () => {
+    it('should return rules for a list', async () => {
+      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      expect(listsResponse.data.length).toBeGreaterThan(0);
+      const listId = listsResponse.data[0].id;
+
+      const result = await client.lists.getRules(listId);
+
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('meta');
+      expect(result).toHaveProperty('links');
+      expect(Array.isArray(result.data)).toBe(true);
+      result.data.forEach((rule) => {
+        expect(rule).toHaveProperty('id');
+        expect(rule).toHaveProperty('type', 'Rule');
+      });
+    }, 30000);
+
+    it('should reject for invalid list ID', async () => {
+      await expect(client.lists.getRules('invalid-list-id')).rejects.toThrow();
+    }, 30000);
+  });
+
   describe('run', () => {
     it('should run a list', async () => {
       // First get a list ID

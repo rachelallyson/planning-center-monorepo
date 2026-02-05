@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-02-05
+
+### Added
+
+- **ListsModule.getRules(listId)**: New method to fetch rules for a list (`GET /people/v2/lists/:id/rules`). Returns paginated list of rules with `data`, `meta`, and `links`. Types `ListRuleResource`, `ListRuleAttributes`, and `ListRulesList` are exported.
+
 ## [3.0.0] - 2026-01-28
 
 ### Added

@@ -8,6 +8,7 @@ import type {
     ListAttributes,
     ListCategoryResource,
     ListCategoryAttributes,
+    ListRuleResource,
     PersonResource,
     Meta,
     TopLevelLinks
@@ -103,6 +104,14 @@ export class ListsModule extends BaseModule {
      */
     async getPeople(listId: string) {
         return this.getList<PersonResource>(`/lists/${listId}/people`);
+    }
+
+    /**
+     * Get rules for a list (GET /people/v2/lists/:id/rules)
+     */
+    async getRules(listId: string) {
+        this.debugLog('lists.getRules', { listId });
+        return this.getList<ListRuleResource>(`/lists/${listId}/rules`);
     }
 
     /**
