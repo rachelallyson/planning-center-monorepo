@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { ThemeResource } from '../types';
+import type { ThemeResource, FlattenedThemeResource } from '../types';
 
 export interface ThemesListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class ThemesModule extends BaseModule {
     /**
      * Get a single page of themes with optional filtering and pagination.
      */
-    async getPage(options: ThemesListOptions = {}): Promise<{ data: ThemeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: ThemesListOptions = {}): Promise<{ data: FlattenedThemeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<ThemeResource>('/themes', params);
     }
@@ -58,7 +58,7 @@ export class ThemesModule extends BaseModule {
     /**
      * Get a single theme by ID
      */
-    async getById(id: string, include?: string[]): Promise<ThemeResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedThemeResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

@@ -5,6 +5,7 @@
 
 import {
   Attributes,
+  FlattenedResource,
   Paginated,
   Relationship,
   ResourceObject,
@@ -39,6 +40,9 @@ export interface EventRelationships {
 
 export interface EventResource
   extends ResourceObject<'Event', EventAttributes, EventRelationships> { }
+
+/** Flattened shape actually returned by the client (attributes/relationships at top level) */
+export type FlattenedEventResource = FlattenedResource<'Event', EventAttributes, EventRelationships>;
 
 export type EventsList = Paginated<EventResource>;
 export type EventSingle = Response<EventResource>;
@@ -78,6 +82,9 @@ export interface CheckInRelationships {
 export interface CheckInResource
   extends ResourceObject<'CheckIn', CheckInAttributes, CheckInRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedCheckInResource = FlattenedResource<'CheckIn', CheckInAttributes, CheckInRelationships>;
+
 export type CheckInsList = Paginated<CheckInResource>;
 export type CheckInSingle = Response<CheckInResource>;
 
@@ -98,6 +105,9 @@ export interface LocationRelationships {
 
 export interface LocationResource
   extends ResourceObject<'Location', LocationAttributes, LocationRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedLocationResource = FlattenedResource<'Location', LocationAttributes, LocationRelationships>;
 
 export type LocationsList = Paginated<LocationResource>;
 export type LocationSingle = Response<LocationResource>;
@@ -121,6 +131,9 @@ export interface EventPeriodRelationships {
 export interface EventPeriodResource
   extends ResourceObject<'EventPeriod', EventPeriodAttributes, EventPeriodRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedEventPeriodResource = FlattenedResource<'EventPeriod', EventPeriodAttributes, EventPeriodRelationships>;
+
 export type EventPeriodsList = Paginated<EventPeriodResource>;
 export type EventPeriodSingle = Response<EventPeriodResource>;
 
@@ -143,6 +156,9 @@ export interface EventTimeRelationships {
 export interface EventTimeResource
   extends ResourceObject<'EventTime', EventTimeAttributes, EventTimeRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedEventTimeResource = FlattenedResource<'EventTime', EventTimeAttributes, EventTimeRelationships>;
+
 export type EventTimesList = Paginated<EventTimeResource>;
 export type EventTimeSingle = Response<EventTimeResource>;
 
@@ -160,6 +176,9 @@ export interface StationRelationships {
 
 export interface StationResource
   extends ResourceObject<'Station', StationAttributes, StationRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedStationResource = FlattenedResource<'Station', StationAttributes, StationRelationships>;
 
 export type StationsList = Paginated<StationResource>;
 export type StationSingle = Response<StationResource>;
@@ -180,6 +199,9 @@ export interface LabelRelationships {
 export interface LabelResource
   extends ResourceObject<'Label', LabelAttributes, LabelRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedLabelResource = FlattenedResource<'Label', LabelAttributes, LabelRelationships>;
+
 export type LabelsList = Paginated<LabelResource>;
 export type LabelSingle = Response<LabelResource>;
 
@@ -197,6 +219,9 @@ export interface EventLabelRelationships {
 
 export interface EventLabelResource
   extends ResourceObject<'EventLabel', EventLabelAttributes, EventLabelRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedEventLabelResource = FlattenedResource<'EventLabel', EventLabelAttributes, EventLabelRelationships>;
 
 export type EventLabelsList = Paginated<EventLabelResource>;
 export type EventLabelSingle = Response<EventLabelResource>;
@@ -216,6 +241,9 @@ export interface LocationLabelRelationships {
 export interface LocationLabelResource
   extends ResourceObject<'LocationLabel', LocationLabelAttributes, LocationLabelRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedLocationLabelResource = FlattenedResource<'LocationLabel', LocationLabelAttributes, LocationLabelRelationships>;
+
 export type LocationLabelsList = Paginated<LocationLabelResource>;
 export type LocationLabelSingle = Response<LocationLabelResource>;
 
@@ -233,6 +261,9 @@ export interface OptionRelationships {
 
 export interface OptionResource
   extends ResourceObject<'Option', OptionAttributes, OptionRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedOptionResource = FlattenedResource<'Option', OptionAttributes, OptionRelationships>;
 
 export type OptionsList = Paginated<OptionResource>;
 export type OptionSingle = Response<OptionResource>;
@@ -252,6 +283,9 @@ export interface CheckInGroupRelationships {
 export interface CheckInGroupResource
   extends ResourceObject<'CheckInGroup', CheckInGroupAttributes, CheckInGroupRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedCheckInGroupResource = FlattenedResource<'CheckInGroup', CheckInGroupAttributes, CheckInGroupRelationships>;
+
 export type CheckInGroupsList = Paginated<CheckInGroupResource>;
 export type CheckInGroupSingle = Response<CheckInGroupResource>;
 
@@ -269,6 +303,9 @@ export interface CheckInTimeRelationships {
 
 export interface CheckInTimeResource
   extends ResourceObject<'CheckInTime', CheckInTimeAttributes, CheckInTimeRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedCheckInTimeResource = FlattenedResource<'CheckInTime', CheckInTimeAttributes, CheckInTimeRelationships>;
 
 export type CheckInTimesList = Paginated<CheckInTimeResource>;
 export type CheckInTimeSingle = Response<CheckInTimeResource>;
@@ -288,6 +325,9 @@ export interface PersonEventRelationships {
 export interface PersonEventResource
   extends ResourceObject<'PersonEvent', PersonEventAttributes, PersonEventRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedPersonEventResource = FlattenedResource<'PersonEvent', PersonEventAttributes, PersonEventRelationships>;
+
 export type PersonEventsList = Paginated<PersonEventResource>;
 export type PersonEventSingle = Response<PersonEventResource>;
 
@@ -305,6 +345,9 @@ export interface PreCheckRelationships {
 
 export interface PreCheckResource
   extends ResourceObject<'PreCheck', PreCheckAttributes, PreCheckRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedPreCheckResource = FlattenedResource<'PreCheck', PreCheckAttributes, PreCheckRelationships>;
 
 export type PreChecksList = Paginated<PreCheckResource>;
 export type PreCheckSingle = Response<PreCheckResource>;
@@ -324,6 +367,9 @@ export interface PassRelationships {
 export interface PassResource
   extends ResourceObject<'Pass', PassAttributes, PassRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedPassResource = FlattenedResource<'Pass', PassAttributes, PassRelationships>;
+
 export type PassesList = Paginated<PassResource>;
 export type PassSingle = Response<PassResource>;
 
@@ -341,6 +387,9 @@ export interface HeadcountRelationships {
 
 export interface HeadcountResource
   extends ResourceObject<'Headcount', HeadcountAttributes, HeadcountRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedHeadcountResource = FlattenedResource<'Headcount', HeadcountAttributes, HeadcountRelationships>;
 
 export type HeadcountsList = Paginated<HeadcountResource>;
 export type HeadcountSingle = Response<HeadcountResource>;
@@ -360,6 +409,9 @@ export interface AttendanceTypeRelationships {
 export interface AttendanceTypeResource
   extends ResourceObject<'AttendanceType', AttendanceTypeAttributes, AttendanceTypeRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedAttendanceTypeResource = FlattenedResource<'AttendanceType', AttendanceTypeAttributes, AttendanceTypeRelationships>;
+
 export type AttendanceTypesList = Paginated<AttendanceTypeResource>;
 export type AttendanceTypeSingle = Response<AttendanceTypeResource>;
 
@@ -377,6 +429,9 @@ export interface RosterListPersonRelationships {
 
 export interface RosterListPersonResource
   extends ResourceObject<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedRosterListPersonResource = FlattenedResource<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships>;
 
 export type RosterListPersonsList = Paginated<RosterListPersonResource>;
 export type RosterListPersonSingle = Response<RosterListPersonResource>;
@@ -397,6 +452,9 @@ export interface OrganizationRelationships {
 export interface OrganizationResource
   extends ResourceObject<'Organization', OrganizationAttributes, OrganizationRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedOrganizationResource = FlattenedResource<'Organization', OrganizationAttributes, OrganizationRelationships>;
+
 export type OrganizationsList = Paginated<OrganizationResource>;
 export type OrganizationSingle = Response<OrganizationResource>;
 
@@ -416,6 +474,9 @@ export interface IntegrationLinkRelationships {
 export interface IntegrationLinkResource
   extends ResourceObject<'IntegrationLink', IntegrationLinkAttributes, IntegrationLinkRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedIntegrationLinkResource = FlattenedResource<'IntegrationLink', IntegrationLinkAttributes, IntegrationLinkRelationships>;
+
 export type IntegrationLinksList = Paginated<IntegrationLinkResource>;
 export type IntegrationLinkSingle = Response<IntegrationLinkResource>;
 
@@ -433,6 +494,9 @@ export interface ThemeRelationships {
 
 export interface ThemeResource
   extends ResourceObject<'Theme', ThemeAttributes, ThemeRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedThemeResource = FlattenedResource<'Theme', ThemeAttributes, ThemeRelationships>;
 
 export type ThemesList = Paginated<ThemeResource>;
 export type ThemeSingle = Response<ThemeResource>;
@@ -453,6 +517,9 @@ export interface LocationEventPeriodRelationships {
 export interface LocationEventPeriodResource
   extends ResourceObject<'LocationEventPeriod', LocationEventPeriodAttributes, LocationEventPeriodRelationships> { }
 
+/** Flattened shape actually returned by the client */
+export type FlattenedLocationEventPeriodResource = FlattenedResource<'LocationEventPeriod', LocationEventPeriodAttributes, LocationEventPeriodRelationships>;
+
 export type LocationEventPeriodsList = Paginated<LocationEventPeriodResource>;
 export type LocationEventPeriodSingle = Response<LocationEventPeriodResource>;
 
@@ -470,6 +537,9 @@ export interface LocationEventTimeRelationships {
 
 export interface LocationEventTimeResource
   extends ResourceObject<'LocationEventTime', LocationEventTimeAttributes, LocationEventTimeRelationships> { }
+
+/** Flattened shape actually returned by the client */
+export type FlattenedLocationEventTimeResource = FlattenedResource<'LocationEventTime', LocationEventTimeAttributes, LocationEventTimeRelationships>;
 
 export type LocationEventTimesList = Paginated<LocationEventTimeResource>;
 export type LocationEventTimeSingle = Response<LocationEventTimeResource>;

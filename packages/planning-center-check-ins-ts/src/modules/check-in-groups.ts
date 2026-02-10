@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { CheckInGroupResource } from '../types';
+import type { CheckInGroupResource, FlattenedCheckInGroupResource } from '../types';
 
 export interface CheckInGroupsListOptions {
     /** Required: check-in groups are listed per station. */
@@ -44,7 +44,7 @@ export class CheckInGroupsModule extends BaseModule {
     /**
      * Get a single page of check-in groups for a station.
      */
-    async getPage(options: CheckInGroupsListOptions): Promise<{ data: CheckInGroupResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: CheckInGroupsListOptions): Promise<{ data: FlattenedCheckInGroupResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const { stationId, ...rest } = options;
         const params = this.buildParams(rest);
         return this.getList<CheckInGroupResource>(`/stations/${stationId}/check_in_groups`, params);
@@ -62,7 +62,7 @@ export class CheckInGroupsModule extends BaseModule {
     /**
      * Get a single check-in group by ID
      */
-    async getById(id: string, include?: string[]): Promise<CheckInGroupResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedCheckInGroupResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

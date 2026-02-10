@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { LabelResource } from '../types';
+import type { LabelResource, FlattenedLabelResource } from '../types';
 
 export interface LabelsListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class LabelsModule extends BaseModule {
     /**
      * Get a single page of labels with optional filtering and pagination.
      */
-    async getPage(options: LabelsListOptions = {}): Promise<{ data: LabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: LabelsListOptions = {}): Promise<{ data: FlattenedLabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<LabelResource>('/labels', {
             where: options.where,
             include: options.include,
@@ -66,7 +66,7 @@ export class LabelsModule extends BaseModule {
     /**
      * Get a single label by ID
      */
-    async getById(id: string, include?: string[]): Promise<LabelResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedLabelResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

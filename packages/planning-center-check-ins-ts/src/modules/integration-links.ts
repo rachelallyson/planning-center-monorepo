@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { IntegrationLinkResource } from '../types';
+import type { IntegrationLinkResource, FlattenedIntegrationLinkResource } from '../types';
 
 export interface IntegrationLinksListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class IntegrationLinksModule extends BaseModule {
     /**
      * Get a single page of integration links with optional filtering and pagination.
      */
-    async getPage(options: IntegrationLinksListOptions = {}): Promise<{ data: IntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: IntegrationLinksListOptions = {}): Promise<{ data: FlattenedIntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<IntegrationLinkResource>('/integration_links', params);
     }
@@ -58,7 +58,7 @@ export class IntegrationLinksModule extends BaseModule {
     /**
      * Get a single integration link by ID
      */
-    async getById(id: string, include?: string[]): Promise<IntegrationLinkResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedIntegrationLinkResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

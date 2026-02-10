@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { AttendanceTypeResource } from '../types';
+import type { AttendanceTypeResource, FlattenedAttendanceTypeResource } from '../types';
 
 export interface AttendanceTypesListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class AttendanceTypesModule extends BaseModule {
     /**
      * Get a single page of attendance types with optional filtering and pagination.
      */
-    async getPage(options: AttendanceTypesListOptions = {}): Promise<{ data: AttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: AttendanceTypesListOptions = {}): Promise<{ data: FlattenedAttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<AttendanceTypeResource>('/attendance_types', params);
     }
@@ -58,7 +58,7 @@ export class AttendanceTypesModule extends BaseModule {
     /**
      * Get a single attendance type by ID
      */
-    async getById(id: string, include?: string[]): Promise<AttendanceTypeResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedAttendanceTypeResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

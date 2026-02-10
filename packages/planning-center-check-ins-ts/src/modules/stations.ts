@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { StationResource } from '../types';
+import type { StationResource, FlattenedStationResource } from '../types';
 
 export interface StationsListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class StationsModule extends BaseModule {
     /**
      * Get a single page of stations with optional filtering and pagination.
      */
-    async getPage(options: StationsListOptions = {}): Promise<{ data: StationResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: StationsListOptions = {}): Promise<{ data: FlattenedStationResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<StationResource>('/stations', params);
     }
@@ -58,7 +58,7 @@ export class StationsModule extends BaseModule {
     /**
      * Get a single station by ID
      */
-    async getById(id: string, include?: string[]): Promise<StationResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedStationResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

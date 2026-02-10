@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { PassResource } from '../types';
+import type { PassResource, FlattenedPassResource } from '../types';
 
 export interface PassesListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class PassesModule extends BaseModule {
     /**
      * Get a single page of passes with optional filtering and pagination.
      */
-    async getPage(options: PassesListOptions = {}): Promise<{ data: PassResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: PassesListOptions = {}): Promise<{ data: FlattenedPassResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<PassResource>('/passes', params);
     }
@@ -58,7 +58,7 @@ export class PassesModule extends BaseModule {
     /**
      * Get a single pass by ID
      */
-    async getById(id: string, include?: string[]): Promise<PassResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedPassResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

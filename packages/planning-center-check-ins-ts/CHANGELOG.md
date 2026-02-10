@@ -5,6 +5,21 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-02-09
+
+### Fixed
+
+- **Types now match actual response shape**: All method return types now use **flattened** resource types (`FlattenedEventResource`, `FlattenedEventPeriodResource`, etc.) so TypeScript accurately describes what the client returns. Previously, return types used JSON:API-style `Resource` types (with optional `attributes` and `relationships`), while the base client has always flattened responses (attributes and relationships at top level). This was a type-only mismatch; runtime behavior is unchanged.
+
+### Added
+
+- **Flattened type aliases**: New exported types for every resource—e.g. `FlattenedEventPeriodResource`, `FlattenedEventResource`, `FlattenedCheckInResource`—representing the flattened shape (e.g. `starts_at`, `event` at top level). Use these when typing variables that hold API return values.
+- **Integration test**: `getAllEventPeriods` return value is validated against `FlattenedEventPeriodResource` in attribute-type-validation integration tests.
+
+### Changed
+
+- **Module return types**: Every method that returns resources (e.g. `events.getEventPeriods()`, `events.getAllEventPeriods()`, `checkIns.getById()`, `locations.getPage()`) now declares a return type using the corresponding `Flattened*` type. The original `*Resource` types (e.g. `EventPeriodResource`) remain for JSON:API / input use and are still exported.
+
 ## [3.0.0] - 2026-02-02
 
 ### ⚠️ **Breaking Changes**

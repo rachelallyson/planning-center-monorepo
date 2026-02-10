@@ -23,6 +23,15 @@ import type {
     PersonEventResource,
     IntegrationLinkResource,
     HeadcountResource,
+    FlattenedEventResource,
+    FlattenedEventPeriodResource,
+    FlattenedEventTimeResource,
+    FlattenedAttendanceTypeResource,
+    FlattenedCheckInResource,
+    FlattenedEventLabelResource,
+    FlattenedLocationResource,
+    FlattenedPersonEventResource,
+    FlattenedIntegrationLinkResource,
 } from '../types';
 
 export interface EventsListOptions {
@@ -54,7 +63,7 @@ export class EventsModule extends BaseModule {
     /**
      * Get a single page of events with optional filtering and pagination.
      */
-    async getPage(options: EventsListOptions = {}): Promise<{ data: EventResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: EventsListOptions = {}): Promise<{ data: FlattenedEventResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildEventsListParams(options);
         return this.getList<EventResource>('/events', params);
     }
@@ -82,7 +91,7 @@ export class EventsModule extends BaseModule {
     /**
      * Get a single event by ID
      */
-    async getById(id: string, include?: string[]): Promise<EventResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedEventResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
@@ -96,14 +105,14 @@ export class EventsModule extends BaseModule {
     /**
      * Get attendance types for an event
      */
-    async getAttendanceTypes(eventId: string): Promise<{ data: AttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getAttendanceTypes(eventId: string): Promise<{ data: FlattenedAttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<AttendanceTypeResource>(`/events/${eventId}/attendance_types`);
     }
 
     /**
      * Get check-ins for an event
      */
-    async getCheckIns(eventId: string, options: { filter?: string[] } = {}): Promise<{ data: CheckInResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getCheckIns(eventId: string, options: { filter?: string[] } = {}): Promise<{ data: FlattenedCheckInResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params: Record<string, any> = {};
         
         // Apply filters: attendee, checked_out, first_time, guest, not_checked_out, 
@@ -120,28 +129,28 @@ export class EventsModule extends BaseModule {
     /**
      * Get current event times for an event
      */
-    async getCurrentEventTimes(eventId: string): Promise<{ data: EventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getCurrentEventTimes(eventId: string): Promise<{ data: FlattenedEventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<EventTimeResource>(`/events/${eventId}/current_event_times`);
     }
 
     /**
      * Get event labels for an event
      */
-    async getEventLabels(eventId: string): Promise<{ data: EventLabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getEventLabels(eventId: string): Promise<{ data: FlattenedEventLabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<EventLabelResource>(`/events/${eventId}/event_labels`);
     }
 
     /**
      * Get event periods for an event (single page)
      */
-    async getEventPeriods(eventId: string): Promise<{ data: EventPeriodResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getEventPeriods(eventId: string): Promise<{ data: FlattenedEventPeriodResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<EventPeriodResource>(`/events/${eventId}/event_periods`);
     }
 
     /**
      * Get all event periods for an event (all pages)
      */
-    async getAllEventPeriods(eventId: string, options?: { perPage?: number }): Promise<EventPeriodResource[]> {
+    async getAllEventPeriods(eventId: string, options?: { perPage?: number }): Promise<FlattenedEventPeriodResource[]> {
         const result = await this.getAllPages<EventPeriodResource>(
             `/events/${eventId}/event_periods`,
             {},
@@ -153,7 +162,7 @@ export class EventsModule extends BaseModule {
     /**
      * Get all events with pagination (all pages)
      */
-    async getAllEvents(options?: { filter?: string | string[]; perPage?: number }): Promise<EventResource[]> {
+    async getAllEvents(options?: { filter?: string | string[]; perPage?: number }): Promise<FlattenedEventResource[]> {
         const params: Record<string, any> = {};
         
         if (options?.filter) {
@@ -221,21 +230,21 @@ export class EventsModule extends BaseModule {
     /**
      * Get integration links for an event
      */
-    async getIntegrationLinks(eventId: string): Promise<{ data: IntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getIntegrationLinks(eventId: string): Promise<{ data: FlattenedIntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<IntegrationLinkResource>(`/events/${eventId}/integration_links`);
     }
 
     /**
      * Get locations for an event
      */
-    async getLocations(eventId: string): Promise<{ data: LocationResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getLocations(eventId: string): Promise<{ data: FlattenedLocationResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<LocationResource>(`/events/${eventId}/locations`);
     }
 
     /**
      * Get person events for an event
      */
-    async getPersonEvents(eventId: string): Promise<{ data: PersonEventResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPersonEvents(eventId: string): Promise<{ data: FlattenedPersonEventResource[]; meta?: Meta; links?: TopLevelLinks }> {
         return this.getList<PersonEventResource>(`/events/${eventId}/person_events`);
     }
 }

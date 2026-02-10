@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { RosterListPersonResource } from '../types';
+import type { RosterListPersonResource, FlattenedRosterListPersonResource } from '../types';
 
 export interface RosterListPersonsListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class RosterListPersonsModule extends BaseModule {
     /**
      * Get a single page of roster list persons with optional filtering and pagination.
      */
-    async getPage(options: RosterListPersonsListOptions = {}): Promise<{ data: RosterListPersonResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: RosterListPersonsListOptions = {}): Promise<{ data: FlattenedRosterListPersonResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<RosterListPersonResource>('/roster_list_persons', params);
     }
@@ -58,7 +58,7 @@ export class RosterListPersonsModule extends BaseModule {
     /**
      * Get a single roster list person by ID
      */
-    async getById(id: string, include?: string[]): Promise<RosterListPersonResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedRosterListPersonResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

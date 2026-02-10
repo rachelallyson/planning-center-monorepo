@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { OptionResource, CheckInResource } from '../types';
+import type { OptionResource, CheckInResource, FlattenedOptionResource } from '../types';
 
 export interface OptionsListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class OptionsModule extends BaseModule {
     /**
      * Get a single page of options with optional filtering and pagination.
      */
-    async getPage(options: OptionsListOptions = {}): Promise<{ data: OptionResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: OptionsListOptions = {}): Promise<{ data: FlattenedOptionResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<OptionResource>('/options', params);
     }
@@ -58,7 +58,7 @@ export class OptionsModule extends BaseModule {
     /**
      * Get a single option by ID
      */
-    async getById(id: string, include?: string[]): Promise<OptionResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedOptionResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

@@ -11,7 +11,7 @@ import type {
     Meta,
     TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
-import type { PreCheckResource } from '../types';
+import type { PreCheckResource, FlattenedPreCheckResource } from '../types';
 
 export interface PreChecksListOptions {
     where?: Record<string, any>;
@@ -41,7 +41,7 @@ export class PreChecksModule extends BaseModule {
     /**
      * Get a single page of pre-checks with optional filtering and pagination.
      */
-    async getPage(options: PreChecksListOptions = {}): Promise<{ data: PreCheckResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: PreChecksListOptions = {}): Promise<{ data: FlattenedPreCheckResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<PreCheckResource>('/pre_checks', params);
     }
@@ -58,7 +58,7 @@ export class PreChecksModule extends BaseModule {
     /**
      * Get a single pre-check by ID
      */
-    async getById(id: string, include?: string[]): Promise<PreCheckResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedPreCheckResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');

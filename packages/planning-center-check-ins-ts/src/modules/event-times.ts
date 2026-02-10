@@ -17,6 +17,11 @@ import type {
     EventPeriodResource,
     LocationEventTimeResource,
     CheckInResource,
+    FlattenedEventTimeResource,
+    FlattenedEventResource,
+    FlattenedEventPeriodResource,
+    FlattenedLocationEventTimeResource,
+    FlattenedCheckInResource,
 } from '../types';
 
 export interface EventTimesListOptions {
@@ -47,7 +52,7 @@ export class EventTimesModule extends BaseModule {
     /**
      * Get a single page of event times with optional filtering and pagination.
      */
-    async getPage(options: EventTimesListOptions = {}): Promise<{ data: EventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: EventTimesListOptions = {}): Promise<{ data: FlattenedEventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params = this.buildParams(options);
         return this.getList<EventTimeResource>('/event_times', params);
     }
@@ -64,7 +69,7 @@ export class EventTimesModule extends BaseModule {
     /**
      * Get a single event time by ID
      */
-    async getById(id: string, include?: string[]): Promise<EventTimeResource> {
+    async getById(id: string, include?: string[]): Promise<FlattenedEventTimeResource> {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
@@ -78,28 +83,28 @@ export class EventTimesModule extends BaseModule {
     /**
      * Get event for an event time
      */
-    async getEvent(eventTimeId: string): Promise<EventResource> {
+    async getEvent(eventTimeId: string): Promise<FlattenedEventResource> {
         return this.getSingle<EventResource>(`/event_times/${eventTimeId}/event`);
     }
 
     /**
      * Get event period for an event time
      */
-    async getEventPeriod(eventTimeId: string): Promise<EventPeriodResource> {
+    async getEventPeriod(eventTimeId: string): Promise<FlattenedEventPeriodResource> {
         return this.getSingle<EventPeriodResource>(`/event_times/${eventTimeId}/event_period`);
     }
 
     /**
      * Get location event times for an event time
      */
-    async getLocationEventTimes(eventTimeId: string): Promise<{ data: LocationEventTimeResource[]; meta?: any; links?: any }> {
+    async getLocationEventTimes(eventTimeId: string): Promise<{ data: FlattenedLocationEventTimeResource[]; meta?: any; links?: any }> {
         return this.getList<LocationEventTimeResource>(`/event_times/${eventTimeId}/location_event_times`);
     }
 
     /**
      * Get check-ins for an event time
      */
-    async getCheckIns(eventTimeId: string): Promise<{ data: CheckInResource[]; meta?: any; links?: any }> {
+    async getCheckIns(eventTimeId: string): Promise<{ data: FlattenedCheckInResource[]; meta?: any; links?: any }> {
         return this.getList<CheckInResource>(`/event_times/${eventTimeId}/check_ins`);
     }
 }

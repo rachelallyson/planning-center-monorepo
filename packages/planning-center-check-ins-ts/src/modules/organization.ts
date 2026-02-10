@@ -10,6 +10,7 @@ import type {
 } from '@rachelallyson/planning-center-base-ts';
 import type {
     OrganizationResource,
+    FlattenedOrganizationResource,
 } from '../types';
 
 export class OrganizationModule extends BaseModule {
@@ -24,7 +25,7 @@ export class OrganizationModule extends BaseModule {
     /**
      * Get organization information
      */
-    async get(): Promise<OrganizationResource> {
+    async get(): Promise<FlattenedOrganizationResource> {
         // Organization is the root of the Check-Ins API (baseURL is .../check-ins/v2)
         return this.getSingle<OrganizationResource>('/');
     }
