@@ -400,91 +400,69 @@ describe('EventsModule', () => {
 
   describe('getEventTimesForPeriod', () => {
     it('should get event times for a specific event period', async () => {
-      const mockResponse = {
-        data: {
-          data: [{ id: '1', type: 'EventTime', attributes: { starts_at: '2023-01-01T10:00:00Z' } }],
-          included: [
-            { id: '1', type: 'Headcount', attributes: { total: 5 } },
-            { id: '1', type: 'AttendanceType', attributes: { name: 'Adult' } },
-          ],
-          meta: { total_count: 1 },
-          links: {},
-        },
+      const mockListResponse = {
+        data: [
+          { id: '1', type: 'EventTime', starts_at: '2023-01-01T10:00:00Z' },
+        ],
+        meta: { total_count: 1 },
+        links: {},
       };
 
-      (eventsModule as any).httpClient = {
-        request: jest.fn().mockResolvedValue(mockResponse),
-      };
+      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockListResponse);
 
       const result = await eventsModule.getEventTimesForPeriod('event-1', 'period-1', {
         include: ['headcounts', 'headcounts.attendance_type'],
         perPage: 100,
       });
 
-      expect(result.data).toEqual(mockResponse.data.data);
-      expect(result.included).toEqual(mockResponse.data.included);
-      expect(result.meta).toEqual(mockResponse.data.meta);
-      expect(result.links).toEqual(mockResponse.data.links);
-      expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
-        method: 'GET',
-        endpoint: '/events/event-1/event_periods/period-1/event_times',
-        params: {
+      expect(result.data).toEqual(mockListResponse.data);
+      expect(result.meta).toEqual(mockListResponse.meta);
+      expect(result.links).toEqual(mockListResponse.links);
+      expect((eventsModule as any).getList).toHaveBeenCalledWith(
+        '/events/event-1/event_periods/period-1/event_times',
+        {
           include: 'headcounts,headcounts.attendance_type',
           per_page: 100,
-        },
-      });
+        }
+      );
     });
 
     it('should get event times for a period with include as string', async () => {
-      const mockResponse = {
-        data: {
-          data: [{ id: '1', type: 'EventTime', attributes: { starts_at: '2023-01-01T10:00:00Z' } }],
-          included: [],
-          meta: { total_count: 1 },
-          links: {},
-        },
+      const mockListResponse = {
+        data: [{ id: '1', type: 'EventTime', starts_at: '2023-01-01T10:00:00Z' }],
+        meta: { total_count: 1 },
+        links: {},
       };
 
-      (eventsModule as any).httpClient = {
-        request: jest.fn().mockResolvedValue(mockResponse),
-      };
+      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockListResponse);
 
       const result = await eventsModule.getEventTimesForPeriod('event-1', 'period-1', {
         include: 'headcounts',
       });
 
-      expect(result.data).toEqual(mockResponse.data.data);
-      expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
-        method: 'GET',
-        endpoint: '/events/event-1/event_periods/period-1/event_times',
-        params: {
-          include: 'headcounts',
-        },
-      });
+      expect(result.data).toEqual(mockListResponse.data);
+      expect((eventsModule as any).getList).toHaveBeenCalledWith(
+        '/events/event-1/event_periods/period-1/event_times',
+        { include: 'headcounts' }
+      );
     });
 
     it('should get event times for a period without options', async () => {
-      const mockResponse = {
-        data: {
-          data: [{ id: '1', type: 'EventTime', attributes: { starts_at: '2023-01-01T10:00:00Z' } }],
-          included: undefined,
-          meta: undefined,
-          links: undefined,
-        },
+      const mockListResponse = {
+        data: [{ id: '1', type: 'EventTime', starts_at: '2023-01-01T10:00:00Z' }],
+        meta: undefined,
+        links: undefined,
       };
 
-      (eventsModule as any).httpClient = {
-        request: jest.fn().mockResolvedValue(mockResponse),
-      };
+      (eventsModule as any).getList = jest.fn().mockResolvedValue(mockListResponse);
 
       const result = await eventsModule.getEventTimesForPeriod('event-1', 'period-1');
 
-      expect(result.data).toEqual(mockResponse.data.data);
-      expect((eventsModule as any).httpClient.request).toHaveBeenCalledWith({
-        method: 'GET',
-        endpoint: '/events/event-1/event_periods/period-1/event_times',
-        params: {},
-      });
+      expect(result.data).toEqual(mockListResponse.data);
+      expect((eventsModule as any).getList).toHaveBeenCalledWith(
+        '/events/event-1/event_periods/period-1/event_times',
+        {}
+      );
     });
   });
 

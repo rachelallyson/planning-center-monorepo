@@ -182,49 +182,26 @@ export class EventsModule extends BaseModule {
     }
 
     /**
-     * Get event times for a specific event period
-     * 
-     * Possible included resources: HeadcountResource, AttendanceTypeResource
+     * Get event times for a specific event period.
+     * Uses the same flattened response shape as other list methods.
+     * Possible included resources (when using include): headcounts, attendance_type.
      */
     async getEventTimesForPeriod(
         eventId: string,
         periodId: string,
         options?: { include?: string[] | string; perPage?: number }
-    ): Promise<{
-        data: EventTimeResource[];
-        included?: (HeadcountResource | AttendanceTypeResource)[];
-        meta?: Meta;
-        links?: TopLevelLinks;
-    }> {
+    ): Promise<{ data: FlattenedEventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
         const params: Record<string, any> = {};
-        
         if (options?.include) {
-            params.include = Array.isArray(options.include) 
-                ? options.include.join(',') 
-                : options.include;
+            params.include = Array.isArray(options.include) ? options.include.join(',') : options.include;
         }
-        
         if (options?.perPage) {
             params.per_page = options.perPage;
         }
-
-        const response = await this.httpClient.request<{
-            data: EventTimeResource[];
-            included?: (HeadcountResource | AttendanceTypeResource)[];
-            meta?: Meta;
-            links?: TopLevelLinks;
-        }>({
-            method: 'GET',
-            endpoint: `/events/${eventId}/event_periods/${periodId}/event_times`,
-            params,
-        });
-
-        return {
-            data: response.data.data,
-            included: response.data.included,
-            meta: response.data.meta,
-            links: response.data.links,
-        };
+        return this.getList<EventTimeResource>(
+            `/events/${eventId}/event_periods/${periodId}/event_times`,
+            params
+        );
     }
 
     /**

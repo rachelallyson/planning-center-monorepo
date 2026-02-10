@@ -5,6 +5,16 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-02-09
+
+### Fixed
+
+- **`getEventTimesForPeriod`**: Now uses the base client’s `getList()` so it returns the same flattened shape as other list methods. Previously it called `httpClient.request` directly and returned raw JSON:API (with `included`). Return type is now `{ data: FlattenedEventTimeResource[]; meta?; links? }`. The `included` property is no longer returned (included resources are merged into the flattened `data`).
+
+### Added
+
+- **Integration test**: `getEventTimesForPeriod` return value is validated against `FlattenedEventTimeResource` in attribute-type-validation integration tests (real API; ensures return shape matches type).
+
 ## [3.1.0] - 2026-02-09
 
 ### Fixed

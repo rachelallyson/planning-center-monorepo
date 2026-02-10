@@ -8,7 +8,7 @@
  */
 
 import { PcoCheckInsClient } from '../../src';
-import type { FlattenedEventPeriodResource } from '../../src/types';
+import type { FlattenedEventPeriodResource, FlattenedEventTimeResource } from '../../src/types';
 import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
 import { validateResourceStructure } from '../type-validators';
 
@@ -249,6 +249,63 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
                 }
 
                 const relKeys = ['event', 'event_times', 'check_ins', 'location_event_periods'] as const;
+                relKeys.forEach((key) => {
+                    const val = (item as any)[key];
+                    if (val !== undefined && val !== null) {
+                        if (Array.isArray(val)) {
+                            val.forEach((v: unknown) => {
+                                expect(v).toBeDefined();
+                                expect(typeof (v as any) === 'object').toBe(true);
+                                if ((v as any).type !== undefined) expect(typeof (v as any).type).toBe('string');
+                                if ((v as any).id !== undefined) expect(typeof (v as any).id).toBe('string');
+                            });
+                        } else {
+                            expect(typeof val === 'object').toBe(true);
+                            if ((val as any).type !== undefined) expect(typeof (val as any).type).toBe('string');
+                            if ((val as any).id !== undefined) expect(typeof (val as any).id).toBe('string');
+                        }
+                    }
+                });
+            });
+        }, 30000);
+
+        it('should return JSON from getEventTimesForPeriod that matches FlattenedEventTimeResource type', async () => {
+            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            const eventId = events.data[0].id;
+
+            const periods = await client.events.getEventPeriods(eventId);
+            expect(periods.data.length).toBeGreaterThan(0);
+            const periodId = periods.data[0].id;
+
+            const result = await client.events.getEventTimesForPeriod(eventId, periodId);
+
+            expect(result).toBeDefined();
+            expect(result).toHaveProperty('data');
+            expect(Array.isArray(result.data)).toBe(true);
+            expect(result).not.toHaveProperty('included');
+
+            result.data.forEach((item: FlattenedEventTimeResource, index: number) => {
+                validateResourceStructure(item, 'EventTime', `getEventTimesForPeriod[${index}]`);
+
+                if ((item as any).starts_at !== undefined) {
+                    expect(typeof (item as any).starts_at).toBe('string');
+                    expect(new Date((item as any).starts_at).getTime()).not.toBeNaN();
+                }
+                if ((item as any).ends_at !== undefined) {
+                    expect(typeof (item as any).ends_at).toBe('string');
+                    expect(new Date((item as any).ends_at).getTime()).not.toBeNaN();
+                }
+                if ((item as any).created_at !== undefined) {
+                    expect(typeof (item as any).created_at).toBe('string');
+                    expect(new Date((item as any).created_at).getTime()).not.toBeNaN();
+                }
+                if ((item as any).updated_at !== undefined) {
+                    expect(typeof (item as any).updated_at).toBe('string');
+                    expect(new Date((item as any).updated_at).getTime()).not.toBeNaN();
+                }
+
+                const relKeys = ['event', 'event_period', 'location_event_times', 'check_ins'] as const;
                 relKeys.forEach((key) => {
                     const val = (item as any)[key];
                     if (val !== undefined && val !== null) {

@@ -1,6 +1,6 @@
 {
     "name": "@rachelallyson/planning-center-check-ins-ts",
-    "version": "3.1.0",
+    "version": "3.1.1",
     "description": "A strictly typed TypeScript client for Planning Center Online Check-Ins API with batch operations and enhanced developer experience",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
