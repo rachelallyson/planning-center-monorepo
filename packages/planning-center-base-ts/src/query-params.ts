@@ -34,7 +34,7 @@
  */
 export function buildQueryParams(params?: {
     where?: Record<string, string | number | boolean | undefined>;
-    include?: string[];
+    include?: string[] | string;
     per_page?: number;
     page?: number;
     order?: string;
@@ -48,7 +48,7 @@ export function buildQueryParams(params?: {
     }
 
     if (params?.include) {
-        queryParams.include = params.include.join(',');
+        queryParams.include = Array.isArray(params.include) ? params.include.join(',') : params.include;
     }
 
     if (params?.per_page) {

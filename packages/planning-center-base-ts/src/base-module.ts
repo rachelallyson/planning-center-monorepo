@@ -24,6 +24,12 @@ export interface QueryOptions {
     order?: string;
 }
 
+function isQueryOptions(p: unknown): p is QueryOptions {
+    return p !== null && typeof p === 'object' && (
+        'where' in p || 'include' in p || 'per_page' in p || 'page' in p || 'order' in p
+    );
+}
+
 export abstract class BaseModule {
     protected httpClient: PcoHttpClient;
     protected paginationHelper: PaginationHelper;
@@ -52,60 +58,76 @@ export abstract class BaseModule {
      * Get a single resource
      * 
      * Automatically maps included resources to their relationships when include parameter is used.
-     * This means relationships will contain full resource objects instead of just identifiers.
+     * Pass TRelResourceMap to get relationship keys typed as specific resource types.
      * 
      * @overload Accept structured query options
      */
-    protected async getSingle<T extends ResourceObject<string, any, any>>(
+    protected async getSingle<
+        T extends ResourceObject<string, any, any>,
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
+    >(
         endpoint: string,
         options: QueryOptions
     ): Promise<FlattenedResource<
         T['type'],
         T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
+        TRelResourceMap,
+        TResourceTypeToRelMap
     >>;
     /**
      * @overload Accept flat params (for backward compatibility)
      */
-    protected async getSingle<T extends ResourceObject<string, any, any>>(
+    protected async getSingle<
+        T extends ResourceObject<string, any, any>,
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
+    >(
         endpoint: string,
         params?: Record<string, any>
     ): Promise<FlattenedResource<
         T['type'],
         T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
+        TRelResourceMap,
+        TResourceTypeToRelMap
     >>;
     /**
      * @overload Accept include array (convenience method)
      */
-    protected async getSingle<T extends ResourceObject<string, any, any>>(
+    protected async getSingle<
+        T extends ResourceObject<string, any, any>,
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
+    >(
         endpoint: string,
         include?: string[]
     ): Promise<FlattenedResource<
         T['type'],
         T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
+        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
+        TRelResourceMap,
+        TResourceTypeToRelMap
     >>;
-    protected async getSingle<T extends ResourceObject<string, any, any>>(
+    protected async getSingle<
+        T extends ResourceObject<string, any, any>,
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
+    >(
         endpoint: string,
         paramsOrOptionsOrInclude?: Record<string, any> | QueryOptions | string[]
-    ): Promise<FlattenedResource<
-        T['type'],
-        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
-    >> {
+    ) {
         let params: Record<string, any> | undefined;
         
         // Handle different input types
         if (Array.isArray(paramsOrOptionsOrInclude)) {
             // Array of strings = include parameter
             params = buildIncludeParams(paramsOrOptionsOrInclude);
-        } else if (paramsOrOptionsOrInclude && 'where' in paramsOrOptionsOrInclude) {
-            // Structured QueryOptions
-            params = buildQueryParams(paramsOrOptionsOrInclude as QueryOptions);
+        } else if (isQueryOptions(paramsOrOptionsOrInclude)) {
+            params = buildQueryParams(paramsOrOptionsOrInclude);
         } else {
-            // Flat params (backward compatibility)
-            params = paramsOrOptionsOrInclude as Record<string, any> | undefined;
+            params = paramsOrOptionsOrInclude;
         }
 
         this.debugLog('base.getSingle', { endpoint, params });
@@ -137,7 +159,8 @@ export abstract class BaseModule {
      */
     protected async getList<
         T extends ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends object = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         options: QueryOptions
@@ -146,7 +169,8 @@ export abstract class BaseModule {
             T['type'],
             T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
             T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
-            TRelResourceMap
+            TRelResourceMap,
+            TResourceTypeToRelMap
        >[]; 
         meta?: Meta; 
         links?: TopLevelLinks 
@@ -156,7 +180,8 @@ export abstract class BaseModule {
      */
     protected async getList<
         T extends ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends object = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         params?: Record<string, any>
@@ -165,44 +190,28 @@ export abstract class BaseModule {
             T['type'],
             T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
             T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
-            TRelResourceMap
+            TRelResourceMap,
+            TResourceTypeToRelMap
        >[]; 
         meta?: Meta; 
         links?: TopLevelLinks 
     }>;
     protected async getList<
         T extends ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends object = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         paramsOrOptions?: Record<string, any> | QueryOptions
-    ): Promise<{ 
-        data: FlattenedResource<
-            T['type'],
-            T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-            T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
-            TRelResourceMap
-       >[]; 
-        meta?: Meta; 
-        links?: TopLevelLinks 
-    }> {
+    ) {
         let params: Record<string, any> | undefined;
         
         // Use buildQueryParams when options look like QueryOptions (include, where, per_page, etc.)
         // so that include is sent as comma-separated string and the API returns included resources.
-        const isQueryOptions =
-            paramsOrOptions &&
-            typeof paramsOrOptions === 'object' &&
-            ('include' in paramsOrOptions ||
-                'where' in paramsOrOptions ||
-                'per_page' in paramsOrOptions ||
-                'page' in paramsOrOptions ||
-                'order' in paramsOrOptions);
-        if (isQueryOptions) {
-            params = buildQueryParams(paramsOrOptions as QueryOptions);
+        if (isQueryOptions(paramsOrOptions)) {
+            params = buildQueryParams(paramsOrOptions);
         } else {
-            // Flat params (backward compatibility)
-            params = paramsOrOptions as Record<string, any> | undefined;
+            params = paramsOrOptions;
         }
         
         const response = await this.httpClient.request<{ 
@@ -215,6 +224,21 @@ export abstract class BaseModule {
             endpoint,
             params,
         });
+        
+        // Debug: log raw API response for event_times + include to verify included/mapping
+        if (params?.include && typeof endpoint === 'string' && endpoint.includes('event_times')) {
+            const raw = response.data;
+            const included = raw?.included ?? [];
+            const dataArray = Array.isArray(raw?.data) ? raw.data : [];
+            const first = dataArray[0] as { relationships?: Record<string, { data?: unknown }> } | undefined;
+            this.debugLog('base.getList raw response (event_times + include)', {
+                endpoint,
+                paramsInclude: params.include,
+                includedCount: included.length,
+                includedTypes: [...new Set((included as { type?: string }[]).map((r) => r.type))],
+                firstDataItemRelationships: first?.relationships,
+            });
+        }
         
         // Automatically map included resources to relationships and flatten structure
         // Always flatten, even if no included resources (to maintain consistent return type)
@@ -238,11 +262,7 @@ export abstract class BaseModule {
         endpoint: string,
         data: any,
         params?: Record<string, any>
-    ): Promise<FlattenedResource<
-        T['type'],
-        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
-    >> {
+    ) {
         this.debugLog('base.createResource', { endpoint, params });
         const response = await this.httpClient.request<{ data: T; included?: ResourceObject<string, any, any>[] }>({
             method: 'POST',
@@ -262,7 +282,7 @@ export abstract class BaseModule {
         }
         const created = mapIncludedToRelationships([response.data.data], response.data?.included)[0];
         this.debugLog('base.createResource result', { endpoint, id: (created as { id?: string })?.id });
-        return created as FlattenedResource<
+        return created as unknown as FlattenedResource<
             T['type'],
             T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
             T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
@@ -278,11 +298,7 @@ export abstract class BaseModule {
         endpoint: string,
         data: any,
         params?: Record<string, any>
-    ): Promise<FlattenedResource<
-        T['type'],
-        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
-    >> {
+    ) {
         this.debugLog('base.updateResource', { endpoint, params });
         const response = await this.httpClient.request<{ data: T; included?: ResourceObject<string, any, any>[] }>({
             method: 'PATCH',
@@ -302,7 +318,7 @@ export abstract class BaseModule {
         }
         const updated = mapIncludedToRelationships([response.data.data], response.data?.included)[0];
         this.debugLog('base.updateResource result', { endpoint, id: (updated as { id?: string })?.id });
-        return updated as FlattenedResource<
+        return updated as unknown as FlattenedResource<
             T['type'],
             T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
             T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
@@ -312,7 +328,7 @@ export abstract class BaseModule {
     /**
      * Delete a resource
      */
-    protected async deleteResource(endpoint: string, params?: Record<string, any>): Promise<void> {
+    protected async deleteResource(endpoint: string, params?: Record<string, any>) {
         this.debugLog('base.deleteResource', { endpoint, params });
         await this.httpClient.request({
             method: 'DELETE',
@@ -330,49 +346,50 @@ export abstract class BaseModule {
     protected async getAllPages<
         T extends ResourceObject<string, any, any>, 
         TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         options: QueryOptions,
         paginationOptions?: PaginationOptions
-    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap>>;
+    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap, TResourceTypeToRelMap>>;
     /**
      * @overload Accept flat params (for backward compatibility)
      */
     protected async getAllPages<
         T extends ResourceObject<string, any, any>, 
         TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         params?: Record<string, any>,
         options?: PaginationOptions
-    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap>>;
+    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap, TResourceTypeToRelMap>>;
     protected async getAllPages<
         T extends ResourceObject<string, any, any>, 
         TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         paramsOrOptions?: Record<string, any> | QueryOptions,
         paginationOptions?: PaginationOptions
-    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap>> {
+    ) {
         let params: Record<string, any> | undefined;
         let paginationOpts: PaginationOptions | undefined;
         
-        // Check if first param is structured QueryOptions
-        if (paramsOrOptions && 'where' in paramsOrOptions) {
-            params = buildQueryParams(paramsOrOptions as QueryOptions);
+        if (isQueryOptions(paramsOrOptions)) {
+            params = buildQueryParams(paramsOrOptions);
             paginationOpts = paginationOptions;
         } else {
-            // Flat params (backward compatibility)
-            params = paramsOrOptions as Record<string, any> | undefined;
+            params = paramsOrOptions;
             paginationOpts = paginationOptions;
         }
 
         this.debugLog('base.getAllPages', { endpoint, params, paginationOptions: paginationOpts });
         
-        return this.paginationHelper.getAllPages<T, TIncluded, TRelResourceMap>(endpoint, params, paginationOpts);
+        return this.paginationHelper.getAllPages<T, TIncluded, TRelResourceMap, TResourceTypeToRelMap>(endpoint, params, paginationOpts);
     }
 
     /**

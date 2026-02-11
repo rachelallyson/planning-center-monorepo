@@ -5,6 +5,13 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-02-10
+
+### Changed
+
+- **Published files**: `CHANGELOG.md` is now included in the npm package so release notes are available to consumers.
+- **Type parameters for API packages**: `getSingle` now accepts an optional second generic `TRelResourceMap` so packages built on base can expose accurately typed flattened resources (relationship keys map to specific resource types). `getAllPages` and `PaginationResult` already supported `TRelResourceMap` and `TResourceTypeToRelMap`; `FlattenedResource` supports a fifth type parameter `TResourceTypeToRelMap` for nested relationship typing. This release keeps backward compatibility (all new parameters are optional with defaults).
+
 ## [1.1.2] - 2026-02-02
 
 ### ✨ **New Features**

@@ -4,7 +4,7 @@
  * Automatically maps included resources to their relationships in JSON:API responses.
  */
 
-import type { ResourceObject, ResourceIdentifier } from './types/json-api';
+import type { ResourceObject } from './types/json-api';
 import type { FlattenedResource } from './types/flattened-resource';
 
 /**
@@ -27,6 +27,44 @@ function createIncludedLookup(
     }
     
     return lookup;
+}
+
+/**
+ * Recursively resolve a resource's relationships from the included lookup.
+ * Nested includes (e.g. headcounts.attendance_type) are resolved so nested resources get full objects.
+ */
+function resolveResourceRelationships(
+    resource: ResourceObject<string, any, any>,
+    lookup: Map<string, ResourceObject<string, any, any>>
+): ResourceObject<string, any, any> {
+    if (!resource.relationships) return resource;
+    const resolved = { ...resource, relationships: { ...resource.relationships } } as ResourceObject<string, any, any>;
+    for (const [key, relationship] of Object.entries(resource.relationships)) {
+        if (!relationship || typeof relationship !== 'object' || !('data' in relationship)) continue;
+        const relationshipData = relationship.data;
+        if (Array.isArray(relationshipData)) {
+            const resolvedArray = relationshipData.map((ref) => {
+                if (ref && typeof ref === 'object' && 'type' in ref && 'id' in ref) {
+                    const found = lookup.get(`${ref.type}:${ref.id}`);
+                    if (found) {
+                        return resolveResourceRelationships(found, lookup);
+                    }
+                    return ref;
+                }
+                return ref;
+            });
+            (resolved.relationships as Record<string, unknown>)[key] = { ...relationship, data: resolvedArray };
+        } else if (relationshipData && typeof relationshipData === 'object' && 'type' in relationshipData && 'id' in relationshipData) {
+            const found = lookup.get(`${relationshipData.type}:${relationshipData.id}`);
+            if (found) {
+                (resolved.relationships as Record<string, unknown>)[key] = {
+                    ...relationship,
+                    data: resolveResourceRelationships(found, lookup),
+                };
+            }
+        }
+    }
+    return resolved;
 }
 
 /**
@@ -126,42 +164,8 @@ export function mapIncludedToRelationships<T extends ResourceObject<string, any,
     
     // Always flatten resources, even if no included data (for consistent return type)
     return data.map((resource) => {
-        // First, resolve relationships with included resources
-        const resolved: any = { ...resource };
-        
-        if (resource.relationships) {
-            resolved.relationships = { ...resource.relationships };
-            
-            // For each relationship, resolve identifiers to full resources
-            for (const [key, relationship] of Object.entries(resource.relationships)) {
-                if (relationship && typeof relationship === 'object' && 'data' in relationship) {
-                    const relationshipData = relationship.data;
-                    
-                    if (relationshipData) {
-                        if (Array.isArray(relationshipData)) {
-                            // To-many relationship: resolve each identifier
-                            const resolvedArray = relationshipData.map((ref) => {
-                                if (ref && typeof ref === 'object' && 'type' in ref && 'id' in ref) {
-                                    const lookupKey = `${ref.type}:${ref.id}`;
-                                    return lookup.get(lookupKey) || ref;
-                                }
-                                return ref;
-                            });
-                            resolved.relationships[key] = resolvedArray;
-                        } else if (relationshipData && typeof relationshipData === 'object' && 'type' in relationshipData && 'id' in relationshipData) {
-                            // To-one relationship: resolve single identifier
-                            const lookupKey = `${relationshipData.type}:${relationshipData.id}`;
-                            const resolvedResource = lookup.get(lookupKey);
-                            resolved.relationships[key] = resolvedResource || relationshipData;
-                        }
-                    } else {
-                        resolved.relationships[key] = null;
-                    }
-                }
-            }
-        }
-        
-        // Now flatten the entire resource (attributes + relationships to top level)
+        // Resolve relationships (and nested relationships) from included, then flatten
+        const resolved = resolveResourceRelationships(resource, lookup);
         return flattenResource(resolved) as FlattenedResource<
             T['type'],
             T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,

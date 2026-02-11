@@ -23,13 +23,15 @@ export interface PaginationOptions {
 export interface PaginationResult<
     T extends ResourceObject<string, any, any>, 
     TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-    TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+    TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+    TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
 > {
     data: FlattenedResource<
         T['type'],
         T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
         T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
-        TRelResourceMap
+        TRelResourceMap,
+        TResourceTypeToRelMap
    >[];
     totalCount: number;
     pagesFetched: number;
@@ -54,12 +56,13 @@ export class PaginationHelper {
     async getAllPages<
         T extends ResourceObject<string, any, any>, 
         TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
+        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
     >(
         endpoint: string,
         params: Record<string, any> = {},
         options: PaginationOptions = {}
-    ): Promise<PaginationResult<T, TIncluded, TRelResourceMap>> {
+    ) {
         // Ensure endpoint is a string
         if (typeof endpoint !== 'string') {
             throw new Error(`Expected endpoint to be a string, got ${typeof endpoint}`);
@@ -200,7 +203,7 @@ export class PaginationHelper {
         page: number = 1,
         perPage: number = 100,
         params: Record<string, any> = {}
-    ): Promise<Paginated<T, TIncluded>> {
+    ) {
         const response = await this.httpClient.request<Paginated<T, TIncluded>>({
             method: 'GET',
             endpoint,
@@ -268,7 +271,7 @@ export class PaginationHelper {
         endpoint: string,
         params: Record<string, any> = {},
         options: PaginationOptions & { maxConcurrency?: number } = {}
-    ): Promise<PaginationResult<T, TIncluded>> {
+    ) {
         const {
             maxPages = 1000,
             perPage = 100,
@@ -393,14 +396,14 @@ class Semaphore {
         this.permits = permits;
     }
 
-    async acquire(): Promise<void> {
+    async acquire() {
         if (this.permits > 0) {
             this.permits--;
             return;
         }
 
-        return new Promise(resolve => {
-            this.waiting.push(resolve);
+        return new Promise<void>(resolve => {
+            this.waiting.push(() => resolve());
         });
     }
 

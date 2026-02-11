@@ -52,7 +52,7 @@ export class PcoHttpClient {
         if (logger.enabled) logger.log(message, data);
     }
 
-    async request<T = any>(options: HttpRequestOptions): Promise<HttpResponse<T>> {
+    async request<T = any>(options: HttpRequestOptions) {
         const requestId = this.requestIdGenerator.generate();
         const startTime = Date.now();
 
@@ -120,7 +120,7 @@ export class PcoHttpClient {
                 type: 'request:error',
                 endpoint: options.endpoint,
                 method: options.method,
-                error: error as Error,
+                error: error instanceof Error ? error : new Error(String(error)),
                 requestId,
                 timestamp: new Date().toISOString(),
                 ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
@@ -258,7 +258,7 @@ export class PcoHttpClient {
                         return this.makeRequest<T>(options, requestId, retryCount + 1);
                     } catch (refreshError) {
                         this.debugLog('http  auth 401 token refresh failed', { error: String(refreshError) });
-                        await this.config.auth.onRefreshFailure(refreshError as Error);
+                        await this.config.auth.onRefreshFailure(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
                         throw refreshError;
                     }
                 }
@@ -476,7 +476,7 @@ export class PcoHttpClient {
         return headers;
     }
 
-    private async attemptTokenRefresh(): Promise<void> {
+    private async attemptTokenRefresh() {
         if (this.config.auth.type !== 'oauth') {
             throw new Error('Token refresh is only available for OAuth authentication');
         }

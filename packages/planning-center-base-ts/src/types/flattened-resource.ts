@@ -8,17 +8,6 @@
 import type { ResourceObject, ResourceIdentifier, Relationship } from './json-api';
 
 /**
- * Extract the resource type from a Relationship's data field
- */
-type ExtractRelationshipResourceType<T> = T extends Relationship
-    ? T['data'] extends ResourceIdentifier[]
-        ? ResourceIdentifier[] // To-many: array of identifiers (will be resolved to full resources)
-        : T['data'] extends ResourceIdentifier
-            ? ResourceIdentifier | null // To-one: single identifier (will be resolved to full resource)
-            : never
-    : T;
-
-/**
  * Flatten a single resource object type
  * 
  * Transforms ResourceObject<TType, TAttrs, TRelMap> into a flat structure where:
@@ -43,39 +32,51 @@ type ExtractRelationshipResourceType<T> = T extends Relationship
  * // Result: { emails?: EmailResource[]; phone_numbers?: PhoneNumberResource[]; household?: HouseholdResource }
  * ```
  */
+/** Lookup type: get the relationship map for a resource type when building nested FlattenedResource */
+type NestedRelMap<TResourceTypeToRelMap extends Record<string, object>, TType extends string> =
+    TType extends keyof TResourceTypeToRelMap ? TResourceTypeToRelMap[TType] : Record<string, never>;
+
 export type FlattenedResource<
     TType extends string = string,
     TAttrs extends Record<string, any> = Record<string, any>,
     TRelMap extends Record<string, any> = Record<string, any>,
-    TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>
+    TRelResourceMap extends object = Record<string, never>,
+    TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
 > = {
     type: TType;
     id: string;
 } & TAttrs & {
     // Flatten relationships - convert Relationship objects to their data directly
-    // If TRelResourceMap provides specific types, use those; otherwise infer from Relationship
-    [K in keyof TRelMap]?: TRelMap[K] extends Relationship
-        ? TRelMap[K]['data'] extends ResourceIdentifier[]
-            ? K extends keyof TRelResourceMap
-                ? TRelResourceMap[K] extends ResourceObject<string, any, any>[]
+    // When TRelResourceMap is provided, use it first (so generic Relationship with data?: Identifier|Identifier[]|null still gets specific types)
+    // Use NonNullable so optional relationships (Relationship | undefined) are handled
+    [K in keyof TRelMap]?: NonNullable<TRelMap[K]> extends Relationship
+        ? K extends keyof TRelResourceMap
+            ? TRelResourceMap[K] extends ResourceObject<string, any, any>[]
+                ? FlattenedResource<
+                    TRelResourceMap[K][number]['type'],
+                    TRelResourceMap[K][number] extends ResourceObject<string, infer A, any> ? A : never,
+                    TRelResourceMap[K][number] extends ResourceObject<any, any, infer R> ? (R extends Record<string, any> ? R : Record<string, any>) : never,
+                    NestedRelMap<TResourceTypeToRelMap, TRelResourceMap[K][number]['type']>,
+                    TResourceTypeToRelMap
+                >[]
+                : TRelResourceMap[K] extends ResourceObject<string, any, any>
                     ? FlattenedResource<
-                        TRelResourceMap[K][number]['type'],
-                        TRelResourceMap[K][number] extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-                        TRelResourceMap[K][number] extends ResourceObject<any, any, infer TRelMap> ? (TRelMap extends Record<string, any> ? TRelMap : Record<string, any>) : never
-                    >[] | ResourceIdentifier[]
-                    : FlattenedResource<string, any, any>[] | ResourceIdentifier[]
-                : FlattenedResource<string, any, any>[] | ResourceIdentifier[] // To-many: array of flattened resources or identifiers
-            : TRelMap[K]['data'] extends ResourceIdentifier
-                ? K extends keyof TRelResourceMap
-                    ? TRelResourceMap[K] extends ResourceObject<string, any, any>
-                        ? FlattenedResource<
-                            TRelResourceMap[K]['type'],
-                            TRelResourceMap[K] extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-                            TRelResourceMap[K] extends ResourceObject<any, any, infer TRelMap> ? (TRelMap extends Record<string, any> ? TRelMap : Record<string, any>) : never
-                        > | ResourceIdentifier | null
-                        : FlattenedResource<string, any, any> | ResourceIdentifier | null
-                    : FlattenedResource<string, any, any> | ResourceIdentifier | null // To-one: single flattened resource or identifier
-                : never
+                        TRelResourceMap[K]['type'],
+                        TRelResourceMap[K] extends ResourceObject<string, infer A, any> ? A : never,
+                        TRelResourceMap[K] extends ResourceObject<any, any, infer R> ? (R extends Record<string, any> ? R : Record<string, any>) : never,
+                        NestedRelMap<TResourceTypeToRelMap, TRelResourceMap[K]['type']>,
+                        TResourceTypeToRelMap
+                    > | null
+                    : NonNullable<TRelMap[K]>['data'] extends ResourceIdentifier[]
+                        ? (FlattenedResource<string, any, any> | ResourceIdentifier)[]
+                        : NonNullable<TRelMap[K]>['data'] extends ResourceIdentifier
+                            ? FlattenedResource<string, any, any> | ResourceIdentifier | null
+                            : (FlattenedResource<string, any, any> | ResourceIdentifier)[] | (FlattenedResource<string, any, any> | ResourceIdentifier | null)
+            : NonNullable<TRelMap[K]>['data'] extends ResourceIdentifier[]
+                ? (FlattenedResource<string, any, any> | ResourceIdentifier)[]
+                : NonNullable<TRelMap[K]>['data'] extends ResourceIdentifier
+                    ? FlattenedResource<string, any, any> | ResourceIdentifier | null
+                    : (FlattenedResource<string, any, any> | ResourceIdentifier)[] | (FlattenedResource<string, any, any> | ResourceIdentifier | null)
         : TRelMap[K];
 } & {
     links?: Record<string, any>;

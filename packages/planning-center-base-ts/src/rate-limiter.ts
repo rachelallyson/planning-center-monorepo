@@ -109,7 +109,7 @@ export class PcoRateLimiter {
   /**
    * Wait until a request can be made
    */
-  async waitForAvailability(): Promise<void> {
+  async waitForAvailability() {
     this.updateWindow();
 
     if (this.requestCount < this.limit) {

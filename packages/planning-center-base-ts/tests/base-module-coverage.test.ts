@@ -54,6 +54,27 @@ describe('BaseModule protected methods coverage', () => {
     expect(httpClient.request).toHaveBeenCalledWith(expect.objectContaining({ method: 'GET', params: { a: 'b' } }));
   });
 
+  it('getList with QueryOptions (include, per_page) forwards include in request', async () => {
+    httpClient.request.mockResolvedValueOnce({
+      data: { data: [{ id: '1', type: 'EventTime', attributes: {} }], meta: {}, links: {} },
+    } as any);
+    const res = await mod._getList('/events/e1/event_periods/p1/event_times', {
+      include: 'headcounts,headcounts.attendance_type',
+      per_page: 100,
+    });
+    expect(res.data).toHaveLength(1);
+    expect(httpClient.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        endpoint: '/events/e1/event_periods/p1/event_times',
+        params: expect.objectContaining({
+          include: 'headcounts,headcounts.attendance_type',
+          per_page: 100,
+        }),
+      })
+    );
+  });
+
   it('createResource', async () => {
     httpClient.request.mockResolvedValueOnce({ data: { data: { id: '2' } } } as any);
     const res = await mod._create('/x', { n: 1 });

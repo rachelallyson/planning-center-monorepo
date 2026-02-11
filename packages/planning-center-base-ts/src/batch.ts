@@ -16,7 +16,9 @@ export class BatchExecutor {
     constructor(
         private client: BatchClient,
         private eventEmitter: PcoEventEmitter
-    ) { }
+    ) {
+        void this.eventEmitter; // Reserved for future batch event emission
+    }
 
     private debugLog(message: string, data?: unknown): void {
         const logger = createDebugLogger(this.client.getConfig?.());
@@ -29,7 +31,7 @@ export class BatchExecutor {
     async execute<T = any>(
         operations: BatchOperation[],
         options: BatchOptions = {}
-    ): Promise<BatchSummary> {
+    ) {
         const {
             continueOnError = true,
             maxConcurrency = 5,
@@ -53,7 +55,7 @@ export class BatchExecutor {
             const semaphore = new Semaphore(maxConcurrency);
             const operationResults = new Map<string, Promise<BatchResult>>();
 
-            const executeOperationWithDependencies = async (operation: ResolvedBatchOperation, index: number): Promise<BatchResult> => {
+            const executeOperationWithDependencies = async (operation: ResolvedBatchOperation, index: number) => {
                 await semaphore.acquire();
 
                 try {
@@ -111,7 +113,7 @@ export class BatchExecutor {
                         index,
                         operation,
                         success: false,
-                        error: error as Error,
+                        error: error instanceof Error ? error : new Error(String(error)),
                     };
 
                     results.push(batchResult);
@@ -169,7 +171,7 @@ export class BatchExecutor {
     /**
      * Resolve operation dependencies and references
      */
-    private async resolveOperations(operations: BatchOperation[]): Promise<ResolvedBatchOperation[]> {
+    private async resolveOperations(operations: BatchOperation[]) {
         const resolved: ResolvedBatchOperation[] = [];
 
         for (let i = 0; i < operations.length; i++) {
@@ -306,7 +308,7 @@ export class BatchExecutor {
     /**
      * Execute a single operation
      */
-    private async executeOperation(operation: ResolvedBatchOperation, getPreviousResults: () => BatchResult[]): Promise<any> {
+    private async executeOperation(operation: ResolvedBatchOperation, getPreviousResults: () => BatchResult[]) {
         const { type, resolvedData, data, endpoint } = operation;
         const operationData = resolvedData || data;
 
@@ -369,7 +371,7 @@ export class BatchExecutor {
     /**
      * Rollback successful operations
      */
-    private async rollbackOperations(operations: ResolvedBatchOperation[]): Promise<void> {
+    private async rollbackOperations(operations: ResolvedBatchOperation[]) {
         // Reverse the order for rollback
         const rollbackOps = [...operations].reverse();
 
@@ -385,7 +387,7 @@ export class BatchExecutor {
     /**
      * Rollback a single operation
      */
-    private async rollbackOperation(operation: ResolvedBatchOperation): Promise<void> {
+    private async rollbackOperation(operation: ResolvedBatchOperation) {
         const { type } = operation;
         const [module, method] = type.split('.');
 
@@ -419,14 +421,14 @@ class Semaphore {
         this.permits = permits;
     }
 
-    async acquire(): Promise<void> {
+    async acquire() {
         if (this.permits > 0) {
             this.permits--;
             return;
         }
 
-        return new Promise(resolve => {
-            this.waiting.push(resolve);
+        return new Promise<void>(resolve => {
+            this.waiting.push(() => resolve());
         });
     }
 
