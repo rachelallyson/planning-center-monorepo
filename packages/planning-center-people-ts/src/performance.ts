@@ -15,7 +15,7 @@ import type {
   EmailsList,
   PhoneNumbersList,
 } from './types';
-import type { PersonListOptions, PersonWhereClause } from './types/api-options';
+import type { PersonInclude, PersonListOptions, PersonWhereClause } from './types/api-options';
 
 // ===== Batch Processing =====
 
@@ -28,10 +28,10 @@ export async function processInBatches<T, R>(
   batchSize: number,
   processor: (batch: T[]) => Promise<R[]>,
   options?: { client?: PcoClient }
-): Promise<R[]> {
+) {
   const logger =
-    options?.client && typeof (options.client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? createDebugLogger((options.client as PcoClient).getConfig())
+    options?.client && typeof options.client.getConfig === 'function'
+      ? createDebugLogger(options.client.getConfig())
       : null;
   if (logger?.enabled) {
     logger.log('performance.processInBatches', { itemCount: items.length, batchSize, batchCount: Math.ceil(items.length / batchSize) });
@@ -67,20 +67,9 @@ export async function batchFetchPersonDetails(
     includePhones?: boolean;
     batchSize?: number;
   } = {}
-): Promise<
-  Map<
-    string,
-    {
-      person: PersonResource;
-      emails?: EmailResource[];
-      phoneNumbers?: PhoneNumberResource[];
-    }
-  >
-> {
+) {
   const logger = createDebugLogger(
-    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? (client as PcoClient).getConfig()
-      : undefined
+    typeof client.getConfig === 'function' ? client.getConfig() : undefined
   );
   if (logger.enabled) logger.log('performance.batchFetchPersonDetails', { personCount: personIds.length, options });
 
@@ -104,20 +93,20 @@ export async function batchFetchPersonDetails(
         if (phonePromise) promises.push(phonePromise);
 
         const responses = await Promise.all(promises);
-        const person = responses[0] as PersonResource;
+        const person = responses[0];
 
         if (!person) return null;
 
-        const result: PersonDetails = { person };
+        const result: PersonDetails = { person: person as PersonResource };
 
         if (includeEmails && emailPromise) {
           const emailsResponse = await emailPromise;
-          result.emails = (emailsResponse as EmailsList).data || [];
+          result.emails = emailsResponse.data ?? [];
         }
 
         if (includePhones && phonePromise) {
           const phonesResponse = await phonePromise;
-          result.phoneNumbers = (phonesResponse as PhoneNumbersList).data || [];
+          result.phoneNumbers = phonesResponse.data ?? [];
         }
 
         return { personId, result };
@@ -187,11 +176,9 @@ export async function getCachedPeople(
   cache: ApiCache,
   params: PersonListOptions = {},
   ttlMs = 300000
-): Promise<PeopleList> {
+) {
   const logger = createDebugLogger(
-    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? (client as PcoClient).getConfig()
-      : undefined
+    typeof client.getConfig === 'function' ? client.getConfig() : undefined
   );
   if (logger.enabled) logger.log('performance.getCachedPeople', { params, ttlMs });
 
@@ -207,7 +194,7 @@ export async function getCachedPeople(
 
   cache.set(cacheKey, result, ttlMs);
 
-  return result as PeopleList;
+  return result;
 }
 
 // ===== Pagination Optimization =====
@@ -230,11 +217,9 @@ export async function fetchAllPages<T>(
     maxPages?: number;
     onProgress?: (current: number, total: number) => void;
   } = {}
-): Promise<T[]> {
+) {
   const logger = createDebugLogger(
-    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? (client as PcoClient).getConfig()
-      : undefined
+    typeof client.getConfig === 'function' ? client.getConfig() : undefined
   );
   if (logger.enabled) logger.log('performance.fetchAllPages', { options });
 
@@ -278,13 +263,11 @@ export async function* streamPeopleData(
     perPage?: number;
     maxConcurrent?: number;
     where?: PersonWhereClause;
-    include?: string[];
+    include?: PersonInclude[];
   } = {}
 ): AsyncGenerator<PersonResource[], void, unknown> {
   const logger = createDebugLogger(
-    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? (client as PcoClient).getConfig()
-      : undefined
+    typeof client.getConfig === 'function' ? client.getConfig() : undefined
   );
   if (logger.enabled) logger.log('performance.streamPeopleData', { options });
 
@@ -298,7 +281,7 @@ export async function* streamPeopleData(
 
     try {
       const response = await client.people.getPage({
-        include: include as any,
+        include,
         page,
         perPage,
         where,
@@ -324,15 +307,15 @@ class Semaphore {
     this.permits = permits;
   }
 
-  async acquire(): Promise<void> {
+  async acquire() {
     if (this.permits > 0) {
       this.permits--;
 
       return;
     }
 
-    return new Promise(resolve => {
-      this.waiting.push(resolve);
+    return new Promise<void>(resolve => {
+      this.waiting.push(() => resolve());
     });
   }
 
@@ -368,11 +351,9 @@ export async function processLargeDataset<T, R>(
     maxMemoryItems?: number;
     onBatchProcessed?: (results: R[]) => void;
   } = {}
-): Promise<R[]> {
+) {
   const logger = createDebugLogger(
-    typeof (client as { getConfig?: () => unknown }).getConfig === 'function'
-      ? (client as PcoClient).getConfig()
-      : undefined
+    typeof client.getConfig === 'function' ? client.getConfig() : undefined
   );
   if (logger.enabled) logger.log('performance.processLargeDataset', { options });
 
@@ -523,7 +504,7 @@ export class AdaptiveRateLimiter {
   private successCount = 0;
   private errorCount = 0;
 
-  async wait(): Promise<void> {
+  async wait() {
     await new Promise(resolve => setTimeout(resolve, this.currentDelay));
   }
 

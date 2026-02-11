@@ -35,7 +35,7 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 export async function retryWithExponentialBackoff<T>(
   operation: () => Promise<T>,
   config: Partial<RetryConfig> = {}
-): Promise<T> {
+) {
   const finalConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
   let lastError: Error;
 
@@ -43,7 +43,7 @@ export async function retryWithExponentialBackoff<T>(
     try {
       return await operation();
     } catch (error) {
-      lastError = error as Error;
+      lastError = error instanceof Error ? error : new Error(String(error));
 
       // Don't retry on the last attempt
       if (attempt === finalConfig.maxRetries) {
@@ -110,9 +110,11 @@ export class CircuitBreaker {
     private failureThreshold = 5,
     private recoveryTimeout = 60000, // 1 minute
     private monitoringPeriod = 60000 // 1 minute
-  ) {}
+  ) {
+    void this.monitoringPeriod; // Reserved for future metrics
+  }
 
-  async execute<T>(operation: () => Promise<T>): Promise<T> {
+  async execute<T>(operation: () => Promise<T>) {
     if (this.state === 'OPEN') {
       if (Date.now() - this.lastFailureTime > this.recoveryTimeout) {
         this.state = 'HALF_OPEN';
@@ -179,7 +181,7 @@ export async function executeBulkOperation<T, R>(
     batchSize?: number;
     onItemComplete?: (index: number, result: R | Error) => void;
   } = {}
-): Promise<BulkOperationResult<R>> {
+) {
   const { batchSize = 10, continueOnError = true, onItemComplete } = options;
   const successful: { index: number; data: R }[] = [];
   const failed: { index: number; error: Error; data?: T }[] = [];
@@ -198,7 +200,7 @@ export async function executeBulkOperation<T, R>(
 
         return { index: globalIndex, result, success: true };
       } catch (error) {
-        const errorObj = error as Error;
+        const errorObj = error instanceof Error ? error : new Error(String(error));
 
         failed.push({ data: item, error: errorObj, index: globalIndex });
         onItemComplete?.(globalIndex, errorObj);
@@ -235,7 +237,7 @@ export async function withTimeout<T>(
   operation: () => Promise<T>,
   timeoutMs: number,
   timeoutMessage?: string
-): Promise<T> {
+) {
   return Promise.race([
     operation(),
     new Promise<never>((_, reject) => {
@@ -433,7 +435,7 @@ export async function attemptRecovery<T>(
     operation: string;
     maxRetries?: number;
   }
-): Promise<T> {
+) {
   const classification = classifyError(error);
 
   if (!classification.retryable) {

@@ -3,20 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type {
-    WorkflowResource,
-    WorkflowAttributes,
-    WorkflowCardResource,
-    WorkflowCardAttributes,
-    WorkflowCardAssignableAttributes,
-    WorkflowCardSnoozeAttributes,
-    WorkflowCardEmailAttributes,
-    WorkflowCardNoteResource,
-    WorkflowCardNoteAttributes,
-    Meta,
-    TopLevelLinks
-} from '../types';
-import type { ResourceObject } from '../types/json-api';
+import type * as Types from '../types';
 
 import type { WorkflowListOptions, WorkflowPageOptions } from '../types/api-options';
 
@@ -36,7 +23,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async getAll(options: WorkflowListOptions = {}) {
         this.debugLog('workflows.getAll', { options });
-        return  await this.getAllPages<WorkflowResource>('/workflows', {
+        return  await this.getAllPages<Types.WorkflowResourceObject>('/workflows', {
             where: options.where,
             include: options.include,
             order: options.order
@@ -52,7 +39,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async getPage(options: WorkflowPageOptions = {}) {
         this.debugLog('workflows.getPage', { options });
-        return this.getList<WorkflowResource>('/workflows', {
+        return this.getList<Types.WorkflowResourceObject>('/workflows', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -66,23 +53,23 @@ export class WorkflowsModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('workflows.getById', { id, include });
-        return this.getSingle<WorkflowResource>(`/workflows/${id}`, include);
+        return this.getSingle<Types.WorkflowResourceObject>(`/workflows/${id}`, include);
     }
 
     /**
      * Create a workflow
      */
-    async create(data: WorkflowAttributes) {
+    async create(data: Types.WorkflowAttributes) {
         this.debugLog('workflows.create', { data });
-        return this.createResource<WorkflowResource>('/workflows', data);
+        return this.createResource<Types.WorkflowResourceObject>('/workflows', data);
     }
 
     /**
      * Update a workflow
      */
-    async update(id: string, data: Partial<WorkflowAttributes>) {
+    async update(id: string, data: Partial<Types.WorkflowAttributes>) {
         this.debugLog('workflows.update', { id, data });
-        return this.updateResource<WorkflowResource>(`/workflows/${id}`, data);
+        return this.updateResource<Types.WorkflowResourceObject>(`/workflows/${id}`, data);
     }
 
     /**
@@ -100,7 +87,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async getPersonWorkflowCards(personId: string, options?: { perPage?: number; page?: number }) {
         this.debugLog('workflows.getPersonWorkflowCards', { personId, options });
-        return this.getList<WorkflowCardResource>(`/people/${personId}/workflow_cards`, options);
+        return this.getList<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards`, options);
     }
 
     /**
@@ -138,9 +125,9 @@ export class WorkflowsModule extends BaseModule {
         }
 
         // Create the workflow card
-        const workflowCard = await this.createResource<WorkflowCardResource>(`/workflows/${workflowId}/cards`, {
+        const workflowCard = await this.createResource<Types.WorkflowCardResourceObject>(`/workflows/${workflowId}/cards`, {
             person_id: personId,
-        } as Partial<WorkflowCardAttributes>);
+        } as Partial<Types.WorkflowCardAttributes>);
 
         // Add note if provided
         if (options.note || options.noteTemplate) {
@@ -156,22 +143,22 @@ export class WorkflowsModule extends BaseModule {
      */
     async createWorkflowCard(workflowId: string, personId: string) {
         this.debugLog('workflows.createWorkflowCard', { workflowId, personId });
-        return this.createResource<WorkflowCardResource>(`/workflows/${workflowId}/cards`, {
+        return this.createResource<Types.WorkflowCardResourceObject>(`/workflows/${workflowId}/cards`, {
             person_id: personId,
-        } as Partial<WorkflowCardAttributes>);
+        } as Partial<Types.WorkflowCardAttributes>);
     }
 
     /**
      * Update a workflow card
      */
-    async updateWorkflowCard(workflowCardId: string, data: Partial<WorkflowCardAssignableAttributes>, personId?: string) {
+    async updateWorkflowCard(workflowCardId: string, data: Partial<Types.WorkflowCardAssignableAttributes>, personId?: string) {
         this.debugLog('workflows.updateWorkflowCard', { workflowCardId, data, personId });
         // If personId is provided, use the person-specific endpoint
         if (personId) {
-            return this.updateResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}`, data);
+            return this.updateResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}`, data);
         }
         // Fallback to the generic endpoint (may not work for all operations)
-        return this.updateResource<WorkflowCardResource>(`/workflow_cards/${workflowCardId}`, data);
+        return this.updateResource<Types.WorkflowCardResourceObject>(`/workflow_cards/${workflowCardId}`, data);
     }
 
     /**
@@ -179,7 +166,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async getWorkflowCardNotes(personId: string, workflowCardId: string) {
         this.debugLog('workflows.getWorkflowCardNotes', { personId, workflowCardId });
-        return this.getList<WorkflowCardNoteResource>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`);
+        return this.getList<Types.WorkflowCardNoteResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`);
     }
 
     /**
@@ -188,10 +175,10 @@ export class WorkflowsModule extends BaseModule {
     async createWorkflowCardNote(
         personId: string,
         workflowCardId: string,
-        data: WorkflowCardNoteAttributes
+        data: Types.WorkflowCardNoteAttributes
     ) {
         this.debugLog('workflows.createWorkflowCardNote', { personId, workflowCardId, data });
-        return this.createResource<WorkflowCardNoteResource>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`, data);
+        return this.createResource<Types.WorkflowCardNoteResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/notes`, data);
     }
 
 
@@ -201,11 +188,8 @@ export class WorkflowsModule extends BaseModule {
     async createWorkflowCardWithNote(
         workflowId: string,
         personId: string,
-        noteData: WorkflowCardNoteAttributes
-    ): Promise<{
-        workflowCard: WorkflowCardResource;
-        note: WorkflowCardNoteResource;
-    }> {
+        noteData: Types.WorkflowCardNoteAttributes
+    ) {
         this.debugLog('workflows.createWorkflowCardWithNote', { workflowId, personId, noteData });
         const workflowCard = await this.createWorkflowCard(workflowId, personId);
         const note = await this.createWorkflowCardNote(personId, workflowCard.id, noteData);
@@ -218,7 +202,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async goBackWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.goBackWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/go_back`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/go_back`, {});
     }
 
     /**
@@ -226,7 +210,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async promoteWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.promoteWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/promote`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/promote`, {});
     }
 
     /**
@@ -234,7 +218,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async removeWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.removeWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/remove`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/remove`, {});
     }
 
     /**
@@ -242,7 +226,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async restoreWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.restoreWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/restore`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/restore`, {});
     }
 
     /**
@@ -251,10 +235,10 @@ export class WorkflowsModule extends BaseModule {
     async sendEmailWorkflowCard(
         personId: string,
         workflowCardId: string,
-        data: WorkflowCardEmailAttributes
+        data: Types.WorkflowCardEmailAttributes
     ) {
         this.debugLog('workflows.sendEmailWorkflowCard', { personId, workflowCardId, data });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/send_email`, data);
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/send_email`, data);
     }
 
     /**
@@ -262,15 +246,15 @@ export class WorkflowsModule extends BaseModule {
      */
     async skipStepWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.skipStepWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/skip_step`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/skip_step`, {});
     }
 
     /**
      * Snooze a workflow card for a specific duration
      */
-    async snoozeWorkflowCard(personId: string, workflowCardId: string, data: WorkflowCardSnoozeAttributes) {
+    async snoozeWorkflowCard(personId: string, workflowCardId: string, data: Types.WorkflowCardSnoozeAttributes) {
         this.debugLog('workflows.snoozeWorkflowCard', { personId, workflowCardId, data });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/snooze`, data);
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/snooze`, data);
     }
 
     /**
@@ -278,7 +262,7 @@ export class WorkflowsModule extends BaseModule {
      */
     async unsnoozeWorkflowCard(personId: string, workflowCardId: string) {
         this.debugLog('workflows.unsnoozeWorkflowCard', { personId, workflowCardId });
-        return this.createResource<WorkflowCardResource>(`/people/${personId}/workflow_cards/${workflowCardId}/unsnooze`, {});
+        return this.createResource<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards/${workflowCardId}/unsnooze`, {});
     }
 
     /**

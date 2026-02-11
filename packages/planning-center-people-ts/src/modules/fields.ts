@@ -3,25 +3,9 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient, QueryOptions } from '@rachelallyson/planning-center-base-ts';
-import type { PaginationHelper } from '@rachelallyson/planning-center-base-ts';
-import type { PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
-import type {
-    FieldDefinitionResource,
-    FieldDefinitionAttributes,
-    FieldDatumResource,
-    FieldDatumAttributes,
-    FieldDatumRelationshipMap,
-    FlattenedFieldDatumResource,
-    FieldOptionResource,
-    FieldOptionAttributes,
-    TabResource,
-    TabAttributes,
-    Meta,
-    TopLevelLinks
-} from '../types';
+import type { QueryOptions } from '@rachelallyson/planning-center-base-ts';
+import type * as Types from '../types';
 import type { FieldDataOptions, FieldDefinitionListOptions } from '../types/api-options';
-import type { FlattenedResource } from '@rachelallyson/planning-center-base-ts';
 
 export interface FieldSetOptions {
     /** Field definition ID */
@@ -52,7 +36,7 @@ export class FieldsModule extends BaseModule {
      */
     async getAllFieldDefinitions(options?: FieldDefinitionListOptions) {
         this.debugLog('fields.getAllFieldDefinitions', { options });
-        return this.getAllPages<FieldDefinitionResource>('/field_definitions', options);
+        return this.getAllPages<Types.FieldDefinitionResourceObject>('/field_definitions', options);
     }
 
     /**
@@ -60,7 +44,7 @@ export class FieldsModule extends BaseModule {
      */
     async getFieldDefinition(id: string) {
         this.debugLog('fields.getFieldDefinition', { id });
-        return this.getSingle<FieldDefinitionResource>(`/field_definitions/${id}`);
+        return this.getSingle<Types.FieldDefinitionResourceObject>(`/field_definitions/${id}`);
     }
 
     /**
@@ -69,12 +53,7 @@ export class FieldsModule extends BaseModule {
     async getFieldDefinitionBySlug(slug: string) {
         this.debugLog('fields.getFieldDefinitionBySlug', { slug });
         const allFieldDefinitions = await this.getAllFieldDefinitions();
-        type FlattenedFieldDefinition = FlattenedResource<
-            FieldDefinitionResource['type'],
-            FieldDefinitionAttributes,
-            FieldDefinitionResource extends { relationships?: infer R } ? R : never
-        >;
-        return allFieldDefinitions.data.find((fd: FlattenedFieldDefinition) => fd.slug === slug) || null;
+        return allFieldDefinitions.data.find((fd: Types.FieldDefinitionResource) => fd.slug === slug) || null;
     }
 
     /**
@@ -83,28 +62,23 @@ export class FieldsModule extends BaseModule {
     async getFieldDefinitionByName(name: string) {
         this.debugLog('fields.getFieldDefinitionByName', { name });
         const allFieldDefinitions = await this.getAllFieldDefinitions();
-        type FlattenedFieldDefinition = FlattenedResource<
-            FieldDefinitionResource['type'],
-            FieldDefinitionAttributes,
-            FieldDefinitionResource extends { relationships?: infer R } ? R : never
-        >;
-        return allFieldDefinitions.data.find((fd: FlattenedFieldDefinition) => fd.name === name) || null;
+        return allFieldDefinitions.data.find((fd: Types.FieldDefinitionResource) => fd.name === name) || null;
     }
 
     /**
      * Create a field definition
      */
-    async createFieldDefinition(tabId: string, data: Partial<FieldDefinitionAttributes>) {
+    async createFieldDefinition(tabId: string, data: Partial<Types.FieldDefinitionAttributes>) {
         this.debugLog('fields.createFieldDefinition', { tabId, data });
-        return this.createResource<FieldDefinitionResource>(`/tabs/${tabId}/field_definitions`, data);
+        return this.createResource<Types.FieldDefinitionResourceObject>(`/tabs/${tabId}/field_definitions`, data);
     }
 
     /**
      * Update a field definition
      */
-    async updateFieldDefinition(id: string, data: Partial<FieldDefinitionAttributes>) {
+    async updateFieldDefinition(id: string, data: Partial<Types.FieldDefinitionAttributes>) {
         this.debugLog('fields.updateFieldDefinition', { id, data });
-        return this.updateResource<FieldDefinitionResource>(`/field_definitions/${id}`, data);
+        return this.updateResource<Types.FieldDefinitionResourceObject>(`/field_definitions/${id}`, data);
     }
 
     /**
@@ -120,27 +94,23 @@ export class FieldsModule extends BaseModule {
      */
     async getFieldOptions(fieldDefinitionId: string) {
         this.debugLog('fields.getFieldOptions', { fieldDefinitionId });
-        return this.getList<FieldOptionResource>(`/field_definitions/${fieldDefinitionId}/field_options`);
+        return this.getList<Types.FieldOptionResourceObject>(`/field_definitions/${fieldDefinitionId}/field_options`);
     }
 
     /**
      * Create a field option
      */
-    async createFieldOption(fieldDefinitionId: string, data: FieldOptionAttributes) {
+    async createFieldOption(fieldDefinitionId: string, data: Types.FieldOptionAttributes) {
         this.debugLog('fields.createFieldOption', { fieldDefinitionId, data });
-        return this.createResource<FieldOptionResource>(`/field_definitions/${fieldDefinitionId}/field_options`, data);
+        return this.createResource<Types.FieldOptionResourceObject>(`/field_definitions/${fieldDefinitionId}/field_options`, data);
     }
 
     /**
      * Get person's field data
      */
-    async getPersonFieldData(personId: string, options?: FieldDataOptions): Promise<{
-        data: FlattenedFieldDatumResource[];
-        meta?: Meta;
-        links?: TopLevelLinks;
-    }> {
+    async getPersonFieldData(personId: string, options?: FieldDataOptions) {
         this.debugLog('fields.getPersonFieldData', { personId, options });
-        return this.getList<FieldDatumResource, FieldDatumRelationshipMap>(`/people/${personId}/field_data`, options as QueryOptions);
+        return this.getList<Types.FieldDatumResourceObject, Types.FieldDatumRelationshipMap, Types.PeopleResourceTypeToRelMap>(`/people/${personId}/field_data`, options as QueryOptions);
     }
 
     /**
@@ -242,13 +212,13 @@ export class FieldsModule extends BaseModule {
 
         if (existingDatum) {
             // Update existing field data
-            return this.updateResource<FieldDatumResource>(
+            return this.updateResource<Types.FieldDatumResourceObject>(
                 `/people/${personId}/field_data/${existingDatum.id}`,
                 { value: cleanValue }
             );
         }
 
-        return this.createResource<FieldDatumResource>(`/people/${personId}/field_data`, {
+        return this.createResource<Types.FieldDatumResourceObject>(`/people/${personId}/field_data`, {
             field_definition_id: fieldDefinitionId,
             value: cleanValue,
         });
@@ -267,7 +237,7 @@ export class FieldsModule extends BaseModule {
      */
     async getTabs() {
         this.debugLog('fields.getTabs');
-        return this.getList<TabResource>('/tabs');
+        return this.getList<Types.TabResourceObject>('/tabs');
     }
 
     /**
@@ -275,23 +245,23 @@ export class FieldsModule extends BaseModule {
      */
     async getTabById(id: string, include?: string[]) {
         this.debugLog('fields.getTabById', { id, include });
-        return this.getSingle<TabResource>(`/tabs/${id}`, include);
+        return this.getSingle<Types.TabResourceObject>(`/tabs/${id}`, include);
     }
 
     /**
      * Create a tab
      */
-    async createTab(data: TabAttributes) {
+    async createTab(data: Types.TabAttributes) {
         this.debugLog('fields.createTab', { data });
-        return this.createResource<TabResource>('/tabs', data);
+        return this.createResource<Types.TabResourceObject>('/tabs', data);
     }
 
     /**
      * Update a tab
      */
-    async updateTab(id: string, data: Partial<TabAttributes>) {
+    async updateTab(id: string, data: Partial<Types.TabAttributes>) {
         this.debugLog('fields.updateTab', { id, data });
-        return this.updateResource<TabResource>(`/tabs/${id}`, data);
+        return this.updateResource<Types.TabResourceObject>(`/tabs/${id}`, data);
     }
 
     /**
@@ -380,7 +350,7 @@ export class FieldsModule extends BaseModule {
             }
 
             // Create field data using the file UUID
-            return this.createResource<FieldDatumResource>(`/people/${personId}/field_data`, {
+            return this.createResource<Types.FieldDatumResourceObject>(`/people/${personId}/field_data`, {
                 field_definition_id: fieldDefinitionId,
                 value: fileUUID,
             });
@@ -389,7 +359,7 @@ export class FieldsModule extends BaseModule {
             // Emit error event for monitoring
             this.eventEmitter.emit({
                 type: 'error',
-                error: error as Error,
+                error: error instanceof Error ? error : new Error(String(error)),
                 operation: 'createPersonFileFieldData',
                 timestamp: new Date().toISOString(),
             });

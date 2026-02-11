@@ -2,14 +2,10 @@ import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     CampusResource,
     CampusAttributes,
-    CampusesList,
-    CampusSingle,
     ListResource,
     ServiceTimeResource,
-    Meta,
-    TopLevelLinks
 } from '../types';
-import type { ListWhereClause, CampusWhereClause } from '../types/api-options';
+import type { ListWhereClause } from '../types/api-options';
 import type { CampusListOptions, CampusPageOptions } from '../types/api-options';
 
 /**

@@ -1,7 +1,6 @@
 import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 import type { PcoDebugOptions } from '@rachelallyson/planning-center-base-ts';
 import type { PcoClient } from './client';
-import type { ErrorContext } from './error-handling';
 
 type ConfigWithDebug = { debug?: boolean | PcoDebugOptions } | null | undefined;
 
@@ -25,22 +24,13 @@ import type {
     AddressAttributes,
     WorkflowCardNoteAttributes,
     PeopleList,
-    PersonSingle,
-    EmailSingle,
-    PhoneNumberSingle,
-    AddressSingle,
-    WorkflowCardSingle,
-    WorkflowCardNoteSingle,
     ListsList,
     ListCategoriesList,
-    OrganizationSingle,
-    HouseholdsList,
     EmailResource,
     PhoneNumberResource,
     AddressResource,
     FieldDatumResource,
     WorkflowCardResource,
-    NoteResource,
     EmailsList,
     PhoneNumbersList,
     AddressesList,
@@ -515,11 +505,7 @@ export function validatePersonData(data: Partial<PersonAttributes>): { isValid: 
 export async function getPrimaryContact(
     client: PcoClient,
     personId: string
-): Promise<{
-    email?: string;
-    phone?: string;
-    address?: string;
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  getPrimaryContact', { personId });
     const [emails, phones, addresses] = await Promise.all([
         client.people.getEmails(personId),
@@ -552,12 +538,7 @@ export async function createPersonWithContact(
         phone?: Partial<PhoneNumberAttributes>;
         address?: Partial<AddressAttributes>;
     }
-): Promise<{
-    person: PersonResource;
-    email?: EmailResource;
-    phone?: PhoneNumberResource;
-    address?: AddressResource;
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  createPersonWithContact', { firstName: personData.first_name, lastName: personData.last_name });
     const createData: Partial<PersonCreateOptions> = {};
     if (personData.first_name) createData.firstName = personData.first_name;
@@ -566,7 +547,7 @@ export async function createPersonWithContact(
         createData.nickname = personData.nickname;
     }
 
-    const person = await client.people.create(createData);
+    const person = await client.people.create(createData) as PersonResource;
 
     const results: {
         person: PersonResource;
@@ -616,7 +597,7 @@ export async function searchPeople(
         perPage?: number;
         page?: number;
     }
-): Promise<PeopleList> {
+) {
     debugLogIfEnabled(client, 'helpers  searchPeople', { criteria });
     const where: PersonWhereClause = {};
 
@@ -638,11 +619,10 @@ export async function searchPeople(
             perPage: criteria.perPage,
             page: criteria.page,
         });
-        return result as PeopleList;
+        return result;
     }
 
-    const result = await client.people.getAll({ where });
-    return result as PeopleList;
+    return client.people.getAll({ where });
 }
 
 /**
@@ -681,14 +661,7 @@ export async function getPeopleByHousehold(
 export async function getCompletePersonProfile(
     client: PcoClient,
     personId: string
-): Promise<{
-    person: PersonResource;
-    emails: EmailsList;
-    phones: PhoneNumbersList;
-    addresses: AddressesList;
-    fieldData: { data: FieldDatumResource[]; meta?: Meta; links?: TopLevelLinks };
-    workflowCards: { data: WorkflowCardResource[]; meta?: Meta; links?: TopLevelLinks };
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  getCompletePersonProfile', { personId });
     const [person, emails, phones, addresses, fieldData, workflowCards] = await Promise.all([
         client.people.getById(personId, ['households']),
@@ -701,9 +674,9 @@ export async function getCompletePersonProfile(
 
     return {
         person,
-        emails: emails as EmailsList,
-        phones: phones as PhoneNumbersList,
-        addresses: addresses as AddressesList,
+        emails,
+        phones,
+        addresses,
         fieldData,
         workflowCards
     };
@@ -714,14 +687,7 @@ export async function getCompletePersonProfile(
  */
 export async function getOrganizationInfo(
     client: PcoClient
-): Promise<{
-    organization: OrganizationResource | null;
-    stats: {
-        totalPeople: number;
-        totalHouseholds: number;
-        totalLists: number;
-    };
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  getOrganizationInfo', {});
     const [people, households, lists] = await Promise.all([
         client.people.getPage({ perPage: 1 }),
@@ -744,20 +710,14 @@ export async function getOrganizationInfo(
  */
 export async function getListsWithCategories(
     client: PcoClient
-): Promise<{
-    lists: ListsList;
-    categories: ListCategoriesList;
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  getListsWithCategories', {});
     const [lists, categories] = await Promise.all([
         client.lists.getAll(),
         client.lists.getListCategories()
     ]);
 
-    return { 
-        lists: lists as ListsList, 
-        categories: categories as ListCategoriesList
-    };
+    return { lists, categories };
 }
 
 /**
@@ -766,10 +726,7 @@ export async function getListsWithCategories(
 export async function getPersonWorkflowCardsWithNotes(
     client: PcoClient,
     personId: string
-): Promise<{
-    workflowCards: { data: WorkflowCardResource[]; meta?: Meta; links?: TopLevelLinks };
-    notes: { [cardId: string]: { data: WorkflowCardNoteResource[]; meta?: Meta; links?: TopLevelLinks } };
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  getPersonWorkflowCardsWithNotes', { personId });
     const workflowCards = await client.people.getWorkflowCards(personId);
 
@@ -794,10 +751,7 @@ export async function createWorkflowCardWithNote(
     workflowId: string,
     personId: string,
     noteData: Partial<WorkflowCardNoteAttributes>
-): Promise<{
-    workflowCard: WorkflowCardResource;
-    note: WorkflowCardNoteResource;
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  createWorkflowCardWithNote', { workflowId, personId });
     const workflowCard = await client.workflows.createWorkflowCard(workflowId, personId);
 
@@ -821,18 +775,11 @@ export async function exportAllPeopleData(
     options: {
         includeInactive?: boolean;
         includeFieldData?: boolean;
-        includeWorkflowCards?: boolean;
+        
     } = {}
-): Promise<{
-    people: PersonResource[];
-    households: HouseholdResource[];
-    lists: ListResource[];
-    organization: OrganizationResource | null;
-    exportDate: string;
-    totalCount: number;
-}> {
+) {
     debugLogIfEnabled(client, 'helpers  exportAllPeopleData', options);
-    const { includeInactive = false, includeFieldData = false, includeWorkflowCards = false } = options;
+    const { includeInactive = false, includeFieldData = false } = options;
 
     const where: PersonWhereClause = {};
     if (!includeInactive) {

@@ -3,16 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type {
-    FormResource,
-    FormAttributes,
-    FormsList,
-    FormCategoryResource,
-    FormFieldResource,
-    FormFieldOptionResource,
-    FormSubmissionResource,
-    FormSubmissionValueResource,
-} from '../types';
+import type * as Types from '../types';
 import type { FormListOptions, FormPageOptions } from '../types/api-options';
 
 /**
@@ -25,7 +16,7 @@ export class FormsModule extends BaseModule {
      */
     async getAll(params?: FormListOptions) {
         this.debugLog('forms.getAll', { params });
-        return this.getAllPages<FormResource>('/forms', {
+        return this.getAllPages<Types.FormResourceObject>('/forms', {
             where: params?.where,
             include: params?.include,
             order: params?.order
@@ -40,7 +31,7 @@ export class FormsModule extends BaseModule {
      */
     async getPage(params?: FormPageOptions) {
         this.debugLog('forms.getPage', { params });
-        return this.getList<FormResource>('/forms', {
+        return this.getList<Types.FormResourceObject>('/forms', {
             where: params?.where,
             include: params?.include,
             per_page: params?.perPage,
@@ -54,7 +45,7 @@ export class FormsModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('forms.getById', { id, include });
-        return this.getSingle<FormResource>(`/forms/${id}`, include);
+        return this.getSingle<Types.FormResourceObject>(`/forms/${id}`, include);
     }
 
     /**
@@ -62,7 +53,7 @@ export class FormsModule extends BaseModule {
      */
     async getFormCategory(formId: string) {
         this.debugLog('forms.getFormCategory', { formId });
-        return this.getSingle<FormCategoryResource>(`/forms/${formId}/category`);
+        return this.getSingle<Types.FormCategoryResourceObject>(`/forms/${formId}/category`);
     }
 
     /**
@@ -75,7 +66,7 @@ export class FormsModule extends BaseModule {
         page?: number;
     }) {
         this.debugLog('forms.getFormFields', { formId, params });
-        return await this.getList<FormFieldResource>(`/forms/${formId}/fields`, {
+        return await this.getList<Types.FormFieldResourceObject>(`/forms/${formId}/fields`, {
             where: params?.where,
             include: params?.include,
             per_page: params?.perPage,
@@ -94,7 +85,7 @@ export class FormsModule extends BaseModule {
         page?: number;
     }) {
         this.debugLog('forms.getFormFieldOptions', { formId, formFieldId, params });
-        return await this.getList<FormFieldOptionResource>(`/forms/${formId}/fields/${formFieldId}/options`, params);
+        return await this.getList<Types.FormFieldOptionResourceObject>(`/forms/${formId}/fields/${formFieldId}/options`, params);
     }
 
     /**
@@ -107,7 +98,7 @@ export class FormsModule extends BaseModule {
         page?: number;
     }) {
         this.debugLog('forms.getFormSubmissions', { formId, params });
-        return await this.getList<FormSubmissionResource>(`/forms/${formId}/form_submissions`, params);
+        return await this.getList<Types.FormSubmissionResourceObject>(`/forms/${formId}/form_submissions`, params);
     }
 
     /**
@@ -116,7 +107,7 @@ export class FormsModule extends BaseModule {
      */
     async getFormSubmissionById(formId: string, formSubmissionId: string, include?: string[]) {
         this.debugLog('forms.getFormSubmissionById', { formId, formSubmissionId, include });
-        return this.getSingle<FormSubmissionResource>(`/forms/${formId}/form_submissions/${formSubmissionId}`, include);
+        return this.getSingle<Types.FormSubmissionResourceObject>(`/forms/${formId}/form_submissions/${formSubmissionId}`, include);
     }
 
     /**
@@ -130,6 +121,6 @@ export class FormsModule extends BaseModule {
         page?: number;
     }) {
         this.debugLog('forms.getFormSubmissionValues', { formId, formSubmissionId, params });
-        return await this.getList<FormSubmissionValueResource>(`/forms/${formId}/form_submissions/${formSubmissionId}/form_submission_values`, params);
+        return await this.getList<Types.FormSubmissionValueResourceObject>(`/forms/${formId}/form_submissions/${formSubmissionId}/form_submission_values`, params);
     }
 }

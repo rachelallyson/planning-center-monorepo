@@ -103,7 +103,7 @@ export async function getSingle<
   endpoint: string,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<JsonApiResponse<TRes, TIncluded>> {
+) {
   return withErrorBoundary(
     () =>
       retryWithBackoff(
@@ -118,7 +118,6 @@ export async function getSingle<
           ),
         {
           baseDelay: client.config.retry?.baseDelay ?? 1000,
-          context,
           maxDelay: client.config.retry?.maxDelay ?? 30000,
           maxRetries: client.config.retry?.maxRetries ?? 3,
           onRetry: client.config.retry?.onRetry,
@@ -143,7 +142,7 @@ export async function getList<
   endpoint: string,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<Paginated<TRes, TIncluded>> {
+) {
   return withErrorBoundary(
     () =>
       retryWithBackoff(
@@ -158,7 +157,6 @@ export async function getList<
           ),
         {
           baseDelay: client.config.retry?.baseDelay ?? 1000,
-          context,
           maxDelay: client.config.retry?.maxDelay ?? 30000,
           maxRetries: client.config.retry?.maxRetries ?? 3,
           onRetry: client.config.retry?.onRetry,
@@ -184,7 +182,7 @@ export async function post<
   data: Partial<TRes['attributes']>,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<JsonApiResponse<TRes, TIncluded>> {
+) {
   return withErrorBoundary(
     () =>
       retryWithBackoff(
@@ -199,7 +197,6 @@ export async function post<
           ),
         {
           baseDelay: client.config.retry?.baseDelay ?? 1000,
-          context,
           maxDelay: client.config.retry?.maxDelay ?? 30000,
           maxRetries: client.config.retry?.maxRetries ?? 3,
           onRetry: client.config.retry?.onRetry,
@@ -225,7 +222,7 @@ export async function patch<
   data: Partial<TRes['attributes']>,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<JsonApiResponse<TRes, TIncluded>> {
+) {
   return withErrorBoundary(
     () =>
       retryWithBackoff(
@@ -240,7 +237,6 @@ export async function patch<
           ),
         {
           baseDelay: client.config.retry?.baseDelay ?? 1000,
-          context,
           maxDelay: client.config.retry?.maxDelay ?? 30000,
           maxRetries: client.config.retry?.maxRetries ?? 3,
           onRetry: client.config.retry?.onRetry,
@@ -258,7 +254,7 @@ export async function del(
   endpoint: string,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<void> {
+) {
   return withErrorBoundary(
     async () => {
       await retryWithBackoff(
@@ -273,7 +269,6 @@ export async function del(
           ),
         {
           baseDelay: client.config.retry?.baseDelay ?? 1000,
-          context,
           maxDelay: client.config.retry?.maxDelay ?? 30000,
           maxRetries: client.config.retry?.maxRetries ?? 3,
           onRetry: client.config.retry?.onRetry,
@@ -292,7 +287,7 @@ export async function getAllPages<T extends ResourceObject<string, any, any>>(
   endpoint: string,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<T[]> {
+) {
   return withErrorBoundary(
     async () => {
       const allData: T[] = [];
@@ -313,9 +308,8 @@ export async function getAllPages<T extends ResourceObject<string, any, any>>(
 
         // Check for next page
         if (response.links?.next) {
-          const nextLink = response.links.next as string;
-
-          currentEndpoint = nextLink;
+          const nextLink = response.links.next;
+          currentEndpoint = typeof nextLink === 'string' ? nextLink : (nextLink && 'href' in nextLink ? String((nextLink as { href?: string }).href ?? '') : '');
           currentParams = {}; // Reset params for subsequent requests
         } else {
           break;
@@ -344,7 +338,7 @@ async function fetchRequestSingle<
   data?: Partial<TRes['attributes']>,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<JsonApiResponse<TRes, TIncluded>> {
+) {
   const response = await makeFetchRequest<JsonApiResponse<TRes, TIncluded>>(
     client,
     method,
@@ -371,7 +365,7 @@ async function fetchRequestList<
   data?: Partial<TRes['attributes']>,
   params?: Record<string, string | number | boolean | undefined>,
   context?: Partial<ErrorContext>
-): Promise<Paginated<TRes, TIncluded>> {
+) {
   const response = await makeFetchRequest<Paginated<TRes, TIncluded>>(
     client,
     method,

@@ -9,26 +9,7 @@ import type {
     PcoEventEmitter,
     PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
-import type {
-    PersonResource,
-    PersonAttributes,
-    PersonRelationshipMap,
-    EmailResource,
-    EmailAttributes,
-    PhoneNumberResource,
-    PhoneNumberAttributes,
-    AddressResource,
-    AddressAttributes,
-    SocialProfileResource,
-    SocialProfileAttributes,
-    CampusResource,
-    HouseholdResource,
-    WorkflowCardResource,
-    NoteResource,
-    FieldDatumResource,
-    PeopleIncluded,
-    FlattenedPersonResource
-} from '../types';
+import type * as Types from '../types';
 import type { Meta, TopLevelLinks } from '../types/json-api';
 import type { ResourceObject, Attributes, Relationship } from '../types/json-api';
 import { PersonMatcher } from '../matching/matcher';
@@ -206,7 +187,7 @@ export class PeopleModule extends BaseModule {
      */
     async getAll(options: PersonListOptions = {}) {
         this.debugLog('people.getAll', { options });
-        return await this.getAllPages<PersonResource, PeopleIncluded, PersonRelationshipMap>('/people', {
+        return await this.getAllPages<Types.PersonResourceObject, Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
             where: options.where,
             include: options.include,
             order: options.order
@@ -219,13 +200,9 @@ export class PeopleModule extends BaseModule {
      * @param options - List options including where, include, perPage, page, and order
      * @returns A single page of results with meta and links for pagination
      */
-    async getPage(options: PersonPageOptions = {}): Promise<{ 
-        data: FlattenedPersonResource[]; 
-        meta?: Meta; 
-        links?: TopLevelLinks 
-    }> {
+    async getPage(options: PersonPageOptions = {}) {
         this.debugLog('people.getPage', { options });
-        return this.getList<PersonResource>('/people', {
+        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -239,7 +216,7 @@ export class PeopleModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('people.getById', { id, include });
-        return this.getSingle<PersonResource>(`/people/${id}`, include);
+        return this.getSingle<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>(`/people/${id}`, include);
     }
 
     /**
@@ -296,8 +273,8 @@ export class PeopleModule extends BaseModule {
      * Transform PersonCreateOptions (camelCase) to API format (snake_case)
      * Also handles snake_case input directly (passes through)
      */
-    private transformPersonData(data: PersonCreateOptions | Partial<PersonCreateOptions> | Partial<PersonAttributes>) {
-        const transformed: Partial<PersonAttributes> = {};
+    private transformPersonData(data: PersonCreateOptions | Partial<PersonCreateOptions> | Partial<Types.PersonAttributes>) {
+        const transformed: Partial<Types.PersonAttributes> = {};
         const dataObj = data as Record<string, any>;
         
         // If data is already in snake_case format, copy those fields directly
@@ -371,34 +348,34 @@ export class PeopleModule extends BaseModule {
      * Create a new person
      * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
      */
-    async create(data: PersonCreateOptions | Partial<PersonAttributes>) {
+    async create(data: PersonCreateOptions | Partial<Types.PersonAttributes>) {
         this.debugLog('people.create', { data });
         // Check if data is already in snake_case format (has first_name, last_name, etc.)
         const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
         
         // If it's already in snake_case, use it directly; otherwise transform
         const transformedData = hasSnakeCase 
-            ? (data as Partial<PersonAttributes>)
+            ? (data as Partial<Types.PersonAttributes>)
             : this.transformPersonData(data as Partial<PersonCreateOptions>);
         
-        return this.createResource<PersonResource>('/people', transformedData);
+        return this.createResource<Types.PersonResourceObject>('/people', transformedData);
     }
 
     /**
      * Update a person
      * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
      */
-    async update(id: string, data: Partial<PersonCreateOptions> | Partial<PersonAttributes>) {
+    async update(id: string, data: Partial<PersonCreateOptions> | Partial<Types.PersonAttributes>) {
         this.debugLog('people.update', { id, data });
         // Check if data is already in snake_case format (has first_name, last_name, etc.)
         const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
         
         // If it's already in snake_case, use it directly; otherwise transform
         const transformedData = hasSnakeCase 
-            ? (data as Partial<PersonAttributes>)
+            ? (data as Partial<Types.PersonAttributes>)
             : this.transformPersonData(data as Partial<PersonCreateOptions>);
         
-        return this.updateResource<PersonResource>(`/people/${id}`, transformedData);
+        return this.updateResource<Types.PersonResourceObject>(`/people/${id}`, transformedData);
     }
 
     /**
@@ -427,11 +404,11 @@ export class PeopleModule extends BaseModule {
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in campusData && 'type' in campusData) {
             // Get the full campus resource
-            return this.getSingle<CampusResource>(`/campuses/${(campusData as { id: string }).id}`);
+            return this.getSingle<Types.CampusResourceObject>(`/campuses/${(campusData as { id: string }).id}`);
         }
         
         // If it's already a full resource, return it
-        return campusData as CampusResource;
+        return campusData as Types.CampusResource;
     }
 
     /**
@@ -440,7 +417,7 @@ export class PeopleModule extends BaseModule {
     async setPrimaryCampus(personId: string, campusId: string) {
         this.debugLog('people.setPrimaryCampus', { personId, campusId });
         const transformedData = this.transformPersonData({ primaryCampusId: campusId });
-        return this.updateResource<PersonResource>(`/people/${personId}`, transformedData);
+        return this.updateResource<Types.PersonResourceObject>(`/people/${personId}`, transformedData);
     }
 
     /**
@@ -449,7 +426,7 @@ export class PeopleModule extends BaseModule {
     async removePrimaryCampus(personId: string) {
         this.debugLog('people.removePrimaryCampus', { personId });
         const transformedData = this.transformPersonData({ primaryCampusId: null });
-        return this.updateResource<PersonResource>(`/people/${personId}`, transformedData);
+        return this.updateResource<Types.PersonResourceObject>(`/people/${personId}`, transformedData);
     }
 
     /**
@@ -468,11 +445,11 @@ export class PeopleModule extends BaseModule {
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in householdData && 'type' in householdData) {
             // Get the full household resource
-            return this.getSingle<HouseholdResource>(`/households/${(householdData as { id: string }).id}`);
+            return this.getSingle<Types.HouseholdResourceObject>(`/households/${(householdData as { id: string }).id}`);
         }
         
         // If it's already a full resource, return it
-        return householdData as HouseholdResource;
+        return householdData as Types.HouseholdResource;
     }
 
     /**
@@ -580,7 +557,7 @@ export class PeopleModule extends BaseModule {
         if (options.page) params.page = options.page;
         params['where[household_id]'] = householdId;
 
-        return this.getList<PersonResource>('/people', params);
+        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', params);
     }
 
     /**
@@ -593,7 +570,7 @@ export class PeopleModule extends BaseModule {
         if (isNaN(campusIdNum)) {
             throw new Error(`Invalid campus ID: ${campusId}`);
         }
-        return this.getList<PersonResource>('/people', {
+        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
             where: { primary_campus_id: campusIdNum } as PersonWhereClause,
             include: options.include,
             per_page: options.perPage,
@@ -610,7 +587,7 @@ export class PeopleModule extends BaseModule {
         page?: number;
     } = {}) {
         this.debugLog('people.getWorkflowCards', { personId, options });
-        return this.getList<WorkflowCardResource>(`/people/${personId}/workflow_cards`, {
+        return this.getList<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards`, {
             include: options.include,
             per_page: options.perPage,
             page: options.page
@@ -626,7 +603,7 @@ export class PeopleModule extends BaseModule {
         page?: number;
     } = {}) {
         this.debugLog('people.getNotes', { personId, options });
-        return this.getList<NoteResource>(`/people/${personId}/notes`, {
+        return this.getList<Types.NoteResourceObject>(`/people/${personId}/notes`, {
             include: options.include,
             per_page: options.perPage,
             page: options.page
@@ -642,7 +619,7 @@ export class PeopleModule extends BaseModule {
         page?: number;
     } = {}) {
         this.debugLog('people.getFieldData', { personId, options });
-        return this.getList<FieldDatumResource>(`/people/${personId}/field_data`, {
+        return this.getList<Types.FieldDatumResourceObject>(`/people/${personId}/field_data`, {
             include: options.include,
             per_page: options.perPage,
             page: options.page
@@ -658,7 +635,7 @@ export class PeopleModule extends BaseModule {
         page?: number;
     } = {}) {
         this.debugLog('people.getSocialProfiles', { personId, options });
-        return this.getList<SocialProfileResource>(`/people/${personId}/social_profiles`, {
+        return this.getList<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, {
             include: options.include,
             per_page: options.perPage,
             page: options.page
@@ -755,23 +732,23 @@ export class PeopleModule extends BaseModule {
      */
     async getEmails(personId: string) {
         this.debugLog('people.getEmails', { personId });
-        return this.getList<EmailResource>(`/people/${personId}/emails`);
+        return this.getList<Types.EmailResourceObject>(`/people/${personId}/emails`);
     }
 
     /**
      * Add an email to a person
      */
-    async addEmail(personId: string, data: EmailAttributes) {
+    async addEmail(personId: string, data: Types.EmailAttributes) {
         this.debugLog('people.addEmail', { personId, data });
-        return this.createResource<EmailResource>(`/people/${personId}/emails`, data);
+        return this.createResource<Types.EmailResourceObject>(`/people/${personId}/emails`, data);
     }
 
     /**
      * Update a person's email
      */
-    async updateEmail(personId: string, emailId: string, data: Partial<EmailAttributes>) {
+    async updateEmail(personId: string, emailId: string, data: Partial<Types.EmailAttributes>) {
         this.debugLog('people.updateEmail', { personId, emailId, data });
-        return this.updateResource<EmailResource>(`/people/${personId}/emails/${emailId}`, data);
+        return this.updateResource<Types.EmailResourceObject>(`/people/${personId}/emails/${emailId}`, data);
     }
 
     /**
@@ -787,23 +764,23 @@ export class PeopleModule extends BaseModule {
      */
     async getPhoneNumbers(personId: string) {
         this.debugLog('people.getPhoneNumbers', { personId });
-        return this.getList<PhoneNumberResource>(`/people/${personId}/phone_numbers`);
+        return this.getList<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`);
     }
 
     /**
      * Add a phone number to a person
      */
-    async addPhoneNumber(personId: string, data: PhoneNumberAttributes) {
+    async addPhoneNumber(personId: string, data: Types.PhoneNumberAttributes) {
         this.debugLog('people.addPhoneNumber', { personId, data });
-        return this.createResource<PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
+        return this.createResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`, data);
     }
 
     /**
      * Update a person's phone number
      */
-    async updatePhoneNumber(personId: string, phoneId: string, data: Partial<PhoneNumberAttributes>) {
+    async updatePhoneNumber(personId: string, phoneId: string, data: Partial<Types.PhoneNumberAttributes>) {
         this.debugLog('people.updatePhoneNumber', { personId, phoneId, data });
-        return this.updateResource<PhoneNumberResource>(`/people/${personId}/phone_numbers/${phoneId}`, data);
+        return this.updateResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers/${phoneId}`, data);
     }
 
     /**
@@ -819,23 +796,23 @@ export class PeopleModule extends BaseModule {
      */
     async getAddresses(personId: string) {
         this.debugLog('people.getAddresses', { personId });
-        return this.getList<AddressResource>(`/people/${personId}/addresses`);
+        return this.getList<Types.AddressResourceObject>(`/people/${personId}/addresses`);
     }
 
     /**
      * Add an address to a person
      */
-    async addAddress(personId: string, data: AddressAttributes) {
+    async addAddress(personId: string, data: Types.AddressAttributes) {
         this.debugLog('people.addAddress', { personId, data });
-        return this.createResource<AddressResource>(`/people/${personId}/addresses`, data);
+        return this.createResource<Types.AddressResourceObject>(`/people/${personId}/addresses`, data);
     }
 
     /**
      * Update a person's address
      */
-    async updateAddress(personId: string, addressId: string, data: Partial<AddressAttributes>) {
+    async updateAddress(personId: string, addressId: string, data: Partial<Types.AddressAttributes>) {
         this.debugLog('people.updateAddress', { personId, addressId, data });
-        return this.updateResource<AddressResource>(`/people/${personId}/addresses/${addressId}`, data);
+        return this.updateResource<Types.AddressResourceObject>(`/people/${personId}/addresses/${addressId}`, data);
     }
 
     /**
@@ -850,17 +827,17 @@ export class PeopleModule extends BaseModule {
     /**
      * Add a social profile to a person
      */
-    async addSocialProfile(personId: string, data: SocialProfileAttributes) {
+    async addSocialProfile(personId: string, data: Types.SocialProfileAttributes) {
         this.debugLog('people.addSocialProfile', { personId, data });
-        return this.createResource<SocialProfileResource>(`/people/${personId}/social_profiles`, data);
+        return this.createResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, data);
     }
 
     /**
      * Update a person's social profile
      */
-    async updateSocialProfile(personId: string, profileId: string, data: Partial<SocialProfileAttributes>) {
+    async updateSocialProfile(personId: string, profileId: string, data: Partial<Types.SocialProfileAttributes>) {
         this.debugLog('people.updateSocialProfile', { personId, profileId, data });
-        return this.updateResource<SocialProfileResource>(`/people/${personId}/social_profiles/${profileId}`, data);
+        return this.updateResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles/${profileId}`, data);
     }
 
     /**
@@ -877,35 +854,30 @@ export class PeopleModule extends BaseModule {
     async createWithContacts(
         personData: PersonCreateOptions,
         contacts?: {
-            email?: EmailAttributes;
-            phone?: PhoneNumberAttributes;
-            address?: AddressAttributes;
+            email?: Types.EmailAttributes;
+            phone?: Types.PhoneNumberAttributes;
+            address?: Types.AddressAttributes;
         }
-    ): Promise<{
-        person: PersonResource;
-        email?: EmailResource;
-        phone?: PhoneNumberResource;
-        address?: AddressResource;
-    }> {
+    ) {
         this.debugLog('people.createWithContacts', { personData, contacts });
-        const person = await this.create(personData);
+        const person = (await this.create(personData)) as Types.PersonResource;
         const result: {
-            person: PersonResource;
-            email?: EmailResource;
-            phone?: PhoneNumberResource;
-            address?: AddressResource;
+            person: Types.PersonResource;
+            email?: Types.EmailResource;
+            phone?: Types.PhoneNumberResource;
+            address?: Types.AddressResource;
         } = { person };
 
         if (contacts?.email) {
-            result.email = await this.addEmail(person.id, contacts.email);
+            result.email = (await this.addEmail(person.id, contacts.email)) as Types.EmailResource;
         }
 
         if (contacts?.phone) {
-            result.phone = await this.addPhoneNumber(person.id, contacts.phone);
+            result.phone = (await this.addPhoneNumber(person.id, contacts.phone)) as Types.PhoneNumberResource;
         }
 
         if (contacts?.address) {
-            result.address = await this.addAddress(person.id, contacts.address);
+            result.address = (await this.addAddress(person.id, contacts.address)) as Types.AddressResource;
         }
 
         return result;

@@ -3,15 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type {
-    NoteResource,
-    NoteAttributes,
-    NoteCategoryResource,
-    NoteCategoryAttributes,
-    Meta,
-    TopLevelLinks
-} from '../types';
-import type { ResourceObject } from '../types/json-api';
+import type * as Types from '../types';
 import type { NoteListOptions, NotePageOptions } from '../types/api-options';
 
 // Re-export for backward compatibility
@@ -23,7 +15,7 @@ export class NotesModule extends BaseModule {
      */
     async getAll(options: NotesListOptions = {}) {
         this.debugLog('notes.getAll', { options });
-        return await this.getAllPages<NoteResource>('/notes', {
+        return await this.getAllPages<Types.NoteResourceObject>('/notes', {
             where: options.where,
             include: options.include,
             order: options.order
@@ -38,7 +30,7 @@ export class NotesModule extends BaseModule {
      */
     async getPage(options: NotePageOptions = {}){
         this.debugLog('notes.getPage', { options });
-        return this.getList<NoteResource>('/notes', {
+        return this.getList<Types.NoteResourceObject>('/notes', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -52,7 +44,7 @@ export class NotesModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('notes.getById', { id, include });
-        return this.getSingle<NoteResource>(`/notes/${id}`, include);
+        return this.getSingle<Types.NoteResourceObject>(`/notes/${id}`, include);
     }
 
     /**
@@ -60,7 +52,7 @@ export class NotesModule extends BaseModule {
      */
     async getNotesForPerson(personId: string, options: NotePageOptions = {}) {
         this.debugLog('notes.getNotesForPerson', { personId, options });
-        return this.getList<NoteResource>(`/people/${personId}/notes`, {
+        return this.getList<Types.NoteResourceObject>(`/people/${personId}/notes`, {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -72,17 +64,17 @@ export class NotesModule extends BaseModule {
     /**
      * Create a note for a person
      */
-    async create(personId: string, data: NoteAttributes) {
+    async create(personId: string, data: Types.NoteAttributes) {
         this.debugLog('notes.create', { personId, data });
-        return this.createResource<NoteResource>(`/people/${personId}/notes`, data);
+        return this.createResource<Types.NoteResourceObject>(`/people/${personId}/notes`, data);
     }
 
     /**
      * Update a note
      */
-    async update(id: string, data: Partial<NoteAttributes>) {
+    async update(id: string, data: Partial<Types.NoteAttributes>) {
         this.debugLog('notes.update', { id, data });
-        return this.updateResource<NoteResource>(`/notes/${id}`, data);
+        return this.updateResource<Types.NoteResourceObject>(`/notes/${id}`, data);
     }
 
     /**
@@ -99,7 +91,7 @@ export class NotesModule extends BaseModule {
      */
     async getNoteCategories(options?: { perPage?: number; page?: number }) {
         this.debugLog('notes.getNoteCategories', { options });
-        return this.getList<NoteCategoryResource>('/note_categories', options ? {
+        return this.getList<Types.NoteCategoryResourceObject>('/note_categories', options ? {
             per_page: options.perPage,
             page: options.page,
         } : undefined);
@@ -109,21 +101,21 @@ export class NotesModule extends BaseModule {
      * Get a single note category by ID
      */
     async getNoteCategoryById(id: string) {
-        return this.getSingle<NoteCategoryResource>(`/note_categories/${id}`);
+        return this.getSingle<Types.NoteCategoryResourceObject>(`/note_categories/${id}`);
     }
 
     /**
      * Create a note category
      */
-    async createNoteCategory(data: Partial<NoteCategoryAttributes>) {
-        return this.createResource<NoteCategoryResource>('/note_categories', data);
+    async createNoteCategory(data: Partial<Types.NoteCategoryAttributes>) {
+        return this.createResource<Types.NoteCategoryResourceObject>('/note_categories', data);
     }
 
     /**
      * Update a note category
      */
-    async updateNoteCategory(id: string, data: Partial<NoteCategoryAttributes>) {
-        return this.updateResource<NoteCategoryResource>(`/note_categories/${id}`, data);
+    async updateNoteCategory(id: string, data: Partial<Types.NoteCategoryAttributes>) {
+        return this.updateResource<Types.NoteCategoryResourceObject>(`/note_categories/${id}`, data);
     }
 
     /**

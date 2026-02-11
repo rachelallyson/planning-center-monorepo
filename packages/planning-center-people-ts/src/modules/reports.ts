@@ -2,7 +2,6 @@ import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     ReportResource,
     ReportAttributes,
-    ReportsList,
 } from '../types';
 import type { ReportListOptions, ReportPageOptions } from '../types/api-options';
 

@@ -4,7 +4,7 @@
 
 import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 import type { PcoClientConfig } from '@rachelallyson/planning-center-base-ts';
-import type { PersonResource, FlattenedPersonResource } from '../types';
+import type { PersonResource } from '../types';
 import type { PersonMatchOptions, PeopleModule } from '../modules/people';
 import { matchesAgeCriteria, calculateAgeSafe, normalizeEmail, normalizePhone } from '../helpers';
 
@@ -23,7 +23,7 @@ export class MatchScorer {
     /**
      * Score a person match based on various criteria
      */
-    async scoreMatch(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<number> {
+    async scoreMatch(person: PersonResource, options: PersonMatchOptions) {
         let totalScore = 0;
         let maxScore = 0;
 
@@ -66,7 +66,7 @@ export class MatchScorer {
     /**
      * Get a human-readable reason for the match
      */
-    async getMatchReason(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<string> {
+    async getMatchReason(person: PersonResource, options: PersonMatchOptions) {
         const reasons: string[] = [];
 
         if (options.email) {
@@ -117,7 +117,7 @@ export class MatchScorer {
     /**
      * Score email matching - verifies actual email matches
      */
-    async scoreEmailMatch(person: FlattenedPersonResource, email: string): Promise<number> {
+    async scoreEmailMatch(person: PersonResource, email: string) {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
             const normalizedSearchEmail = normalizeEmail(email);
@@ -137,7 +137,7 @@ export class MatchScorer {
     /**
      * Score phone matching - verifies actual phone matches
      */
-    async scorePhoneMatch(person: FlattenedPersonResource, phone: string): Promise<number> {
+    async scorePhoneMatch(person: PersonResource, phone: string) {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
             const normalizedSearchPhone = normalizePhone(phone);
@@ -155,7 +155,7 @@ export class MatchScorer {
     /**
      * Score name matching - only exact matches
      */
-    private scoreNameMatch(person: FlattenedPersonResource, options: PersonMatchOptions): number {
+    private scoreNameMatch(person: PersonResource, options: PersonMatchOptions): number {
         let score = 0;
 
         // First name matching - exact match only
@@ -176,7 +176,7 @@ export class MatchScorer {
     /**
      * Score age matching
      */
-    private scoreAgeMatch(person: FlattenedPersonResource, options: PersonMatchOptions): number {
+    private scoreAgeMatch(person: PersonResource, options: PersonMatchOptions): number {
         const birthdate = person.birthdate;
 
         // If no age criteria specified, return neutral score
@@ -233,7 +233,7 @@ export class MatchScorer {
     /**
      * Score additional criteria
      */
-    private scoreAdditionalCriteria(person: FlattenedPersonResource, options: PersonMatchOptions): number {
+    private scoreAdditionalCriteria(person: PersonResource, options: PersonMatchOptions): number {
         // Add scoring for other criteria like campus, status, etc.
         return 0;
     }

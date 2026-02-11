@@ -39,7 +39,7 @@ export class PcoClientManager {
     static async getClientForChurch(
         churchId: string,
         configResolver: ClientConfigResolver
-    ): Promise<PcoClient> {
+    ) {
         return PcoClientManager.getInstance().getClientForChurch(churchId, configResolver);
     }
 
@@ -83,7 +83,7 @@ export class PcoClientManager {
     async getClientForChurch(
         churchId: string,
         configResolver: ClientConfigResolver
-    ): Promise<PcoClient> {
+    ) {
         const configKey = `church:${churchId}`;
 
         // Check if we have a cached client

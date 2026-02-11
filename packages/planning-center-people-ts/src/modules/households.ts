@@ -3,13 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type {
-    HouseholdResource,
-    HouseholdAttributes,
-    Meta,
-    TopLevelLinks
-} from '../types';
-import type { ResourceObject } from '../types/json-api';
+import type * as Types from '../types';
 
 import type { HouseholdListOptions, HouseholdPageOptions } from '../types/api-options';
 
@@ -22,7 +16,7 @@ export class HouseholdsModule extends BaseModule {
      */
     async getAll(options: HouseholdListOptions = {}) {
         this.debugLog('households.getAll', { options });
-        return await this.getAllPages<HouseholdResource>('/households', {
+        return await this.getAllPages<Types.HouseholdResourceObject>('/households', {
             where: options.where,
             include: options.include,
             order: options.order
@@ -37,7 +31,7 @@ export class HouseholdsModule extends BaseModule {
      */
     async getPage(options: HouseholdPageOptions = {}) {
         this.debugLog('households.getPage', { options });
-        return this.getList<HouseholdResource>('/households', {
+        return this.getList<Types.HouseholdResourceObject>('/households', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -51,23 +45,23 @@ export class HouseholdsModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('households.getById', { id, include });
-        return this.getSingle<HouseholdResource>(`/households/${id}`, include);
+        return this.getSingle<Types.HouseholdResourceObject>(`/households/${id}`, include);
     }
 
     /**
      * Create a household
      */
-    async create(data: HouseholdAttributes) {
+    async create(data: Types.HouseholdAttributes) {
         this.debugLog('households.create', { data });
-        return this.createResource<HouseholdResource>('/households', data);
+        return this.createResource<Types.HouseholdResourceObject>('/households', data);
     }
 
     /**
      * Update a household
      */
-    async update(id: string, data: Partial<HouseholdAttributes>) {
+    async update(id: string, data: Partial<Types.HouseholdAttributes>) {
         this.debugLog('households.update', { id, data });
-        return this.updateResource<HouseholdResource>(`/households/${id}`, data);
+        return this.updateResource<Types.HouseholdResourceObject>(`/households/${id}`, data);
     }
 
     /**

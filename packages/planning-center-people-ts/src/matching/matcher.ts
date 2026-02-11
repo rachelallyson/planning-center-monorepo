@@ -5,7 +5,7 @@
 import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
 import type { PcoClientConfig } from '@rachelallyson/planning-center-base-ts';
 import type { PeopleModule } from '../modules/people';
-import type { PersonResource, FlattenedPersonResource } from '../types';
+import type { PersonResource } from '../types';
 import {
     PersonMatchOptions,
     RetryConfig,
@@ -20,12 +20,11 @@ import {
     normalizePhone, 
     isValidEmail,
     validateContactSimilarity,
-    emailDomainsMatch,
-    phoneNumbersSimilar 
+    emailDomainsMatch
 } from '../helpers';
 
 export interface MatchResult {
-    person: FlattenedPersonResource;
+    person: PersonResource;
     score: number;
     reason: string;
     isVerifiedContactMatch?: boolean; // True if email/phone actually matches
@@ -82,7 +81,7 @@ export class PersonMatcher {
      * @param options.retryConfig - Configuration for retry logic to handle PCO contact verification delays
      * @param options.searchStrategy - 'single' for standard search, 'multi-step' for trying multiple strategies
      */
-    async findOrCreate(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
+    async findOrCreate(options: PersonMatchOptions) {
         const { 
             createIfNotFound = true, 
             matchStrategy = 'fuzzy', 
@@ -155,7 +154,7 @@ export class PersonMatcher {
      * - Multiple workers are processing the same person
      * - The fast path didn't find an existing person
      */
-    private async findWithAggressiveRetry(options: PersonMatchOptions): Promise<MatchResult | null> {
+    private async findWithAggressiveRetry(options: PersonMatchOptions) {
         const { 
             matchStrategy = 'fuzzy', 
             searchStrategy = 'single',
@@ -249,7 +248,7 @@ export class PersonMatcher {
      * 
      * This approach maximizes matching success while maintaining quality.
      */
-    async findMatchMultiStep(options: PersonMatchOptions): Promise<MatchResult | null> {
+    async findMatchMultiStep(options: PersonMatchOptions) {
         const { agePreference, agePreferenceLenient, ...baseOptions } = options;
         
         for (const strategy of PersonMatcher.MULTI_STEP_STRATEGIES) {
@@ -295,7 +294,7 @@ export class PersonMatcher {
      * - initial: Quick search (default 30s)
      * - aggressive: Final search before create (default 60s)
      */
-    private async findOrCreateWithRetry(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
+    private async findOrCreateWithRetry(options: PersonMatchOptions) {
         const { 
             createIfNotFound = false, 
             matchStrategy = 'fuzzy', 
@@ -401,7 +400,7 @@ export class PersonMatcher {
     /**
      * Find the best match for a person
      */
-    async findMatch(options: PersonMatchOptions): Promise<MatchResult | null> {
+    async findMatch(options: PersonMatchOptions) {
         const { 
             matchStrategy = 'fuzzy', 
             email, 
@@ -413,8 +412,8 @@ export class PersonMatcher {
         } = options;
 
         // Step 1: Try email/phone search first
-        const emailPhoneMatches: FlattenedPersonResource[] = [];
-        const nameOnlyMatches: FlattenedPersonResource[] = [];
+        const emailPhoneMatches: PersonResource[] = [];
+        const nameOnlyMatches: PersonResource[] = [];
 
         // Search by email (with normalization and validation)
         if (email) {
@@ -449,7 +448,7 @@ export class PersonMatcher {
         );
 
         // Step 2: Verify email/phone actually match
-        const verifiedMatches: FlattenedPersonResource[] = [];
+        const verifiedMatches: PersonResource[] = [];
         for (const candidate of uniqueEmailPhoneMatches) {
             let emailMatches = false;
             let phoneMatches = false;
@@ -573,7 +572,7 @@ export class PersonMatcher {
         searchPhone: string | undefined,
         validationStrategy: 'strict' | 'domain' | 'similarity',
         options: PersonMatchOptions
-    ): Promise<MatchResult | null> {
+    ) {
         try {
             const nameResults = await this.peopleModule.search({
                 name: `${firstName} ${lastName}`
@@ -615,11 +614,11 @@ export class PersonMatcher {
      * Validate a candidate's contact info based on the validation strategy
      */
     private async validateCandidateContact(
-        candidate: FlattenedPersonResource,
+        candidate: PersonResource,
         searchEmail: string | undefined,
         searchPhone: string | undefined,
         validationStrategy: 'strict' | 'domain' | 'similarity'
-    ): Promise<boolean> {
+    ) {
         try {
             // Get person's contact info
             const [personEmails, personPhones] = await Promise.all([
@@ -678,73 +677,11 @@ export class PersonMatcher {
         }
     }
 
-    /**
-     * Get potential matching candidates
-     * @deprecated Use findMatch which has improved logic for separating verified matches from name-only matches
-     */
-    private async getCandidates(options: PersonMatchOptions): Promise<FlattenedPersonResource[]> {
-        const candidates: FlattenedPersonResource[] = [];
-        const { email, phone, firstName, lastName } = options;
-
-        // Strategy 1: Exact email match
-        if (email) {
-            try {
-                const emailMatches = await this.peopleModule.search({ email });
-                candidates.push(...emailMatches.data);
-            } catch (error) {
-                this.debugLog('findMatch  email search failed', { error: String(error) });
-            }
-        }
-
-        // Strategy 2: Exact phone match
-        if (phone) {
-            try {
-                const phoneMatches = await this.peopleModule.search({ phone });
-                candidates.push(...phoneMatches.data);
-            } catch (error) {
-                this.debugLog('findMatch  phone search failed', { error: String(error) });
-            }
-        }
-
-        // Strategy 3: Name-based search
-        if (firstName && lastName) {
-            try {
-                const nameMatches = await this.peopleModule.search({
-                    name: `${firstName} ${lastName}`
-                });
-                candidates.push(...nameMatches.data);
-            } catch (error) {
-                this.debugLog('findMatch  name search failed', { error: String(error) });
-            }
-        }
-
-        // Strategy 4: Broader search if no exact matches
-        if (candidates.length === 0 && (firstName || lastName)) {
-            try {
-                const broadMatches = await this.peopleModule.search({
-                    name: firstName || lastName || '',
-                });
-                candidates.push(...broadMatches.data);
-            } catch (error) {
-                this.debugLog('findMatch  broad search failed', { error: String(error) });
-            }
-        }
-
-        // Remove duplicates based on person ID
-        const uniqueCandidates = candidates.filter((person, index, self) =>
-            index === self.findIndex(p => p.id === person.id)
-        );
-
-        // Filter by age preferences if specified
-        const ageFilteredCandidates = this.filterByAgePreferences(uniqueCandidates, options);
-
-        return ageFilteredCandidates;
-    }
-
+    
     /**
      * Verify if a person's email actually matches the search email
      */
-    private async verifyEmailMatch(person: FlattenedPersonResource, email: string): Promise<boolean> {
+    private async verifyEmailMatch(person: PersonResource, email: string) {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
             const normalizedSearchEmail = normalizeEmail(email);
@@ -760,7 +697,7 @@ export class PersonMatcher {
     /**
      * Verify if a person's phone actually matches the search phone
      */
-    private async verifyPhoneMatch(person: FlattenedPersonResource, phone: string): Promise<boolean> {
+    private async verifyPhoneMatch(person: PersonResource, phone: string) {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
             const normalizedSearchPhone = normalizePhone(phone);
@@ -776,7 +713,7 @@ export class PersonMatcher {
     /**
      * Add missing contact information to a person's profile
      */
-    private async addMissingContactInfo(person: FlattenedPersonResource, options: PersonMatchOptions): Promise<void> {
+    private async addMissingContactInfo(person: PersonResource, options: PersonMatchOptions) {
         const { email, phone } = options;
 
         // Check and add email if provided and missing
@@ -815,7 +752,7 @@ export class PersonMatcher {
     /**
      * Filter candidates by age preferences
      */
-    private filterByAgePreferences(candidates: FlattenedPersonResource[], options: PersonMatchOptions): FlattenedPersonResource[] {
+    private filterByAgePreferences(candidates: PersonResource[], options: PersonMatchOptions): PersonResource[] {
         // If no age criteria specified, return all candidates
         if (!options.agePreference &&
             options.minAge === undefined &&
@@ -839,7 +776,7 @@ export class PersonMatcher {
     /**
      * Create a new person
      */
-    private async createPerson(options: PersonMatchOptions): Promise<FlattenedPersonResource> {
+    private async createPerson(options: PersonMatchOptions) {
         // Validate firstName is required for person creation
         if (!options.firstName?.trim()) {
             throw new Error('First name is required to create a person');
@@ -895,12 +832,12 @@ export class PersonMatcher {
     /**
      * Get all potential matches with detailed scoring
      */
-    async getAllMatches(options: PersonMatchOptions): Promise<MatchResult[]> {
+    async getAllMatches(options: PersonMatchOptions) {
         // Use the improved matching logic from findMatch
-        const { matchStrategy = 'fuzzy', email, phone, firstName, lastName } = options;
+        const { email, phone, firstName, lastName } = options;
 
-        const emailPhoneMatches: FlattenedPersonResource[] = [];
-        const nameOnlyMatches: FlattenedPersonResource[] = [];
+        const emailPhoneMatches: PersonResource[] = [];
+        const nameOnlyMatches: PersonResource[] = [];
 
         if (email) {
             try {
@@ -924,7 +861,7 @@ export class PersonMatcher {
             (person, index, self) => index === self.findIndex(p => p.id === person.id)
         );
 
-        const verifiedMatches: FlattenedPersonResource[] = [];
+        const verifiedMatches: PersonResource[] = [];
         for (const candidate of uniqueEmailPhoneMatches) {
             let emailMatches = false;
             let phoneMatches = false;
@@ -984,7 +921,7 @@ export class PersonMatcher {
     /**
      * Check if a person matches the given criteria
      */
-    async isMatch(personId: string, options: PersonMatchOptions): Promise<MatchResult | null> {
+    async isMatch(personId: string, options: PersonMatchOptions) {
         const person = await this.peopleModule.getById(personId);
         const score = await this.scorer.scoreMatch(person, options);
 

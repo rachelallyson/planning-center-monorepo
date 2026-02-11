@@ -286,19 +286,17 @@ export async function retryWithBackoff<T>(
     maxRetries?: number;
     baseDelay?: number;
     maxDelay?: number;
-    context?: Partial<ErrorContext>;
     onRetry?: (error: PcoError, attempt: number) => void;
   } = {}
-): Promise<T> {
+) {
   const {
     baseDelay = 1000,
-    context = {},
     maxDelay = 30000,
     maxRetries = 3,
     onRetry,
   } = options;
 
-  const attemptOperation = async (attempt: number): Promise<T> => {
+  const attemptOperation = async (attempt: number) => {
     try {
       return await fn();
     } catch (error) {
@@ -349,7 +347,7 @@ export async function retryWithBackoff<T>(
 export function withErrorBoundary<T>(
   fn: () => Promise<T>,
   context: Partial<ErrorContext> = {}
-): Promise<T> {
+) {
   return fn().catch(error => {
     if (error instanceof PcoError) {
       throw error;

@@ -62,7 +62,7 @@ export interface PcoClientConfigWithRefresh {
 export async function refreshAccessToken(
   client: PcoClientState,
   refreshToken: string
-): Promise<TokenResponse> {
+) {
   const baseURL = client.config.baseURL ?? 'https://api.planningcenteronline.com';
   const tokenUrl = `${baseURL}/oauth/token`;
 
@@ -127,7 +127,7 @@ export function hasRefreshTokenCapability(client: PcoClientState): boolean {
 export async function attemptTokenRefresh<T>(
   client: PcoClientState,
   originalRequest: () => Promise<T>
-): Promise<T> {
+) {
   if (!hasRefreshTokenCapability(client)) {
     throw new Error('No refresh token or callback configured');
   }

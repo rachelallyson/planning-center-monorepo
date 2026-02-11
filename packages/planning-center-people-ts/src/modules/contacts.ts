@@ -3,19 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
-import type {
-    EmailResource,
-    EmailAttributes,
-    PhoneNumberResource,
-    PhoneNumberAttributes,
-    AddressResource,
-    AddressAttributes,
-    SocialProfileResource,
-    SocialProfileAttributes,
-    Meta,
-    TopLevelLinks
-} from '../types';
+import type * as Types from '../types';
 
 export class ContactsModule extends BaseModule {
     /**
@@ -23,7 +11,7 @@ export class ContactsModule extends BaseModule {
      */
     async getAllEmails() {
         this.debugLog('contacts.getAllEmails');
-        return this.getList<EmailResource>('/emails');
+        return this.getList<Types.EmailResourceObject>('/emails');
     }
 
     /**
@@ -31,24 +19,24 @@ export class ContactsModule extends BaseModule {
      */
     async getEmailById(id: string) {
         this.debugLog('contacts.getEmailById', { id });
-        return this.getSingle<EmailResource>(`/emails/${id}`);
+        return this.getSingle<Types.EmailResourceObject>(`/emails/${id}`);
     }
 
     /**
      * Create an email for a person
      * Note: Emails must be created via person-specific endpoint
      */
-    async createEmail(personId: string, data: EmailAttributes) {
+    async createEmail(personId: string, data: Types.EmailAttributes) {
         this.debugLog('contacts.createEmail', { personId, data });
-        return this.createResource<EmailResource>(`/people/${personId}/emails`, data);
+        return this.createResource<Types.EmailResourceObject>(`/people/${personId}/emails`, data);
     }
 
     /**
      * Update an email
      */
-    async updateEmail(id: string, data: Partial<EmailAttributes>) {
+    async updateEmail(id: string, data: Partial<Types.EmailAttributes>) {
         this.debugLog('contacts.updateEmail', { id, data });
-        return this.updateResource<EmailResource>(`/emails/${id}`, data);
+        return this.updateResource<Types.EmailResourceObject>(`/emails/${id}`, data);
     }
 
     /**
@@ -64,7 +52,7 @@ export class ContactsModule extends BaseModule {
      */
     async getAllPhoneNumbers() {
         this.debugLog('contacts.getAllPhoneNumbers');
-        return this.getList<PhoneNumberResource>('/phone_numbers');
+        return this.getList<Types.PhoneNumberResourceObject>('/phone_numbers');
     }
 
     /**
@@ -72,24 +60,24 @@ export class ContactsModule extends BaseModule {
      */
     async getPhoneNumberById(id: string) {
         this.debugLog('contacts.getPhoneNumberById', { id });
-        return this.getSingle<PhoneNumberResource>(`/phone_numbers/${id}`);
+        return this.getSingle<Types.PhoneNumberResourceObject>(`/phone_numbers/${id}`);
     }
 
     /**
      * Create a phone number for a person
      * Note: Phone numbers must be created via person-specific endpoint
      */
-    async createPhoneNumber(personId: string, data: PhoneNumberAttributes) {
+    async createPhoneNumber(personId: string, data: Types.PhoneNumberAttributes) {
         this.debugLog('contacts.createPhoneNumber', { personId, data });
-        return this.createResource<PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
+        return this.createResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`, data);
     }
 
     /**
      * Update a phone number
      */
-    async updatePhoneNumber(id: string, data: Partial<PhoneNumberAttributes>) {
+    async updatePhoneNumber(id: string, data: Partial<Types.PhoneNumberAttributes>) {
         this.debugLog('contacts.updatePhoneNumber', { id, data });
-        return this.updateResource<PhoneNumberResource>(`/phone_numbers/${id}`, data);
+        return this.updateResource<Types.PhoneNumberResourceObject>(`/phone_numbers/${id}`, data);
     }
 
     /**
@@ -105,7 +93,7 @@ export class ContactsModule extends BaseModule {
      */
     async getAllAddresses() {
         this.debugLog('contacts.getAllAddresses');
-        return this.getList<AddressResource>('/addresses');
+        return this.getList<Types.AddressResourceObject>('/addresses');
     }
 
     /**
@@ -113,24 +101,24 @@ export class ContactsModule extends BaseModule {
      */
     async getAddressById(id: string) {
         this.debugLog('contacts.getAddressById', { id });
-        return this.getSingle<AddressResource>(`/addresses/${id}`);
+        return this.getSingle<Types.AddressResourceObject>(`/addresses/${id}`);
     }
 
     /**
      * Create an address for a person
      * Note: Addresses must be created via person-specific endpoint
      */
-    async createAddress(personId: string, data: AddressAttributes) {
+    async createAddress(personId: string, data: Types.AddressAttributes) {
         this.debugLog('contacts.createAddress', { personId, data });
-        return this.createResource<AddressResource>(`/people/${personId}/addresses`, data);
+        return this.createResource<Types.AddressResourceObject>(`/people/${personId}/addresses`, data);
     }
 
     /**
      * Update an address
      */
-    async updateAddress(id: string, data: Partial<AddressAttributes>) {
+    async updateAddress(id: string, data: Partial<Types.AddressAttributes>) {
         this.debugLog('contacts.updateAddress', { id, data });
-        return this.updateResource<AddressResource>(`/addresses/${id}`, data);
+        return this.updateResource<Types.AddressResourceObject>(`/addresses/${id}`, data);
     }
 
     /**
@@ -146,7 +134,7 @@ export class ContactsModule extends BaseModule {
      */
     async getAllSocialProfiles() {
         this.debugLog('contacts.getAllSocialProfiles');
-        return this.getList<SocialProfileResource>('/social_profiles');
+        return this.getList<Types.SocialProfileResourceObject>('/social_profiles');
     }
 
     /**
@@ -154,24 +142,24 @@ export class ContactsModule extends BaseModule {
      */
     async getSocialProfileById(id: string) {
         this.debugLog('contacts.getSocialProfileById', { id });
-        return this.getSingle<SocialProfileResource>(`/social_profiles/${id}`);
+        return this.getSingle<Types.SocialProfileResourceObject>(`/social_profiles/${id}`);
     }
 
     /**
      * Create a social profile for a person
      * Note: Social profiles must be created via person-specific endpoint
      */
-    async createSocialProfile(personId: string, data: SocialProfileAttributes) {
+    async createSocialProfile(personId: string, data: Types.SocialProfileAttributes) {
         this.debugLog('contacts.createSocialProfile', { personId, data });
-        return this.createResource<SocialProfileResource>(`/people/${personId}/social_profiles`, data);
+        return this.createResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, data);
     }
 
     /**
      * Update a social profile
      */
-    async updateSocialProfile(id: string, data: Partial<SocialProfileAttributes>) {
+    async updateSocialProfile(id: string, data: Partial<Types.SocialProfileAttributes>) {
         this.debugLog('contacts.updateSocialProfile', { id, data });
-        return this.updateResource<SocialProfileResource>(`/social_profiles/${id}`, data);
+        return this.updateResource<Types.SocialProfileResourceObject>(`/social_profiles/${id}`, data);
     }
 
     /**

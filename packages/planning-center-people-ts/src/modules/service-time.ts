@@ -2,7 +2,6 @@ import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     ServiceTimeResource,
     ServiceTimeAttributes,
-    ServiceTimesList,
 } from '../types';
 import type { ServiceTimeListOptions, ServiceTimePageOptions } from '../types/api-options';
 

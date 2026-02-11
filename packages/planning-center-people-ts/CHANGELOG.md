@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-02-10
+
+### Changed
+
+- **Type naming aligned with check-ins package**: Canonical public types are now `*Resource` (flattened shape returned by the client). Internal JSON:API shapes are `*ResourceObject`. List responses use `ListResponse<*Resource>`; single resources use `*Single` (= `*Resource`). All modules use a single namespace import: `import type * as Types from '../types'` and reference `Types.*ResourceObject` for base client calls and `Types.*Resource` / `Types.*Attributes` where appropriate.
+
+### Removed
+
+- **`FlattenedPersonResource`** and **`FlattenedFieldDatumResource`**: Use **`PersonResource`** and **`FieldDatumResource`** instead (same flattened shape; naming is now consistent across PCO packages).
+
+### Breaking changes
+
+- **Consumers that imported `FlattenedPersonResource` or `FlattenedFieldDatumResource`** must switch to `PersonResource` and `FieldDatumResource` respectively.
+- **Consumers that relied on raw `Paginated` or `Response` list/single types** for people resources should use the new `ListResponse<*Resource>` and `*Single` / `*Resource` types from `./types`.
+
+### Dependency
+
+- **Base package**: `@rachelallyson/planning-center-base-ts` dependency updated to `^1.1.3` (from `^1.1.0`) for consistency with the latest base release. No API or behavior changes in this release.
+
 ## [3.1.0] - 2026-02-05
 
 ### Added

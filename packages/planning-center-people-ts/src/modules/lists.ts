@@ -3,17 +3,7 @@
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
-import type {
-    ListResource,
-    ListAttributes,
-    ListCategoryResource,
-    ListCategoryAttributes,
-    ListRuleResource,
-    PersonResource,
-    Meta,
-    TopLevelLinks
-} from '../types';
-import type { ResourceObject } from '../types/json-api';
+import type * as Types from '../types';
 
 import type { ListListOptions, ListPageOptions } from '../types/api-options';
 
@@ -26,7 +16,7 @@ export class ListsModule extends BaseModule {
      */
     async getAll(options: ListsListOptions = {}) {
         this.debugLog('lists.getAll', { options });
-        return await this.getAllPages<ListResource>('/lists', {
+        return await this.getAllPages<Types.ListResourceObject>('/lists', {
             where: options.where,
             include: options.include,
             order: options.order
@@ -41,7 +31,7 @@ export class ListsModule extends BaseModule {
      */
     async getPage(options: ListPageOptions = {}) {
         this.debugLog('lists.getPage', { options });
-        return this.getList<ListResource>('/lists', {
+        return this.getList<Types.ListResourceObject>('/lists', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -55,7 +45,7 @@ export class ListsModule extends BaseModule {
      */
     async getById(id: string, include?: string[]) {
         this.debugLog('lists.getById', { id, include });
-        return this.getSingle<ListResource>(`/lists/${id}`, include);
+        return this.getSingle<Types.ListResourceObject>(`/lists/${id}`, include);
     }
 
 
@@ -65,7 +55,7 @@ export class ListsModule extends BaseModule {
      */
     async getListCategories(options?: { perPage?: number; page?: number }) {
         this.debugLog('lists.getListCategories', { options });
-        return this.getList<ListCategoryResource>('/list_categories', options ? {
+        return this.getList<Types.ListCategoryResourceObject>('/list_categories', options ? {
             per_page: options.perPage,
             page: options.page,
         } : undefined);
@@ -75,21 +65,21 @@ export class ListsModule extends BaseModule {
      * Get a single list category by ID
      */
     async getListCategoryById(id: string) {
-        return this.getSingle<ListCategoryResource>(`/list_categories/${id}`);
+        return this.getSingle<Types.ListCategoryResourceObject>(`/list_categories/${id}`);
     }
 
     /**
      * Create a new list category
      */
-    async createListCategory(data: Partial<ListCategoryAttributes>) {
-        return this.createResource<ListCategoryResource>('/list_categories', data);
+    async createListCategory(data: Partial<Types.ListCategoryAttributes>) {
+        return this.createResource<Types.ListCategoryResourceObject>('/list_categories', data);
     }
 
     /**
      * Update an existing list category
      */
-    async updateListCategory(id: string, data: Partial<ListCategoryAttributes>) {
-        return this.updateResource<ListCategoryResource>(`/list_categories/${id}`, data);
+    async updateListCategory(id: string, data: Partial<Types.ListCategoryAttributes>) {
+        return this.updateResource<Types.ListCategoryResourceObject>(`/list_categories/${id}`, data);
     }
 
     /**
@@ -103,7 +93,7 @@ export class ListsModule extends BaseModule {
      * Get people in a list (via the people relationship)
      */
     async getPeople(listId: string) {
-        return this.getList<PersonResource>(`/lists/${listId}/people`);
+        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>(`/lists/${listId}/people`);
     }
 
     /**
@@ -111,7 +101,7 @@ export class ListsModule extends BaseModule {
      */
     async getRules(listId: string) {
         this.debugLog('lists.getRules', { listId });
-        return this.getList<ListRuleResource>(`/lists/${listId}/rules`);
+        return this.getList<Types.ListRuleResourceObject>(`/lists/${listId}/rules`);
     }
 
     /**
@@ -120,7 +110,7 @@ export class ListsModule extends BaseModule {
     async refresh(listId: string) {
         this.debugLog('lists.refresh', { listId });
         try {
-            const response = await this.httpClient.request<{ data: ListResource }>({
+            const response = await this.httpClient.request<{ data: Types.ListResource }>({
                 method: 'POST',
                 endpoint: `/lists/${listId}/run`,
             });
