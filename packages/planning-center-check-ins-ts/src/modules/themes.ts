@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { ThemeResource, FlattenedThemeResource } from '../types';
+import type * as Types from '../types';
 
 export interface ThemesListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class ThemesModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all themes across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: ThemesListOptions = {}): Promise<PaginationResult<ThemeResource>> {
+    async getAll(options: ThemesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<ThemeResource>('/themes', params);
+        return this.getAllPages<Types.ThemeResourceObject>('/themes', params);
     }
 
     /**
      * Get a single page of themes with optional filtering and pagination.
      */
-    async getPage(options: ThemesListOptions = {}): Promise<{ data: FlattenedThemeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: ThemesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<ThemeResource>('/themes', params);
+        return this.getList<Types.ThemeResourceObject>('/themes', params);
     }
 
     private buildParams(options: ThemesListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class ThemesModule extends BaseModule {
     /**
      * Get a single theme by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedThemeResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<ThemeResource>(`/themes/${id}`, params);
+        return this.getSingle<Types.ThemeResourceObject>(`/themes/${id}`, params);
     }
 }
 

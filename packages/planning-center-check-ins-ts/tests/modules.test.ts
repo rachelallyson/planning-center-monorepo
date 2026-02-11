@@ -6,7 +6,7 @@
 import { EventsModule } from '../src/modules/events';
 import { CheckInsModule } from '../src/modules/check-ins';
 import { LocationsModule } from '../src/modules/locations';
-import type { EventResource, CheckInResource } from '../src';
+import type { EventResource, EventResourceObject, CheckInResource, CheckInResourceObject } from '../src';
 import { PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
 
 // Create a mock HTTP client
@@ -67,13 +67,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
             const mockEvent: EventResource = {
                 type: 'Event',
                 id: 'event_1',
-                attributes: {
-                    name: 'Sunday Service',
-                    frequency: 'weekly',
-                    created_at: '2024-01-01T00:00:00Z',
-                    updated_at: '2024-01-01T00:00:00Z',
-                },
-                relationships: {}
+                name: 'Sunday Service',
+                frequency: 'weekly',
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
             };
 
             (mockPaginationHelper as any).getAllPages.mockResolvedValueOnce({
@@ -97,7 +94,7 @@ describe('Check-Ins Modules with Mocked Data', () => {
         });
 
         it('should get event by ID with mocked data', async () => {
-            const mockEvent: EventResource = {
+            const mockEvent: EventResourceObject = {
                 type: 'Event',
                 id: 'event_1',
                 attributes: {
@@ -129,7 +126,7 @@ describe('Check-Ins Modules with Mocked Data', () => {
         });
 
         it('should get check-ins for an event with filters', async () => {
-            const mockCheckIn: CheckInResource = {
+            const mockCheckIn: CheckInResourceObject = {
                 type: 'CheckIn',
                 id: 'checkin_1',
                 attributes: {
@@ -174,13 +171,10 @@ describe('Check-Ins Modules with Mocked Data', () => {
             const mockCheckIn: CheckInResource = {
                 type: 'CheckIn',
                 id: 'checkin_1',
-                attributes: {
-                    first_name: 'Jane',
-                    last_name: 'Smith',
-                    number: 1,
-                    security_code: 'XYZ789',
-                },
-                relationships: {}
+                first_name: 'Jane',
+                last_name: 'Smith',
+                number: 1,
+                security_code: 'XYZ789',
             };
 
             (mockPaginationHelper as any).getAllPages.mockResolvedValueOnce({

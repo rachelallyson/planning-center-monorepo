@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { RosterListPersonResource, FlattenedRosterListPersonResource } from '../types';
+import type * as Types from '../types';
 
 export interface RosterListPersonsListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class RosterListPersonsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all roster list persons across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: RosterListPersonsListOptions = {}): Promise<PaginationResult<RosterListPersonResource>> {
+    async getAll(options: RosterListPersonsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<RosterListPersonResource>('/roster_list_persons', params);
+        return this.getAllPages<Types.RosterListPersonResourceObject>('/roster_list_persons', params);
     }
 
     /**
      * Get a single page of roster list persons with optional filtering and pagination.
      */
-    async getPage(options: RosterListPersonsListOptions = {}): Promise<{ data: FlattenedRosterListPersonResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: RosterListPersonsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<RosterListPersonResource>('/roster_list_persons', params);
+        return this.getList<Types.RosterListPersonResourceObject>('/roster_list_persons', params);
     }
 
     private buildParams(options: RosterListPersonsListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class RosterListPersonsModule extends BaseModule {
     /**
      * Get a single roster list person by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedRosterListPersonResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<RosterListPersonResource>(`/roster_list_persons/${id}`, params);
+        return this.getSingle<Types.RosterListPersonResourceObject>(`/roster_list_persons/${id}`, params);
     }
 }
 

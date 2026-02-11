@@ -7,20 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type {
-    LocationResource,
-    LocationEventPeriodResource,
-    LocationEventTimeResource,
-    LocationLabelResource,
-    FlattenedLocationResource,
-    FlattenedLocationEventPeriodResource,
-    FlattenedLocationEventTimeResource,
-    FlattenedLocationLabelResource,
-} from '../types';
+import type * as Types from '../types';
 
 export interface LocationsListOptions {
     where?: Record<string, any>;
@@ -33,26 +22,28 @@ export class LocationsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all locations across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: LocationsListOptions = {}): Promise<PaginationResult<LocationResource>> {
+    async getAll(options: LocationsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<LocationResource>('/locations', params);
+        return this.getAllPages<Types.LocationResourceObject>('/locations', params);
     }
 
     /**
      * Get a single page of locations with optional filtering and pagination.
      */
-    async getPage(options: LocationsListOptions = {}): Promise<{ data: FlattenedLocationResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: LocationsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<LocationResource>('/locations', params);
+        return this.getList<Types.LocationResourceObject, Types.LocationRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/locations', params);
     }
 
     private buildParams(options: LocationsListOptions): Record<string, any> {
@@ -67,13 +58,13 @@ export class LocationsModule extends BaseModule {
     /**
      * Get a single location by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedLocationResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<LocationResource>(`/locations/${id}`, params);
+        return this.getSingle<Types.LocationResourceObject, Types.LocationRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/locations/${id}`, params);
     }
 
     // ===== Associations =====
@@ -81,15 +72,15 @@ export class LocationsModule extends BaseModule {
     /**
      * Get location event periods for a location
      */
-    async getLocationEventPeriods(locationId: string): Promise<{ data: FlattenedLocationEventPeriodResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventPeriodResource>(`/locations/${locationId}/location_event_periods`);
+    async getLocationEventPeriods(locationId: string) {
+        return this.getList<Types.LocationEventPeriodResourceObject, Types.LocationEventPeriodRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/locations/${locationId}/location_event_periods`);
     }
 
     /**
      * Get location event times for a location
      */
-    async getLocationEventTimes(locationId: string): Promise<{ data: FlattenedLocationEventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventTimeResource>(`/locations/${locationId}/location_event_times`);
+    async getLocationEventTimes(locationId: string) {
+        return this.getList<Types.LocationEventTimeResourceObject, Types.LocationEventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/locations/${locationId}/location_event_times`);
     }
 
     /**
@@ -98,8 +89,8 @@ export class LocationsModule extends BaseModule {
      * If this returns empty or 404, use checkIns.getLocationLabels(checkInId, locationId) instead.
      * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/location_label
      */
-    async getLocationLabels(locationId: string): Promise<{ data: FlattenedLocationLabelResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationLabelResource>(`/locations/${locationId}/location_labels`);
+    async getLocationLabels(locationId: string) {
+        return this.getList<Types.LocationLabelResourceObject, Types.LocationLabelRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/locations/${locationId}/location_labels`);
     }
 }
 

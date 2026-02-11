@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { OptionResource, CheckInResource, FlattenedOptionResource } from '../types';
+import type * as Types from '../types';
 
 export interface OptionsListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class OptionsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all options across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: OptionsListOptions = {}): Promise<PaginationResult<OptionResource>> {
+    async getAll(options: OptionsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<OptionResource>('/options', params);
+        return this.getAllPages<Types.OptionResourceObject>('/options', params);
     }
 
     /**
      * Get a single page of options with optional filtering and pagination.
      */
-    async getPage(options: OptionsListOptions = {}): Promise<{ data: FlattenedOptionResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: OptionsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<OptionResource>('/options', params);
+        return this.getList<Types.OptionResourceObject, Types.OptionRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/options', params);
     }
 
     private buildParams(options: OptionsListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class OptionsModule extends BaseModule {
     /**
      * Get a single option by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedOptionResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<OptionResource>(`/options/${id}`, params);
+        return this.getSingle<Types.OptionResourceObject, Types.OptionRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/options/${id}`, params);
     }
 }
 

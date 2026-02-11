@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { AttendanceTypeResource, FlattenedAttendanceTypeResource } from '../types';
+import type * as Types from '../types';
 
 export interface AttendanceTypesListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,27 @@ export class AttendanceTypesModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
 
     /**
      * Get all attendance types across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: AttendanceTypesListOptions = {}): Promise<PaginationResult<AttendanceTypeResource>> {
+    async getAll(options: AttendanceTypesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<AttendanceTypeResource>('/attendance_types', params);
+        return this.getAllPages<Types.AttendanceTypeResourceObject>('/attendance_types', params);
     }
 
     /**
      * Get a single page of attendance types with optional filtering and pagination.
      */
-    async getPage(options: AttendanceTypesListOptions = {}): Promise<{ data: FlattenedAttendanceTypeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: AttendanceTypesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<AttendanceTypeResource>('/attendance_types', params);
+        return this.getList<Types.AttendanceTypeResourceObject, Types.AttendanceTypeRelResourceMap>('/attendance_types', params);
     }
 
     private buildParams(options: AttendanceTypesListOptions): Record<string, any> {
@@ -58,13 +57,13 @@ export class AttendanceTypesModule extends BaseModule {
     /**
      * Get a single attendance type by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedAttendanceTypeResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<AttendanceTypeResource>(`/attendance_types/${id}`, params);
+        return this.getSingle<Types.AttendanceTypeResourceObject, Types.AttendanceTypeRelResourceMap>(`/attendance_types/${id}`, params);
     }
 }
 

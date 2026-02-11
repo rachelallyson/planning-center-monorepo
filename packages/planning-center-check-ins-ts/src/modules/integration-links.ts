@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { IntegrationLinkResource, FlattenedIntegrationLinkResource } from '../types';
+import type * as Types from '../types';
 
 export interface IntegrationLinksListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class IntegrationLinksModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all integration links across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: IntegrationLinksListOptions = {}): Promise<PaginationResult<IntegrationLinkResource>> {
+    async getAll(options: IntegrationLinksListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<IntegrationLinkResource>('/integration_links', params);
+        return this.getAllPages<Types.IntegrationLinkResourceObject>('/integration_links', params);
     }
 
     /**
      * Get a single page of integration links with optional filtering and pagination.
      */
-    async getPage(options: IntegrationLinksListOptions = {}): Promise<{ data: FlattenedIntegrationLinkResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: IntegrationLinksListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<IntegrationLinkResource>('/integration_links', params);
+        return this.getList<Types.IntegrationLinkResourceObject, Types.IntegrationLinkRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/integration_links', params);
     }
 
     private buildParams(options: IntegrationLinksListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class IntegrationLinksModule extends BaseModule {
     /**
      * Get a single integration link by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedIntegrationLinkResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<IntegrationLinkResource>(`/integration_links/${id}`, params);
+        return this.getSingle<Types.IntegrationLinkResourceObject, Types.IntegrationLinkRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/integration_links/${id}`, params);
     }
 }
 

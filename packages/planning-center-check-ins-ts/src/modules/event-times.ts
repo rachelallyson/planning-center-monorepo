@@ -7,22 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type {
-    EventTimeResource,
-    EventResource,
-    EventPeriodResource,
-    LocationEventTimeResource,
-    CheckInResource,
-    FlattenedEventTimeResource,
-    FlattenedEventResource,
-    FlattenedEventPeriodResource,
-    FlattenedLocationEventTimeResource,
-    FlattenedCheckInResource,
-} from '../types';
+import type * as Types from '../types';
 
 export interface EventTimesListOptions {
     where?: Record<string, any>;
@@ -35,26 +22,27 @@ export class EventTimesModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
 
     /**
      * Get all event times across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: EventTimesListOptions = {}): Promise<PaginationResult<EventTimeResource>> {
+    async getAll(options: EventTimesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<EventTimeResource>('/event_times', params);
+        return this.getAllPages<Types.EventTimeResourceObject>('/event_times', params);
     }
 
     /**
      * Get a single page of event times with optional filtering and pagination.
      */
-    async getPage(options: EventTimesListOptions = {}): Promise<{ data: FlattenedEventTimeResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: EventTimesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<EventTimeResource>('/event_times', params);
+        return this.getList<Types.EventTimeResourceObject, Types.EventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/event_times', params);
     }
 
     private buildParams(options: EventTimesListOptions): Record<string, any> {
@@ -69,13 +57,13 @@ export class EventTimesModule extends BaseModule {
     /**
      * Get a single event time by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedEventTimeResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<EventTimeResource>(`/event_times/${id}`, params);
+        return this.getSingle<Types.EventTimeResourceObject, Types.EventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/event_times/${id}`, params) as Promise<Types.EventTimeResource>;
     }
 
     // ===== Associations =====
@@ -83,29 +71,29 @@ export class EventTimesModule extends BaseModule {
     /**
      * Get event for an event time
      */
-    async getEvent(eventTimeId: string): Promise<FlattenedEventResource> {
-        return this.getSingle<EventResource>(`/event_times/${eventTimeId}/event`);
+    async getEvent(eventTimeId: string) {
+        return this.getSingle<Types.EventResourceObject, Types.EventRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/event_times/${eventTimeId}/event`);
     }
 
     /**
      * Get event period for an event time
      */
-    async getEventPeriod(eventTimeId: string): Promise<FlattenedEventPeriodResource> {
-        return this.getSingle<EventPeriodResource>(`/event_times/${eventTimeId}/event_period`);
+    async getEventPeriod(eventTimeId: string) {
+        return this.getSingle<Types.EventPeriodResourceObject, Types.EventPeriodRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/event_times/${eventTimeId}/event_period`);
     }
 
     /**
      * Get location event times for an event time
      */
-    async getLocationEventTimes(eventTimeId: string): Promise<{ data: FlattenedLocationEventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationEventTimeResource>(`/event_times/${eventTimeId}/location_event_times`);
+    async getLocationEventTimes(eventTimeId: string) {
+        return this.getList<Types.LocationEventTimeResourceObject, Types.LocationEventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/event_times/${eventTimeId}/location_event_times`);
     }
 
     /**
      * Get check-ins for an event time
      */
-    async getCheckIns(eventTimeId: string): Promise<{ data: FlattenedCheckInResource[]; meta?: any; links?: any }> {
-        return this.getList<CheckInResource>(`/event_times/${eventTimeId}/check_ins`);
+    async getCheckIns(eventTimeId: string) {
+        return this.getList<Types.CheckInResourceObject, Types.CheckInRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/event_times/${eventTimeId}/check_ins`);
     }
 }
 

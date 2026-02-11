@@ -16,13 +16,14 @@ export type { BatchOperation, BatchResult, BatchOptions, BatchSummary } from '@r
 
 // Core types (re-exported from base)
 export type {
-  Paginated,
   PaginationResult,
   Relationship,
   ResourceIdentifier,
   ResourceObject,
-  Response,
 } from '@rachelallyson/planning-center-base-ts';
+
+// List/single response shapes (canonical resource types; list = ListResponse<Resource>)
+export type { ListResponse } from './types';
 
 // Check-Ins types
 export type {

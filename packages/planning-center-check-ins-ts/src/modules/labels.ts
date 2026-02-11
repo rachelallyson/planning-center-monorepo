@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { LabelResource, FlattenedLabelResource } from '../types';
+import type * as Types from '../types';
 
 export interface LabelsListOptions {
     where?: Record<string, any>;
@@ -24,25 +22,26 @@ export class LabelsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
 
     /**
      * Get all labels across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: LabelsListOptions = {}): Promise<PaginationResult<LabelResource>> {
+    async getAll(options: LabelsListOptions = {}) {
         const params = this.buildLabelsParams(options);
-        return this.getAllPages<LabelResource>('/labels', params);
+        return this.getAllPages<Types.LabelResourceObject>('/labels', params);
     }
 
     /**
      * Get a single page of labels with optional filtering and pagination.
      */
-    async getPage(options: LabelsListOptions = {}): Promise<{ data: FlattenedLabelResource[]; meta?: Meta; links?: TopLevelLinks }> {
-        return this.getList<LabelResource>('/labels', {
+    async getPage(options: LabelsListOptions = {}) {
+        return this.getList<Types.LabelResourceObject, Types.LabelRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/labels', {
             where: options.where,
             include: options.include,
             per_page: options.perPage,
@@ -66,13 +65,13 @@ export class LabelsModule extends BaseModule {
     /**
      * Get a single label by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedLabelResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<LabelResource>(`/labels/${id}`, params);
+        return this.getSingle<Types.LabelResourceObject, Types.LabelRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/labels/${id}`, params);
     }
 }
 

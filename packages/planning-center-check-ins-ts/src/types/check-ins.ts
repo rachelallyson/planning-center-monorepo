@@ -6,11 +6,18 @@
 import {
   Attributes,
   FlattenedResource,
-  Paginated,
+  Meta,
   Relationship,
   ResourceObject,
-  Response,
+  TopLevelLinks,
 } from '@rachelallyson/planning-center-base-ts';
+
+/** List response shape returned by the client (data is always flattened) */
+export interface ListResponse<T> {
+  data: T[];
+  meta?: Meta;
+  links?: TopLevelLinks;
+}
 
 // ===== Event Resource =====
 
@@ -38,14 +45,32 @@ export interface EventRelationships {
   person_events?: Relationship;
 }
 
-export interface EventResource
+/** Maps Event relationship keys to specific resource types (internal JSON:API shape) */
+export interface EventRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  attendance_types: AttendanceTypeResourceObject[];
+  check_ins: CheckInResourceObject[];
+  current_event_times: EventTimeResourceObject[];
+  event_labels: EventLabelResourceObject[];
+  event_periods: EventPeriodResourceObject[];
+  integration_links: IntegrationLinkResourceObject[];
+  locations: LocationResourceObject[];
+  person_events: PersonEventResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use EventResource for the type returned by the client */
+export interface EventResourceObject
   extends ResourceObject<'Event', EventAttributes, EventRelationships> { }
 
-/** Flattened shape actually returned by the client (attributes/relationships at top level) */
-export type FlattenedEventResource = FlattenedResource<'Event', EventAttributes, EventRelationships>;
+/** Event resource as returned by the client (attributes and relationships at top level) */
+export type EventResource = FlattenedResource<
+  'Event',
+  EventAttributes,
+  EventRelationships,
+  EventRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type EventsList = Paginated<EventResource>;
-export type EventSingle = Response<EventResource>;
+export type EventsList = ListResponse<EventResource>;
+export type EventSingle = EventResource;
 
 // ===== CheckIn Resource =====
 
@@ -79,14 +104,32 @@ export interface CheckInRelationships {
   person?: Relationship;
 }
 
-export interface CheckInResource
+/** Maps CheckIn relationship keys to specific resource types (Person/checked_in_by/checked_out_by are external) */
+export interface CheckInRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  check_in_group: CheckInGroupResourceObject;
+  check_in_times: CheckInTimeResourceObject[];
+  checked_in_at: StationResourceObject;
+  event: EventResourceObject;
+  event_period: EventPeriodResourceObject;
+  event_times: EventTimeResourceObject[];
+  locations: LocationResourceObject[];
+  options: OptionResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use CheckInResource for the type returned by the client */
+export interface CheckInResourceObject
   extends ResourceObject<'CheckIn', CheckInAttributes, CheckInRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedCheckInResource = FlattenedResource<'CheckIn', CheckInAttributes, CheckInRelationships>;
+/** Check-in resource as returned by the client (attributes and relationships at top level) */
+export type CheckInResource = FlattenedResource<
+  'CheckIn',
+  CheckInAttributes,
+  CheckInRelationships,
+  CheckInRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type CheckInsList = Paginated<CheckInResource>;
-export type CheckInSingle = Response<CheckInResource>;
+export type CheckInsList = ListResponse<CheckInResource>;
+export type CheckInSingle = CheckInResource;
 
 // ===== Location Resource =====
 
@@ -103,14 +146,28 @@ export interface LocationRelationships {
   location_labels?: Relationship;
 }
 
-export interface LocationResource
+/** Maps Location relationship keys to specific resource types */
+export interface LocationRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+  location_event_periods: LocationEventPeriodResourceObject[];
+  location_event_times: LocationEventTimeResourceObject[];
+  location_labels: LocationLabelResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use LocationResource for the type returned by the client */
+export interface LocationResourceObject
   extends ResourceObject<'Location', LocationAttributes, LocationRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedLocationResource = FlattenedResource<'Location', LocationAttributes, LocationRelationships>;
+/** Location resource as returned by the client (attributes and relationships at top level) */
+export type LocationResource = FlattenedResource<
+  'Location',
+  LocationAttributes,
+  LocationRelationships,
+  LocationRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type LocationsList = Paginated<LocationResource>;
-export type LocationSingle = Response<LocationResource>;
+export type LocationsList = ListResponse<LocationResource>;
+export type LocationSingle = LocationResource;
 
 // ===== EventPeriod Resource =====
 
@@ -128,14 +185,28 @@ export interface EventPeriodRelationships {
   location_event_periods?: Relationship;
 }
 
-export interface EventPeriodResource
+/** Maps EventPeriod relationship keys to specific resource types */
+export interface EventPeriodRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+  event_times: EventTimeResourceObject[];
+  check_ins: CheckInResourceObject[];
+  location_event_periods: LocationEventPeriodResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use EventPeriodResource for the type returned by the client */
+export interface EventPeriodResourceObject
   extends ResourceObject<'EventPeriod', EventPeriodAttributes, EventPeriodRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedEventPeriodResource = FlattenedResource<'EventPeriod', EventPeriodAttributes, EventPeriodRelationships>;
+/** Event period resource as returned by the client (attributes and relationships at top level) */
+export type EventPeriodResource = FlattenedResource<
+  'EventPeriod',
+  EventPeriodAttributes,
+  EventPeriodRelationships,
+  EventPeriodRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type EventPeriodsList = Paginated<EventPeriodResource>;
-export type EventPeriodSingle = Response<EventPeriodResource>;
+export type EventPeriodsList = ListResponse<EventPeriodResource>;
+export type EventPeriodSingle = EventPeriodResource;
 
 // ===== EventTime Resource =====
 
@@ -151,16 +222,32 @@ export interface EventTimeRelationships {
   event_period?: Relationship;
   location_event_times?: Relationship;
   check_ins?: Relationship;
+  headcounts?: Relationship;
 }
 
-export interface EventTimeResource
+/** Maps EventTime relationship keys to specific resource types */
+export interface EventTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+  event_period: EventPeriodResourceObject;
+  location_event_times: LocationEventTimeResourceObject[];
+  check_ins: CheckInResourceObject[];
+  headcounts: HeadcountResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use EventTimeResource for the type returned by the client */
+export interface EventTimeResourceObject
   extends ResourceObject<'EventTime', EventTimeAttributes, EventTimeRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedEventTimeResource = FlattenedResource<'EventTime', EventTimeAttributes, EventTimeRelationships>;
+/** Event time resource as returned by the client (attributes and relationships at top level) */
+export type EventTimeResource = FlattenedResource<
+  'EventTime',
+  EventTimeAttributes,
+  EventTimeRelationships,
+  EventTimeRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type EventTimesList = Paginated<EventTimeResource>;
-export type EventTimeSingle = Response<EventTimeResource>;
+export type EventTimesList = ListResponse<EventTimeResource>;
+export type EventTimeSingle = EventTimeResource;
 
 // ===== Station Resource =====
 
@@ -174,14 +261,25 @@ export interface StationRelationships {
   check_ins?: Relationship;
 }
 
-export interface StationResource
+/** Maps Station relationship keys to specific resource types */
+export interface StationRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  check_ins: CheckInResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use StationResource for the type returned by the client */
+export interface StationResourceObject
   extends ResourceObject<'Station', StationAttributes, StationRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedStationResource = FlattenedResource<'Station', StationAttributes, StationRelationships>;
+/** Station resource as returned by the client (attributes and relationships at top level) */
+export type StationResource = FlattenedResource<
+  'Station',
+  StationAttributes,
+  StationRelationships,
+  StationRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type StationsList = Paginated<StationResource>;
-export type StationSingle = Response<StationResource>;
+export type StationsList = ListResponse<StationResource>;
+export type StationSingle = StationResource;
 
 // ===== Label Resource =====
 
@@ -196,14 +294,26 @@ export interface LabelRelationships {
   location_labels?: Relationship;
 }
 
-export interface LabelResource
+/** Maps Label relationship keys to specific resource types */
+export interface LabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event_labels: EventLabelResourceObject[];
+  location_labels: LocationLabelResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use LabelResource for the type returned by the client */
+export interface LabelResourceObject
   extends ResourceObject<'Label', LabelAttributes, LabelRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedLabelResource = FlattenedResource<'Label', LabelAttributes, LabelRelationships>;
+/** Label resource as returned by the client (attributes and relationships at top level) */
+export type LabelResource = FlattenedResource<
+  'Label',
+  LabelAttributes,
+  LabelRelationships,
+  LabelRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type LabelsList = Paginated<LabelResource>;
-export type LabelSingle = Response<LabelResource>;
+export type LabelsList = ListResponse<LabelResource>;
+export type LabelSingle = LabelResource;
 
 // ===== EventLabel Resource =====
 
@@ -217,14 +327,26 @@ export interface EventLabelRelationships {
   label?: Relationship;
 }
 
-export interface EventLabelResource
+/** Maps EventLabel relationship keys to specific resource types */
+export interface EventLabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+  label: LabelResourceObject;
+}
+
+/** Internal JSON:API resource shape; use EventLabelResource for the type returned by the client */
+export interface EventLabelResourceObject
   extends ResourceObject<'EventLabel', EventLabelAttributes, EventLabelRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedEventLabelResource = FlattenedResource<'EventLabel', EventLabelAttributes, EventLabelRelationships>;
+/** Event label resource as returned by the client (attributes and relationships at top level) */
+export type EventLabelResource = FlattenedResource<
+  'EventLabel',
+  EventLabelAttributes,
+  EventLabelRelationships,
+  EventLabelRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type EventLabelsList = Paginated<EventLabelResource>;
-export type EventLabelSingle = Response<EventLabelResource>;
+export type EventLabelsList = ListResponse<EventLabelResource>;
+export type EventLabelSingle = EventLabelResource;
 
 // ===== LocationLabel Resource =====
 
@@ -238,14 +360,26 @@ export interface LocationLabelRelationships {
   label?: Relationship;
 }
 
-export interface LocationLabelResource
+/** Maps LocationLabel relationship keys to specific resource types */
+export interface LocationLabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  location: LocationResourceObject;
+  label: LabelResourceObject;
+}
+
+/** Internal JSON:API resource shape; use LocationLabelResource for the type returned by the client */
+export interface LocationLabelResourceObject
   extends ResourceObject<'LocationLabel', LocationLabelAttributes, LocationLabelRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedLocationLabelResource = FlattenedResource<'LocationLabel', LocationLabelAttributes, LocationLabelRelationships>;
+/** Location label resource as returned by the client (attributes and relationships at top level) */
+export type LocationLabelResource = FlattenedResource<
+  'LocationLabel',
+  LocationLabelAttributes,
+  LocationLabelRelationships,
+  LocationLabelRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type LocationLabelsList = Paginated<LocationLabelResource>;
-export type LocationLabelSingle = Response<LocationLabelResource>;
+export type LocationLabelsList = ListResponse<LocationLabelResource>;
+export type LocationLabelSingle = LocationLabelResource;
 
 // ===== Option Resource =====
 
@@ -259,14 +393,25 @@ export interface OptionRelationships {
   check_ins?: Relationship;
 }
 
-export interface OptionResource
+/** Maps Option relationship keys to specific resource types */
+export interface OptionRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  check_ins: CheckInResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use OptionResource for the type returned by the client */
+export interface OptionResourceObject
   extends ResourceObject<'Option', OptionAttributes, OptionRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedOptionResource = FlattenedResource<'Option', OptionAttributes, OptionRelationships>;
+/** Option resource as returned by the client (attributes and relationships at top level) */
+export type OptionResource = FlattenedResource<
+  'Option',
+  OptionAttributes,
+  OptionRelationships,
+  OptionRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type OptionsList = Paginated<OptionResource>;
-export type OptionSingle = Response<OptionResource>;
+export type OptionsList = ListResponse<OptionResource>;
+export type OptionSingle = OptionResource;
 
 // ===== CheckInGroup Resource =====
 
@@ -280,14 +425,25 @@ export interface CheckInGroupRelationships {
   check_ins?: Relationship;
 }
 
-export interface CheckInGroupResource
+/** Maps CheckInGroup relationship keys to specific resource types */
+export interface CheckInGroupRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  check_ins: CheckInResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use CheckInGroupResource for the type returned by the client */
+export interface CheckInGroupResourceObject
   extends ResourceObject<'CheckInGroup', CheckInGroupAttributes, CheckInGroupRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedCheckInGroupResource = FlattenedResource<'CheckInGroup', CheckInGroupAttributes, CheckInGroupRelationships>;
+/** Check-in group resource as returned by the client (attributes and relationships at top level) */
+export type CheckInGroupResource = FlattenedResource<
+  'CheckInGroup',
+  CheckInGroupAttributes,
+  CheckInGroupRelationships,
+  CheckInGroupRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type CheckInGroupsList = Paginated<CheckInGroupResource>;
-export type CheckInGroupSingle = Response<CheckInGroupResource>;
+export type CheckInGroupsList = ListResponse<CheckInGroupResource>;
+export type CheckInGroupSingle = CheckInGroupResource;
 
 // ===== CheckInTime Resource =====
 
@@ -301,14 +457,26 @@ export interface CheckInTimeRelationships {
   event_time?: Relationship;
 }
 
-export interface CheckInTimeResource
+/** Maps CheckInTime relationship keys to specific resource types */
+export interface CheckInTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  check_in: CheckInResourceObject;
+  event_time: EventTimeResourceObject;
+}
+
+/** Internal JSON:API resource shape; use CheckInTimeResource for the type returned by the client */
+export interface CheckInTimeResourceObject
   extends ResourceObject<'CheckInTime', CheckInTimeAttributes, CheckInTimeRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedCheckInTimeResource = FlattenedResource<'CheckInTime', CheckInTimeAttributes, CheckInTimeRelationships>;
+/** Check-in time resource as returned by the client (attributes and relationships at top level) */
+export type CheckInTimeResource = FlattenedResource<
+  'CheckInTime',
+  CheckInTimeAttributes,
+  CheckInTimeRelationships,
+  CheckInTimeRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type CheckInTimesList = Paginated<CheckInTimeResource>;
-export type CheckInTimeSingle = Response<CheckInTimeResource>;
+export type CheckInTimesList = ListResponse<CheckInTimeResource>;
+export type CheckInTimeSingle = CheckInTimeResource;
 
 // ===== PersonEvent Resource =====
 
@@ -322,14 +490,25 @@ export interface PersonEventRelationships {
   person?: Relationship;
 }
 
-export interface PersonEventResource
+/** Maps PersonEvent relationship keys to specific resource types (person is external/People API) */
+export interface PersonEventRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+}
+
+/** Internal JSON:API resource shape; use PersonEventResource for the type returned by the client */
+export interface PersonEventResourceObject
   extends ResourceObject<'PersonEvent', PersonEventAttributes, PersonEventRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedPersonEventResource = FlattenedResource<'PersonEvent', PersonEventAttributes, PersonEventRelationships>;
+/** Person event resource as returned by the client (attributes and relationships at top level) */
+export type PersonEventResource = FlattenedResource<
+  'PersonEvent',
+  PersonEventAttributes,
+  PersonEventRelationships,
+  PersonEventRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type PersonEventsList = Paginated<PersonEventResource>;
-export type PersonEventSingle = Response<PersonEventResource>;
+export type PersonEventsList = ListResponse<PersonEventResource>;
+export type PersonEventSingle = PersonEventResource;
 
 // ===== PreCheck Resource =====
 
@@ -343,14 +522,25 @@ export interface PreCheckRelationships {
   person?: Relationship;
 }
 
-export interface PreCheckResource
+/** Maps PreCheck relationship keys to specific resource types (person is external/People API) */
+export interface PreCheckRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+}
+
+/** Internal JSON:API resource shape; use PreCheckResource for the type returned by the client */
+export interface PreCheckResourceObject
   extends ResourceObject<'PreCheck', PreCheckAttributes, PreCheckRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedPreCheckResource = FlattenedResource<'PreCheck', PreCheckAttributes, PreCheckRelationships>;
+/** Pre-check resource as returned by the client (attributes and relationships at top level) */
+export type PreCheckResource = FlattenedResource<
+  'PreCheck',
+  PreCheckAttributes,
+  PreCheckRelationships,
+  PreCheckRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type PreChecksList = Paginated<PreCheckResource>;
-export type PreCheckSingle = Response<PreCheckResource>;
+export type PreChecksList = ListResponse<PreCheckResource>;
+export type PreCheckSingle = PreCheckResource;
 
 // ===== Pass Resource =====
 
@@ -364,14 +554,15 @@ export interface PassRelationships {
   // Relationships TBD
 }
 
-export interface PassResource
+/** Internal JSON:API resource shape; use PassResource for the type returned by the client */
+export interface PassResourceObject
   extends ResourceObject<'Pass', PassAttributes, PassRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedPassResource = FlattenedResource<'Pass', PassAttributes, PassRelationships>;
+/** Pass resource as returned by the client (attributes at top level) */
+export type PassResource = FlattenedResource<'Pass', PassAttributes, PassRelationships>;
 
-export type PassesList = Paginated<PassResource>;
-export type PassSingle = Response<PassResource>;
+export type PassesList = ListResponse<PassResource>;
+export type PassSingle = PassResource;
 
 // ===== Headcount Resource =====
 
@@ -382,17 +573,30 @@ export interface HeadcountAttributes extends Attributes {
 }
 
 export interface HeadcountRelationships {
-  // Relationships TBD
+  attendance_type?: Relationship;
+  event_time?: Relationship;
 }
 
-export interface HeadcountResource
+/** Maps Headcount relationship keys to specific resource types */
+export interface HeadcountRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  attendance_type: AttendanceTypeResourceObject;
+  event_time: EventTimeResourceObject;
+}
+
+/** Internal JSON:API resource shape; use HeadcountResource for the type returned by the client */
+export interface HeadcountResourceObject
   extends ResourceObject<'Headcount', HeadcountAttributes, HeadcountRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedHeadcountResource = FlattenedResource<'Headcount', HeadcountAttributes, HeadcountRelationships>;
+/** Headcount resource as returned by the client (attributes and relationships at top level) */
+export type HeadcountResource = FlattenedResource<
+  'Headcount',
+  HeadcountAttributes,
+  HeadcountRelationships,
+  HeadcountRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type HeadcountsList = Paginated<HeadcountResource>;
-export type HeadcountSingle = Response<HeadcountResource>;
+export type HeadcountsList = ListResponse<HeadcountResource>;
+export type HeadcountSingle = HeadcountResource;
 
 // ===== AttendanceType Resource =====
 
@@ -406,14 +610,25 @@ export interface AttendanceTypeRelationships {
   event?: Relationship;
 }
 
-export interface AttendanceTypeResource
+/** Maps AttendanceType relationship keys to specific resource types */
+export interface AttendanceTypeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+}
+
+/** Internal JSON:API resource shape; use AttendanceTypeResource for the type returned by the client */
+export interface AttendanceTypeResourceObject
   extends ResourceObject<'AttendanceType', AttendanceTypeAttributes, AttendanceTypeRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedAttendanceTypeResource = FlattenedResource<'AttendanceType', AttendanceTypeAttributes, AttendanceTypeRelationships>;
+/** Attendance type resource as returned by the client (attributes and relationships at top level) */
+export type AttendanceTypeResource = FlattenedResource<
+  'AttendanceType',
+  AttendanceTypeAttributes,
+  AttendanceTypeRelationships,
+  AttendanceTypeRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type AttendanceTypesList = Paginated<AttendanceTypeResource>;
-export type AttendanceTypeSingle = Response<AttendanceTypeResource>;
+export type AttendanceTypesList = ListResponse<AttendanceTypeResource>;
+export type AttendanceTypeSingle = AttendanceTypeResource;
 
 // ===== RosterListPerson Resource =====
 
@@ -427,14 +642,15 @@ export interface RosterListPersonRelationships {
   // Additional relationships TBD
 }
 
-export interface RosterListPersonResource
+/** Internal JSON:API resource shape; use RosterListPersonResource for the type returned by the client */
+export interface RosterListPersonResourceObject
   extends ResourceObject<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedRosterListPersonResource = FlattenedResource<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships>;
+/** Roster list person resource as returned by the client (attributes at top level) */
+export type RosterListPersonResource = FlattenedResource<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships>;
 
-export type RosterListPersonsList = Paginated<RosterListPersonResource>;
-export type RosterListPersonSingle = Response<RosterListPersonResource>;
+export type RosterListPersonsList = ListResponse<RosterListPersonResource>;
+export type RosterListPersonSingle = RosterListPersonResource;
 
 // ===== Organization Resource =====
 
@@ -449,14 +665,15 @@ export interface OrganizationRelationships {
   // Relationships TBD
 }
 
-export interface OrganizationResource
+/** Internal JSON:API resource shape; use OrganizationResource for the type returned by the client */
+export interface OrganizationResourceObject
   extends ResourceObject<'Organization', OrganizationAttributes, OrganizationRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedOrganizationResource = FlattenedResource<'Organization', OrganizationAttributes, OrganizationRelationships>;
+/** Organization resource as returned by the client (attributes at top level) */
+export type OrganizationResource = FlattenedResource<'Organization', OrganizationAttributes, OrganizationRelationships>;
 
-export type OrganizationsList = Paginated<OrganizationResource>;
-export type OrganizationSingle = Response<OrganizationResource>;
+export type OrganizationsList = ListResponse<OrganizationResource>;
+export type OrganizationSingle = OrganizationResource;
 
 // ===== IntegrationLink Resource =====
 
@@ -471,14 +688,25 @@ export interface IntegrationLinkRelationships {
   event?: Relationship;
 }
 
-export interface IntegrationLinkResource
+/** Maps IntegrationLink relationship keys to specific resource types */
+export interface IntegrationLinkRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  event: EventResourceObject;
+}
+
+/** Internal JSON:API resource shape; use IntegrationLinkResource for the type returned by the client */
+export interface IntegrationLinkResourceObject
   extends ResourceObject<'IntegrationLink', IntegrationLinkAttributes, IntegrationLinkRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedIntegrationLinkResource = FlattenedResource<'IntegrationLink', IntegrationLinkAttributes, IntegrationLinkRelationships>;
+/** Integration link resource as returned by the client (attributes and relationships at top level) */
+export type IntegrationLinkResource = FlattenedResource<
+  'IntegrationLink',
+  IntegrationLinkAttributes,
+  IntegrationLinkRelationships,
+  IntegrationLinkRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type IntegrationLinksList = Paginated<IntegrationLinkResource>;
-export type IntegrationLinkSingle = Response<IntegrationLinkResource>;
+export type IntegrationLinksList = ListResponse<IntegrationLinkResource>;
+export type IntegrationLinkSingle = IntegrationLinkResource;
 
 // ===== Theme Resource =====
 
@@ -492,14 +720,15 @@ export interface ThemeRelationships {
   // Relationships TBD
 }
 
-export interface ThemeResource
+/** Internal JSON:API resource shape; use ThemeResource for the type returned by the client */
+export interface ThemeResourceObject
   extends ResourceObject<'Theme', ThemeAttributes, ThemeRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedThemeResource = FlattenedResource<'Theme', ThemeAttributes, ThemeRelationships>;
+/** Theme resource as returned by the client (attributes at top level) */
+export type ThemeResource = FlattenedResource<'Theme', ThemeAttributes, ThemeRelationships>;
 
-export type ThemesList = Paginated<ThemeResource>;
-export type ThemeSingle = Response<ThemeResource>;
+export type ThemesList = ListResponse<ThemeResource>;
+export type ThemeSingle = ThemeResource;
 
 // ===== LocationEventPeriod Resource =====
 
@@ -514,14 +743,27 @@ export interface LocationEventPeriodRelationships {
   check_ins?: Relationship;
 }
 
-export interface LocationEventPeriodResource
+/** Maps LocationEventPeriod relationship keys to specific resource types */
+export interface LocationEventPeriodRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  location: LocationResourceObject;
+  event_period: EventPeriodResourceObject;
+  check_ins: CheckInResourceObject[];
+}
+
+/** Internal JSON:API resource shape; use LocationEventPeriodResource for the type returned by the client */
+export interface LocationEventPeriodResourceObject
   extends ResourceObject<'LocationEventPeriod', LocationEventPeriodAttributes, LocationEventPeriodRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedLocationEventPeriodResource = FlattenedResource<'LocationEventPeriod', LocationEventPeriodAttributes, LocationEventPeriodRelationships>;
+/** Location event period resource as returned by the client (attributes and relationships at top level) */
+export type LocationEventPeriodResource = FlattenedResource<
+  'LocationEventPeriod',
+  LocationEventPeriodAttributes,
+  LocationEventPeriodRelationships,
+  LocationEventPeriodRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type LocationEventPeriodsList = Paginated<LocationEventPeriodResource>;
-export type LocationEventPeriodSingle = Response<LocationEventPeriodResource>;
+export type LocationEventPeriodsList = ListResponse<LocationEventPeriodResource>;
+export type LocationEventPeriodSingle = LocationEventPeriodResource;
 
 // ===== LocationEventTime Resource =====
 
@@ -535,12 +777,47 @@ export interface LocationEventTimeRelationships {
   event_time?: Relationship;
 }
 
-export interface LocationEventTimeResource
+/** Maps LocationEventTime relationship keys to specific resource types */
+export interface LocationEventTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
+  location: LocationResourceObject;
+  event_time: EventTimeResourceObject;
+}
+
+/** Internal JSON:API resource shape; use LocationEventTimeResource for the type returned by the client */
+export interface LocationEventTimeResourceObject
   extends ResourceObject<'LocationEventTime', LocationEventTimeAttributes, LocationEventTimeRelationships> { }
 
-/** Flattened shape actually returned by the client */
-export type FlattenedLocationEventTimeResource = FlattenedResource<'LocationEventTime', LocationEventTimeAttributes, LocationEventTimeRelationships>;
+/** Location event time resource as returned by the client (attributes and relationships at top level) */
+export type LocationEventTimeResource = FlattenedResource<
+  'LocationEventTime',
+  LocationEventTimeAttributes,
+  LocationEventTimeRelationships,
+  LocationEventTimeRelResourceMap,
+  CheckInsResourceTypeToRelMap>;
 
-export type LocationEventTimesList = Paginated<LocationEventTimeResource>;
-export type LocationEventTimeSingle = Response<LocationEventTimeResource>;
+export type LocationEventTimesList = ListResponse<LocationEventTimeResource>;
+export type LocationEventTimeSingle = LocationEventTimeResource;
+
+/** Map from resource type name to its relationship map; used as 5th generic of FlattenedResource for nested typing */
+export interface CheckInsResourceTypeToRelMap extends Record<string, object> {
+  Event: EventRelResourceMap;
+  CheckIn: CheckInRelResourceMap;
+  Location: LocationRelResourceMap;
+  EventPeriod: EventPeriodRelResourceMap;
+  EventTime: EventTimeRelResourceMap;
+  Station: StationRelResourceMap;
+  Label: LabelRelResourceMap;
+  EventLabel: EventLabelRelResourceMap;
+  LocationLabel: LocationLabelRelResourceMap;
+  Option: OptionRelResourceMap;
+  CheckInGroup: CheckInGroupRelResourceMap;
+  CheckInTime: CheckInTimeRelResourceMap;
+  PersonEvent: PersonEventRelResourceMap;
+  PreCheck: PreCheckRelResourceMap;
+  Headcount: HeadcountRelResourceMap;
+  AttendanceType: AttendanceTypeRelResourceMap;
+  IntegrationLink: IntegrationLinkRelResourceMap;
+  LocationEventPeriod: LocationEventPeriodRelResourceMap;
+  LocationEventTime: LocationEventTimeRelResourceMap;
+}
 

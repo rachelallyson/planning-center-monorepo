@@ -5,30 +5,43 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-02-10
+
+### Changed
+
+- **Type naming and public API**: The canonical types you use in app code are now **`*Resource`** (flattened shape the client returns) and **`*ResourceObject`** (internal JSON:API shape). List responses use **`ListResponse<T>`** (`{ data: T[]; meta?; links? }`). So `EventsList = ListResponse<EventResource>`, `EventSingle = EventResource`, etc. The package no longer re-exports `Paginated` or `Response` from base; use `ListResponse` and the `*Resource` / `*Single` types from this package.
+- **Module imports**: All modules now use a single namespace import from `../types` (`import type * as Types from '../types'`) instead of long named import lists. Types are referenced as `Types.EventResource`, `Types.CheckInsResourceTypeToRelMap`, etc.
+- **Return types**: Removed explicit return type annotations from module methods; return types are now inferred from the implementation (base `getSingle` / `getList` / `getAllPages`), so the public API stays accurate without maintaining duplicate type annotations.
+
+### Fixed
+
+- **Attendance-types module**: Removed invalid third type argument `CheckInsResourceTypeToRelMap` from `getList` and `getSingle` calls (attendance types use only their own resource/relationship types).
+- **Events module**: Removed explicit return types from `getAllEventPeriods` and `getAllEvents` so TypeScript infers the correct flattened type and avoid type mismatches with the base pagination result.
+
 ## [3.1.1] - 2026-02-09
 
 ### Fixed
 
-- **`getEventTimesForPeriod`**: Now uses the base client’s `getList()` so it returns the same flattened shape as other list methods. Previously it called `httpClient.request` directly and returned raw JSON:API (with `included`). Return type is now `{ data: FlattenedEventTimeResource[]; meta?; links? }`. The `included` property is no longer returned (included resources are merged into the flattened `data`).
+- **`getEventTimesForPeriod`**: Now uses the base client’s `getList()` so it returns the same flattened shape as other list methods. Previously it called `httpClient.request` directly and returned raw JSON:API (with `included`). Return type is now `{ data: EventTimeResource[]; meta?; links? }`. The `included` property is no longer returned (included resources are merged into the flattened `data`).
 
 ### Added
 
-- **Integration test**: `getEventTimesForPeriod` return value is validated against `FlattenedEventTimeResource` in attribute-type-validation integration tests (real API; ensures return shape matches type).
+- **Integration test**: `getEventTimesForPeriod` return value is validated against `EventTimeResource` in attribute-type-validation integration tests (real API; ensures return shape matches type).
 
 ## [3.1.0] - 2026-02-09
 
 ### Fixed
 
-- **Types now match actual response shape**: All method return types now use **flattened** resource types (`FlattenedEventResource`, `FlattenedEventPeriodResource`, etc.) so TypeScript accurately describes what the client returns. Previously, return types used JSON:API-style `Resource` types (with optional `attributes` and `relationships`), while the base client has always flattened responses (attributes and relationships at top level). This was a type-only mismatch; runtime behavior is unchanged.
+- **Types now match actual response shape**: The **`*Resource`** types (e.g. `EventResource`, `EventPeriodResource`, `CheckInResource`) now accurately describe the flattened shape the client returns (attributes and relationships at top level). Previously, those types were JSON:API-style (optional `attributes` / `relationships`), while the base client has always returned flattened data. This was a type-only mismatch; runtime behavior is unchanged.
 
 ### Added
 
-- **Flattened type aliases**: New exported types for every resource—e.g. `FlattenedEventPeriodResource`, `FlattenedEventResource`, `FlattenedCheckInResource`—representing the flattened shape (e.g. `starts_at`, `event` at top level). Use these when typing variables that hold API return values.
-- **Integration test**: `getAllEventPeriods` return value is validated against `FlattenedEventPeriodResource` in attribute-type-validation integration tests.
+- **Canonical resource types**: For every resource, **`*Resource`** is the type for the shape returned by the client (e.g. `EventResource`, `EventPeriodResource`, `CheckInResource`). Use these when typing variables that hold API return values. Internal JSON:API shapes are **`*ResourceObject`** (for advanced use).
+- **Integration test**: `getAllEventPeriods` return value is validated against `EventPeriodResource` in attribute-type-validation integration tests.
 
 ### Changed
 
-- **Module return types**: Every method that returns resources (e.g. `events.getEventPeriods()`, `events.getAllEventPeriods()`, `checkIns.getById()`, `locations.getPage()`) now declares a return type using the corresponding `Flattened*` type. The original `*Resource` types (e.g. `EventPeriodResource`) remain for JSON:API / input use and are still exported.
+- **Type naming**: List and single response types use **`*Resource`** for the flattened shape (e.g. `EventsList = ListResponse<EventResource>`, `EventSingle = EventResource`). Method return types infer from the base client and match these types.
 
 ## [3.0.0] - 2026-02-02
 
@@ -36,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`getAll()` now fetches all pages**: `getAll()` previously called `getList()` and returned a single page. It now calls `getAllPages()` and returns **all** pages. The return type is now `PaginationResult<T>` (from base), which includes `data`, `totalCount`, `pagesFetched`, `duration`, `meta?`, and `links?`. If you need a single page, use **`getPage(options)`** instead.
 - **`getPage()` for single-page fetching**: New method on all list-capable modules. Use `getPage({ perPage, page, where, include, ... })` when you want one page with full control. Use `getAll()` when you want every page automatically.
-- **Flattened responses (from base)**: All methods that return resources use the base package’s flattened shape: **attributes and relationships are at the top level** (e.g. `resource.name` instead of `resource.attributes.name`, and related data at `resource.relation_name` instead of `resource.relationships.relation_name.data`). This matches the People and Base packages.
+- **Response shape (from base)**: All methods that return resources use the base package’s flattened shape: **attributes and relationships are at the top level** (e.g. `resource.name` instead of `resource.attributes.name`, and related data at `resource.relation_name` instead of `resource.relationships.relation_name.data`). The **`*Resource`** types (e.g. `EventResource`, `CheckInResource`) describe this shape. This matches the People and Base packages.
 - **Same item shape for `getAll()` and `getPage()`**: Both return flattened items. `getAll().data` and `getPage().data` contain the same shape per item; only the wrapper differs—`getAll()` returns `PaginationResult<T>` (adds `totalCount`, `pagesFetched`, `duration`), while `getPage()` returns `{ data, meta?, links? }`.
 - **Check-in groups require `stationId`**: `checkInGroups.getAll()` and `checkInGroups.getPage()` now require `stationId` in options. The API lists check-in groups per station: `GET /stations/:station_id/check_in_groups`. Pass `stationId` from a station you’ve fetched (e.g. `client.stations.getPage()`).
 

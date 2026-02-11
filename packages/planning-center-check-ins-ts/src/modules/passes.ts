@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { PassResource, FlattenedPassResource } from '../types';
+import type * as Types from '../types';
 
 export interface PassesListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class PassesModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all passes across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: PassesListOptions = {}): Promise<PaginationResult<PassResource>> {
+    async getAll(options: PassesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<PassResource>('/passes', params);
+        return this.getAllPages<Types.PassResourceObject>('/passes', params);
     }
 
     /**
      * Get a single page of passes with optional filtering and pagination.
      */
-    async getPage(options: PassesListOptions = {}): Promise<{ data: FlattenedPassResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: PassesListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<PassResource>('/passes', params);
+        return this.getList<Types.PassResourceObject>('/passes', params);
     }
 
     private buildParams(options: PassesListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class PassesModule extends BaseModule {
     /**
      * Get a single pass by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedPassResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<PassResource>(`/passes/${id}`, params);
+        return this.getSingle<Types.PassResourceObject>(`/passes/${id}`, params);
     }
 }
 

@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { StationResource, FlattenedStationResource } from '../types';
+import type * as Types from '../types';
 
 export interface StationsListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,28 @@ export class StationsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
 
     /**
      * Get all stations across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: StationsListOptions = {}): Promise<PaginationResult<StationResource>> {
+    async getAll(options: StationsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<StationResource>('/stations', params);
+        return this.getAllPages<Types.StationResourceObject>('/stations', params);
     }
 
     /**
      * Get a single page of stations with optional filtering and pagination.
      */
-    async getPage(options: StationsListOptions = {}): Promise<{ data: FlattenedStationResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: StationsListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<StationResource>('/stations', params);
+        return this.getList<Types.StationResourceObject, Types.StationRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/stations', params);
     }
 
     private buildParams(options: StationsListOptions): Record<string, any> {
@@ -58,13 +58,13 @@ export class StationsModule extends BaseModule {
     /**
      * Get a single station by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedStationResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<StationResource>(`/stations/${id}`, params);
+        return this.getSingle<Types.StationResourceObject, Types.StationRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/stations/${id}`, params);
     }
 }
 

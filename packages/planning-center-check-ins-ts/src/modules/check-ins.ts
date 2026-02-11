@@ -7,32 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type {
-    CheckInResource,
-    CheckInGroupResource,
-    CheckInTimeResource,
-    StationResource,
-    EventResource,
-    EventPeriodResource,
-    EventTimeResource,
-    LocationResource,
-    LocationLabelResource,
-    OptionResource,
-    FlattenedCheckInResource,
-    FlattenedCheckInGroupResource,
-    FlattenedCheckInTimeResource,
-    FlattenedStationResource,
-    FlattenedEventResource,
-    FlattenedEventPeriodResource,
-    FlattenedEventTimeResource,
-    FlattenedLocationResource,
-    FlattenedLocationLabelResource,
-    FlattenedOptionResource,
-} from '../types';
+import type * as Types from '../types';
 
 export interface CheckInsListOptions {
     where?: Record<string, any>;
@@ -46,26 +23,29 @@ export class CheckInsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
+
+
 
     /**
      * Get all check-ins across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: CheckInsListOptions = {}): Promise<PaginationResult<CheckInResource>> {
+    async getAll(options: CheckInsListOptions = {}) {
         const params = this.buildCheckInsListParams(options);
-        return this.getAllPages<CheckInResource>('/check_ins', params);
+        return this.getAllPages<Types.CheckInResourceObject, Types.CheckInResourceObject, Types.CheckInRelResourceMap>('/check_ins', params);
     }
 
     /**
      * Get a single page of check-ins with optional filtering and pagination.
      */
-    async getPage(options: CheckInsListOptions = {}): Promise<{ data: FlattenedCheckInResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: CheckInsListOptions = {}) {
         const params = this.buildCheckInsListParams(options);
-        return this.getList<CheckInResource>('/check_ins', params);
+        return this.getList<Types.CheckInResourceObject, Types.CheckInRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/check_ins', params);
     }
 
     private buildCheckInsListParams(options: CheckInsListOptions): Record<string, any> {
@@ -87,13 +67,13 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get a single check-in by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedCheckInResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<CheckInResource>(`/check_ins/${id}`, params);
+        return this.getSingle<Types.CheckInResourceObject, Types.CheckInRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${id}`, params);
     }
 
     // ===== Associations =====
@@ -101,9 +81,9 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get check-in group for a check-in
      */
-    async getCheckInGroup(checkInId: string): Promise<FlattenedCheckInGroupResource | null> {
+    async getCheckInGroup(checkInId: string) {
         try {
-            return await this.getSingle<CheckInGroupResource>(`/check_ins/${checkInId}/check_in_group`);
+            return await this.getSingle<Types.CheckInGroupResourceObject, Types.CheckInGroupRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/check_in_group`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -115,16 +95,16 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get check-in times for a check-in
      */
-    async getCheckInTimes(checkInId: string): Promise<{ data: FlattenedCheckInTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<CheckInTimeResource>(`/check_ins/${checkInId}/check_in_times`);
+    async getCheckInTimes(checkInId: string) {
+        return this.getList<Types.CheckInTimeResourceObject, Types.CheckInTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/check_in_times`);
     }
 
     /**
      * Get station where check-in occurred (checked_in_at)
      */
-    async getCheckedInAt(checkInId: string): Promise<FlattenedStationResource | null> {
+    async getCheckedInAt(checkInId: string) {
         try {
-            return await this.getSingle<StationResource>(`/check_ins/${checkInId}/checked_in_at`);
+            return await this.getSingle<Types.StationResourceObject, Types.StationRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/checked_in_at`);
         } catch (error: any) {
             if (error?.status === 404) {
                 return null;
@@ -136,7 +116,7 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get person who checked in (checked_in_by)
      */
-    async getCheckedInBy(checkInId: string): Promise<any | null> {
+    async getCheckedInBy(checkInId: string) {
         try {
             return await this.getSingle<any>(`/check_ins/${checkInId}/checked_in_by`);
         } catch (error: any) {
@@ -150,7 +130,7 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get person who checked out (checked_out_by)
      */
-    async getCheckedOutBy(checkInId: string): Promise<any | null> {
+    async getCheckedOutBy(checkInId: string) {
         try {
             return await this.getSingle<any>(`/check_ins/${checkInId}/checked_out_by`);
         } catch (error: any) {
@@ -164,29 +144,29 @@ export class CheckInsModule extends BaseModule {
     /**
      * Get event for a check-in
      */
-    async getEvent(checkInId: string): Promise<FlattenedEventResource> {
-        return this.getSingle<EventResource>(`/check_ins/${checkInId}/event`);
+    async getEvent(checkInId: string) {
+        return this.getSingle<Types.EventResourceObject, Types.EventRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/event`);
     }
 
     /**
      * Get event period for a check-in
      */
-    async getEventPeriod(checkInId: string): Promise<FlattenedEventPeriodResource> {
-        return this.getSingle<EventPeriodResource>(`/check_ins/${checkInId}/event_period`);
+    async getEventPeriod(checkInId: string) {
+        return this.getSingle<Types.EventPeriodResourceObject, Types.EventPeriodRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/event_period`);
     }
 
     /**
      * Get event times for a check-in
      */
-    async getEventTimes(checkInId: string): Promise<{ data: FlattenedEventTimeResource[]; meta?: any; links?: any }> {
-        return this.getList<EventTimeResource>(`/check_ins/${checkInId}/event_times`);
+    async getEventTimes(checkInId: string) {
+        return this.getList<Types.EventTimeResourceObject, Types.EventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/event_times`);
     }
 
     /**
      * Get locations for a check-in
      */
-    async getLocations(checkInId: string): Promise<{ data: FlattenedLocationResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationResource>(`/check_ins/${checkInId}/locations`);
+    async getLocations(checkInId: string) {
+        return this.getList<Types.LocationResourceObject, Types.LocationRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/locations`);
     }
 
     /**
@@ -194,21 +174,21 @@ export class CheckInsModule extends BaseModule {
      * Per API docs, location_labels are only available under check_ins, not under locations.
      * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/location_label
      */
-    async getLocationLabels(checkInId: string, locationId: string): Promise<{ data: FlattenedLocationLabelResource[]; meta?: any; links?: any }> {
-        return this.getList<LocationLabelResource>(`/check_ins/${checkInId}/locations/${locationId}/location_labels`);
+    async getLocationLabels(checkInId: string, locationId: string) {
+        return this.getList<Types.LocationLabelResourceObject, Types.LocationLabelRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/locations/${locationId}/location_labels`);
     }
 
     /**
      * Get options for a check-in
      */
-    async getOptions(checkInId: string): Promise<{ data: FlattenedOptionResource[]; meta?: any; links?: any }> {
-        return this.getList<OptionResource>(`/check_ins/${checkInId}/options`);
+    async getOptions(checkInId: string) {
+        return this.getList<Types.OptionResourceObject, Types.OptionRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_ins/${checkInId}/options`);
     }
 
     /**
      * Get person for a check-in
      */
-    async getPerson(checkInId: string): Promise<any | null> {
+    async getPerson(checkInId: string) {
         try {
             return await this.getSingle<any>(`/check_ins/${checkInId}/person`);
         } catch (error: any) {

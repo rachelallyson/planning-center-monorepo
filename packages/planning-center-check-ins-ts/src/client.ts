@@ -64,23 +64,24 @@ export class PcoCheckInsClient implements EventEmitter {
         this.httpClient = new PcoHttpClient(fullConfig, this.eventEmitter);
         this.paginationHelper = new PaginationHelper(this.httpClient);
 
-        // Initialize modules
-        this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.attendanceTypes = new AttendanceTypesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.rosterListPersons = new RosterListPersonsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.organization = new OrganizationModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.integrationLinks = new IntegrationLinksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.themes = new ThemesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
+        // Initialize modules (getConfig so base module debugLog can read config)
+        const getConfig = () => this.getConfig();
+        this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.attendanceTypes = new AttendanceTypesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.rosterListPersons = new RosterListPersonsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.organization = new OrganizationModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.integrationLinks = new IntegrationLinksModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.themes = new ThemesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
         this.batch = new BatchExecutor(this, this.eventEmitter);
 
         // Set up event handlers from config
@@ -186,23 +187,23 @@ export class PcoCheckInsClient implements EventEmitter {
     }
 
     private updateModules(): void {
-        // Recreate modules with new HTTP client
-        this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.attendanceTypes = new AttendanceTypesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.rosterListPersons = new RosterListPersonsModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.organization = new OrganizationModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.integrationLinks = new IntegrationLinksModule(this.httpClient, this.paginationHelper, this.eventEmitter);
-        this.themes = new ThemesModule(this.httpClient, this.paginationHelper, this.eventEmitter);
+        const getConfig = () => this.getConfig();
+        this.events = new EventsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.checkIns = new CheckInsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.locations = new LocationsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.eventTimes = new EventTimesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.stations = new StationsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.labels = new LabelsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.options = new OptionsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.checkInGroups = new CheckInGroupsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.preChecks = new PreChecksModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.passes = new PassesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.headcounts = new HeadcountsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.attendanceTypes = new AttendanceTypesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.rosterListPersons = new RosterListPersonsModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.organization = new OrganizationModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.integrationLinks = new IntegrationLinksModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
+        this.themes = new ThemesModule(this.httpClient, this.paginationHelper, this.eventEmitter, getConfig);
         this.batch = new BatchExecutor(this, this.eventEmitter);
     }
 }

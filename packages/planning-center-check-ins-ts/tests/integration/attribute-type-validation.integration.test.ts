@@ -8,7 +8,12 @@
  */
 
 import { PcoCheckInsClient } from '../../src';
-import type { FlattenedEventPeriodResource, FlattenedEventTimeResource } from '../../src/types';
+import type {
+    EventPeriodResource,
+    EventTimeResource,
+    HeadcountResource,
+} from '../../src/types';
+import type { ResourceIdentifier } from '@rachelallyson/planning-center-base-ts';
 import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
 import { validateResourceStructure } from '../type-validators';
 
@@ -228,7 +233,7 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(result).toBeDefined();
             expect(result.length).toBeGreaterThan(0);
 
-            result.forEach((item: FlattenedEventPeriodResource, index: number) => {
+            result.forEach((item: EventPeriodResource, index: number) => {
                 validateResourceStructure(item, 'EventPeriod', `getAllEventPeriods[${index}]`);
 
                 if ((item as any).starts_at !== undefined) {
@@ -269,7 +274,7 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             });
         }, 30000);
 
-        it('should return JSON from getEventTimesForPeriod that matches FlattenedEventTimeResource type', async () => {
+        it('should return JSON from getEventTimesForPeriod that matches EventTimeResource type', async () => {
             const events = await client.events.getPage({ perPage: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
             const eventId = events.data[0].id;
@@ -285,7 +290,7 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(Array.isArray(result.data)).toBe(true);
             expect(result).not.toHaveProperty('included');
 
-            result.data.forEach((item: FlattenedEventTimeResource, index: number) => {
+            result.data.forEach((item: EventTimeResource, index: number) => {
                 validateResourceStructure(item, 'EventTime', `getEventTimesForPeriod[${index}]`);
 
                 if ((item as any).starts_at !== undefined) {
@@ -320,6 +325,72 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
                             expect(typeof val === 'object').toBe(true);
                             if ((val as any).type !== undefined) expect(typeof (val as any).type).toBe('string');
                             if ((val as any).id !== undefined) expect(typeof (val as any).id).toBe('string');
+                        }
+                    }
+                });
+            });
+        }, 30000);
+
+        it('getEventTimesForPeriod with include headcounts: client sends include; when API returns headcounts, validate shape', async () => {
+            const events = await client.events.getPage({ perPage: 100, page: 1 });
+            expect(events.data.length).toBeGreaterThan(0);
+            const event1 = events.data.find((e: any) => e.name === 'Event 1');
+            expect(event1).toBeDefined();
+            const eventId = event1!.id;
+            const periodId = '43407327';
+
+            // To log raw API response (included types + first item relationships), use:
+            //   client.updateConfig({ debug: { includePayloads: true } });
+            const result = await client.events.getEventTimesForPeriod(eventId, periodId, {
+                include: ['headcounts', 'headcounts.attendance_type'],
+                perPage: 100,
+            });
+
+            expect(result).toBeDefined();
+            expect(result.data).toBeDefined();
+            expect(Array.isArray(result.data)).toBe(true);
+            expect(result).not.toHaveProperty('included');
+
+            const data = result.data;
+            const eventTimesWithHeadcounts = data.filter((et) => (et.headcounts?.length ?? 0) > 0);
+
+            const allHeadcounts = eventTimesWithHeadcounts.flatMap(
+                (et) => (et.headcounts ?? []) 
+            );
+            const withResolvedAttendanceType = allHeadcounts.filter(
+                (hc) =>
+                    hc?.attendance_type != null &&
+                    typeof hc.attendance_type === 'object' &&
+                    Object.keys(hc.attendance_type).length > 2
+            );
+            expect(withResolvedAttendanceType.length).toBeGreaterThan(0);
+
+            eventTimesWithHeadcounts.forEach((eventTime) => {
+                const headcounts = eventTime.headcounts ?? [];
+                headcounts.forEach((hc) => {
+                    expect(hc).toBeDefined();
+                    expect(typeof hc === 'object').toBe(true);
+                    expect(hc).toHaveProperty('type');
+                    expect(hc).toHaveProperty('id');
+                    expect(typeof hc.type).toBe('string');
+                    expect(typeof hc.id).toBe('string');
+                    if (hc.type === 'Headcount') {
+                        if ('count' in hc && hc.count !== undefined) {
+                            expect(typeof hc.count).toBe('number');
+                        }
+                        if ('created_at' in hc && hc.created_at !== undefined) {
+                            expect(typeof hc.created_at).toBe('string');
+                            expect(new Date(hc.created_at).getTime()).not.toBeNaN();
+                        }
+                        if ('updated_at' in hc && hc.updated_at !== undefined) {
+                            expect(typeof hc.updated_at).toBe('string');
+                            expect(new Date(hc.updated_at).getTime()).not.toBeNaN();
+                        }
+                        if (hc.attendance_type !== undefined && hc.attendance_type !== null) {
+                            const at = hc.attendance_type;
+                            expect(typeof at === 'object').toBe(true);
+                            if (at.type !== undefined) expect(typeof at.type).toBe('string');
+                            if (at.id !== undefined) expect(typeof at.id).toBe('string');
                         }
                     }
                 });

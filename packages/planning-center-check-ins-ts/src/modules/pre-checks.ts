@@ -7,11 +7,9 @@ import type {
     PcoHttpClient,
     PaginationHelper,
     PcoEventEmitter,
-    PaginationResult,
-    Meta,
-    TopLevelLinks,
+    PcoClientConfig
 } from '@rachelallyson/planning-center-base-ts';
-import type { PreCheckResource, FlattenedPreCheckResource } from '../types';
+import type * as Types from '../types';
 
 export interface PreChecksListOptions {
     where?: Record<string, any>;
@@ -24,26 +22,27 @@ export class PreChecksModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter
+        eventEmitter: PcoEventEmitter,
+        getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter);
+        super(httpClient, paginationHelper, eventEmitter, getConfig);
     }
 
     /**
      * Get all pre-checks across all pages with optional filtering.
      * Use getPage() when you need a single page or custom perPage/page.
      */
-    async getAll(options: PreChecksListOptions = {}): Promise<PaginationResult<PreCheckResource>> {
+    async getAll(options: PreChecksListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getAllPages<PreCheckResource>('/pre_checks', params);
+        return this.getAllPages<Types.PreCheckResourceObject>('/pre_checks', params);
     }
 
     /**
      * Get a single page of pre-checks with optional filtering and pagination.
      */
-    async getPage(options: PreChecksListOptions = {}): Promise<{ data: FlattenedPreCheckResource[]; meta?: Meta; links?: TopLevelLinks }> {
+    async getPage(options: PreChecksListOptions = {}) {
         const params = this.buildParams(options);
-        return this.getList<PreCheckResource>('/pre_checks', params);
+        return this.getList<Types.PreCheckResourceObject, Types.PreCheckRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/pre_checks', params);
     }
 
     private buildParams(options: PreChecksListOptions): Record<string, any> {
@@ -58,13 +57,13 @@ export class PreChecksModule extends BaseModule {
     /**
      * Get a single pre-check by ID
      */
-    async getById(id: string, include?: string[]): Promise<FlattenedPreCheckResource> {
+    async getById(id: string, include?: string[]) {
         const params: Record<string, any> = {};
         if (include) {
             params.include = include.join(',');
         }
 
-        return this.getSingle<PreCheckResource>(`/pre_checks/${id}`, params);
+        return this.getSingle<Types.PreCheckResourceObject, Types.PreCheckRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/pre_checks/${id}`, params);
     }
 }
 
