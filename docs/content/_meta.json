@@ -7,25 +7,24 @@
     "pages": [
       "guides/quickstart",
       "guides/pagination",
-      "guides/error-handling"
+      "guides/error-handling",
+      "guides/event-system"
     ]
   },
   "reference": {
     "title": "Reference",
     "type": "page",
     "pages": [
-      "reference/config"
+      "reference/config",
+      "reference/vertices"
     ]
   },
   "recipes": {
     "title": "Examples",
     "type": "page",
-    "pages": [
-      "recipes/examples"
-    ]
+    "pages": ["recipes/examples"]
   },
   "troubleshooting": "Troubleshooting",
   "llm-context": "LLM Context",
-  "api": "API Reference"
+  "api": "API"
 }
-

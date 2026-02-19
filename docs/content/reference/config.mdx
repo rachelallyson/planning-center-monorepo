@@ -9,12 +9,10 @@ Main configuration interface for `PcoClient`:
 ```typescript
 interface PcoClientConfig {
   auth: PcoAuthConfig;           // REQUIRED
-  caching?: CachingConfig;
-  retry?: RetryConfig;
-  events?: EventsConfig;
   baseURL?: string;
   timeout?: number;
   headers?: Record<string, string>;
+  debug?: boolean | PcoDebugOptions;
 }
 ```
 
@@ -107,119 +105,6 @@ const client = new PcoClient({
 
 **Use case**: Server-to-server integrations
 
-## Caching
-
-```typescript
-{
-  caching?: {
-    fieldDefinitions?: boolean;  // Default: false
-    ttl?: number;                // Default: 300000 (5 minutes, milliseconds)
-    maxSize?: number;            // Default: 1000 entries
-  }
-}
-```
-
-**Options**:
-
-- `fieldDefinitions`: Cache field definition lookups (recommended)
-- `ttl`: Cache time-to-live in milliseconds
-- `maxSize`: Maximum number of cached entries
-
-**Example**:
-
-```typescript
-{
-  caching: {
-    fieldDefinitions: true,
-    ttl: 600000,        // 10 minutes
-    maxSize: 2000
-  }
-}
-```
-
-## Retry
-
-```typescript
-{
-  retry?: {
-    enabled?: boolean;           // Default: true
-    maxRetries?: number;         // Default: 3
-    baseDelay?: number;          // Default: 1000 (1 second, milliseconds)
-    maxDelay?: number;           // Default: 10000 (10 seconds, milliseconds)
-    backoff?: 'linear' | 'exponential';  // Default: 'exponential'
-  }
-}
-```
-
-**Options**:
-
-- `enabled`: Enable automatic retries for retryable errors
-- `maxRetries`: Maximum number of retry attempts
-- `baseDelay`: Initial delay before first retry
-- `maxDelay`: Maximum delay cap for backoff
-- `backoff`: Backoff strategy (linear or exponential)
-
-**Retry Logic**:
-
-- Only retries errors where `error.retryable === true`
-- Uses exponential backoff: `delay = baseDelay * 2^retryCount`
-- Caps delay at `maxDelay`
-- Skips retries for validation errors (400, 422)
-
-**Example**:
-
-```typescript
-{
-  retry: {
-    enabled: true,
-    maxRetries: 5,
-    baseDelay: 2000,     // Start with 2 seconds
-    maxDelay: 30000,      // Cap at 30 seconds
-    backoff: 'exponential'
-  }
-}
-```
-
-## Events
-
-```typescript
-{
-  events?: {
-    onError?: (event: ErrorEvent) => void | Promise<void>;
-    onAuthFailure?: (event: AuthFailureEvent) => void | Promise<void>;
-    onRequestStart?: (event: RequestStartEvent) => void | Promise<void>;
-    onRequestComplete?: (event: RequestCompleteEvent) => void | Promise<void>;
-    onRateLimit?: (event: RateLimitEvent) => void | Promise<void>;
-  }
-}
-```
-
-**Event Types**:
-
-- `onError`: Fired on any error
-- `onAuthFailure`: Fired on authentication failures
-- `onRequestStart`: Fired when request starts (event includes `endpoint`, `method`, optional `params`)
-- `onRequestComplete`: Fired when request completes successfully (event includes `status`, `duration`, optional `params`, `responseSummary`, `retryCount`, `rateLimitRemaining`/`rateLimitLimit`)
-- `onRateLimit`: Fired when approaching rate limit
-
-**Example**:
-
-```typescript
-{
-  events: {
-    onError: (event) => {
-      console.error('Error:', event.error);
-      errorTracker.captureError(event.error);
-    },
-    onRateLimit: (event) => {
-      console.warn(`Rate limit: ${event.remaining}/${event.limit}`);
-    }
-  }
-}
-```
-
-**Note**: Config-based event handlers are converted to `client.on()` listeners internally. For more advanced event handling, multiple listeners, and complete event type documentation, see the **[Event System Guide](../guides/event-system)**.
-
 ## Base URL
 
 ```typescript
@@ -261,6 +146,20 @@ Custom headers to include with every request.
 }
 ```
 
+## Debug
+
+```typescript
+{
+  debug?: boolean | {
+    prefix?: string;
+    includePayloads?: boolean;
+    onLog?: (message: string, data?: object) => void;
+  };
+}
+```
+
+When set, the client logs each request (start, complete, error) to the console or your custom `onLog` sink. Use `debug: true` for simple logging, or an object for a prefix, optional payload logging, and a custom log function.
+
 ## Environment Variables
 
 The library respects these environment variables:
@@ -296,54 +195,29 @@ const client = new PcoClient({
     type: 'personal_access_token',
     personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
   },
-  caching: {
-    fieldDefinitions: true,
-    ttl: 300000,        // 5 minutes
-    maxSize: 1000
-  },
-  retry: {
-    enabled: true,
-    maxRetries: 3,
-    baseDelay: 1000,
-    maxDelay: 10000,
-    backoff: 'exponential'
-  },
-  events: {
-    onError: (event) => {
-      console.error('Error:', event.error);
-    },
-    onRateLimit: (event) => {
-      console.warn(`Rate limit: ${event.remaining}/${event.limit}`);
-    }
-  },
+  baseURL: 'https://api.planningcenteronline.com/people/v2',
   timeout: 30000,
-  headers: {
-    'User-Agent': 'MyApp/1.0'
-  }
+  headers: { 'User-Agent': 'MyApp/1.0' },
+  debug: true  // optional: request logging
 });
 ```
 
 ## Type Reference
 
-See [API Documentation](/docs/api) for complete type definitions:
+See [API Documentation](/docs/api) or package `index.ts` for full types:
 
 - `PcoClientConfig`
 - `PcoAuthConfig`
+- `PcoDebugOptions`
 - `PersonalAccessTokenAuth`
 - `OAuthAuth`
 - `BasicAuth`
-- `CachingConfig`
-- `RetryConfig`
-- `EventsConfig`
 
 ## Validation
 
-Configuration is validated on client instantiation:
-
-- **Auth**: Required, must be one of the three auth types
+- **Auth**: Required; must be one of the three auth types
 - **OAuth**: `onRefresh` and `onRefreshFailure` are required
-- **Retry**: Validates retry config (maxRetries > 0, delays > 0)
-- **Timeout**: Must be positive number
+- **Timeout**: Must be a positive number when provided
 
 Invalid configuration throws an error during client creation.
 

@@ -2,22 +2,66 @@
 
 This document describes how to publish packages from this monorepo.
 
+## Before publishing (checklist)
+
+Use this short checklist before running publish commands:
+
+1. **Versions and changelogs** – Each package’s `package.json` `version` matches the latest `## [x.y.z]` in that package’s `CHANGELOG.md`. Add a new `## [x.y.z]` for any `[Unreleased]` entries and bump the version.
+2. **Regenerate API docs** – Run `npm run docs:api` from the monorepo root so `docs/content/api/` is up to date, then commit if you want the new docs deployed.
+3. **Build and test** – Run `npm run publish:prep:full` (builds all packages, then runs tests in base, people, and check-ins).
+4. **Dry run** – Run `npm run publish:all` to do a full dry run (build, test, then `npm publish --dry-run` for each package).
+5. **Publish** – Run `npm run publish:all:real`, then tag and push (see [Tagging releases](#tagging-releases)).
+
+## Release readiness: from WIP to publish
+
+You often have a branch with lots of uncommitted (or committed) work—changelogs, version bumps, code, and docs all mixed together. **You don’t have to publish from a “clean” branch.** Publishing is a separate step you do when you’re ready.
+
+**Two-phase mindset:**
+
+1. **Day-to-day:** Commit work in whatever chunks make sense. You don’t need to touch changelogs or versions. Untracked files (e.g. generated docs, scripts) can stay untracked until you want them in the repo.
+2. **When you’re ready to release:** Decide what’s in scope for this release, then do a single **release prep** pass:
+   - Update each package’s **CHANGELOG.md** (move `[Unreleased]` into `[x.y.z]` with a date).
+   - Bump **version** in each package’s `package.json` to match.
+   - Commit those changes (e.g. `chore: release prep`), then run the build/test and publish steps below.
+
+**Checklist:** Use **[Release readiness checklist](./release-readiness.md)** for a step-by-step list (changelogs, versions, commit, test, dry-run, publish, tag). No need to “tidy” the whole branch—just get release prep in order and publish.
+
 ## Prerequisites
 
 1. You must be logged in to npm: `npm login`
 2. You must have publish access to the `@rachelallyson` scope
 3. All packages must be built before publishing
 
+## Quick path (all packages)
+
+From the monorepo root, after doing the pre-publish checklist below:
+
+1. **One-shot dry run** (build, test, dry-run all three packages):
+   ```bash
+   npm run publish:all
+   ```
+2. If that succeeds, **publish for real** (base → people → check-ins):
+   ```bash
+   npm run publish:all:real
+   ```
+3. **Tag and push** (use the versions you just published):
+   ```bash
+   git tag -a planning-center-base-ts@2.0.0 -m "Release base-ts 2.0.0"
+   git tag -a planning-center-people-ts@4.0.0 -m "Release people-ts 4.0.0"
+   git tag -a planning-center-check-ins-ts@4.0.0 -m "Release check-ins-ts 4.0.0"
+   git push origin planning-center-base-ts@2.0.0 origin planning-center-people-ts@4.0.0 origin planning-center-check-ins-ts@4.0.0
+   ```
+
 ## Pre-publish checklist
 
 From the monorepo root:
 
-1. **Versions and changelogs**: Ensure each package’s `package.json` version matches the latest `## [x.y.z]` entry in that package’s `CHANGELOG.md`.
-2. **Build all**: `npm run docs:build:packages` (builds base, people, check-ins).
-3. **Test all** (optional but recommended): `npm run publish:prep:full` — builds then runs `test:ci` in base, people, and check-ins.
-4. **Dry run**: `npm run publish:dry-run` — builds and runs `npm publish --dry-run` in each package so you can confirm tarball contents and no publish errors.
+1. **Versions and changelogs**: For each package, ensure `package.json` `version` matches the latest `## [x.y.z]` in that package’s `CHANGELOG.md`. If you have `## [Unreleased]` entries, add a new `## [x.y.z]` section and bump the version in `package.json`.
+2. **Base dependency**: People and check-ins must depend on `@rachelallyson/planning-center-base-ts` with a version range (e.g. `^2.0.0` for base 2.x), not `file:../...`, so the published tarball is valid. Workspaces still resolve to the local base package during development.
+3. **Build and test**: `npm run publish:prep:full` — builds then runs tests in base, people, and check-ins.
+4. **Dry run**: `npm run publish:dry-run` (or `npm run publish:all`) — confirms tarball contents and that publish would succeed.
 
-Then publish in dependency order: **base → people and check-ins** (people and check-ins can be published in either order).
+Publish in dependency order: **base → people → check-ins**.
 
 ## Publishing Base Package
 
@@ -42,7 +86,7 @@ npm publish
 
 After the base package is published:
 
-- **Dependencies**: People and check-ins both depend on `@rachelallyson/planning-center-base-ts` (e.g. `^1.1.3`). No change needed if already set.
+- **Dependencies**: People and check-ins both depend on `@rachelallyson/planning-center-base-ts` (e.g. `^2.0.0` for base 2.x). No change needed if already set.
 - Publish in either order:
 
 **People** (`@rachelallyson/planning-center-people-ts`):
@@ -79,9 +123,9 @@ npm publish
 
 After publishing, tag the release using the package-prefixed format (use the version you just published):
 
-- **Base package**: `git tag -a planning-center-base-ts@1.1.3 -m "Release base-ts 1.1.3"`
-- **People package**: `git tag -a planning-center-people-ts@3.1.2 -m "Release people-ts 3.1.2"`
-- **Check-ins package**: `git tag -a planning-center-check-ins-ts@3.1.2 -m "Release check-ins-ts 3.1.2"`
+- **Base package**: `git tag -a planning-center-base-ts@2.0.0 -m "Release base-ts 2.0.0"`
+- **People package**: `git tag -a planning-center-people-ts@4.0.0 -m "Release people-ts 4.0.0"`
+- **Check-ins package**: `git tag -a planning-center-check-ins-ts@4.0.0 -m "Release check-ins-ts 4.0.0"`
 
 Then push the tag: `git push origin <tag-name>`
 
@@ -111,4 +155,4 @@ Then push the tag: `git push origin <tag-name>`
 
 - Make sure base package is published first
 - Check npm registry: `npm view @rachelallyson/planning-center-base-ts`
-- Update people/check-ins dependency version in their `package.json` if needed (e.g. `^1.1.3`)
+- Update people/check-ins dependency version in their `package.json` if needed (e.g. `^2.0.0` for base 2.x)

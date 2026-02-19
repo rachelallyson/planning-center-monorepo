@@ -22,9 +22,7 @@ The base package provides:
 - **Rate Limiter** (`PcoRateLimiter`) - Enforces 100 requests per 20 seconds
 - **Pagination Helper** (`PaginationHelper`) - Utilities for paginated responses
 - **Base Module** (`BaseModule`) - Abstract base class for API modules
-- **Error Handling** (`PcoApiError`, `PcoError`) - Typed error classes with categories
-- **Batch Executor** (`BatchExecutor`) - Execute multiple operations with dependency resolution
-- **Event System** (`PcoEventEmitter`) - Monitor requests, errors, rate limits
+- **Error Handling** (`PcoApiError`) - Typed API errors with status and JSON:API error details
 - **JSON:API Types** - Complete TypeScript types for JSON:API 1.0 specification
 
 ### People Package
@@ -203,7 +201,7 @@ Two pagination patterns:
 
 ```typescript
 // Fetches all pages automatically
-const allPeople = await client.people.getAllPages({ perPage: 25 });
+const allPeople = await client.people.getAll({ per_page: 25 });
 // Returns: { data: PersonResource[], meta: {...} }
 ```
 
@@ -211,10 +209,10 @@ const allPeople = await client.people.getAllPages({ perPage: 25 });
 
 ```typescript
 // Fetch one page at a time
-const page = await client.people.getAll({ perPage: 25 });
+const page = await client.people.getAll({ per_page: 25 });
 // Check for next page
 if (page.links?.next) {
-  const nextPage = await client.people.getAll({ perPage: 25, page: 2 });
+  const nextPage = await client.people.getAll({ per_page: 25, page: 2 });
 }
 ```
 
@@ -226,40 +224,22 @@ if (page.links?.next) {
 
 ### 5. Error Handling Model
 
-All errors extend `PcoError` or `PcoApiError` with:
+API errors are thrown as `PcoApiError` with:
 
-- **Category**: `ErrorCategory` enum (AUTHENTICATION, RATE_LIMIT, VALIDATION, etc.)
-- **Severity**: `ErrorSeverity` enum (LOW, MEDIUM, HIGH, CRITICAL)
-- **Retryable**: Boolean indicating if operation should be retried
-- **Context**: Request context (endpoint, method, metadata)
+- **status**: HTTP status code (401, 404, 422, 429, etc.)
+- **statusText**: HTTP status text
+- **errors**: JSON:API error objects (detail, title, source)
+- **rateLimitHeaders**: Optional (e.g. Retry-After for 429)
 
 ```typescript
 try {
   await client.people.create({ first_name: 'John' });
 } catch (error) {
-  if (error instanceof PcoError) {
-    console.log(error.category); // ErrorCategory.VALIDATION
-    console.log(error.severity);  // ErrorSeverity.LOW
-    console.log(error.retryable); // false
+  if (error instanceof PcoApiError) {
+    if (error.status === 422) console.log('Validation failed');
+    if (error.status === 429) console.log('Rate limited', error.rateLimitHeaders?.['Retry-After']);
   }
 }
-```
-
-### 6. Batch Operations Model
-
-Batch operations execute multiple operations with dependency resolution:
-
-- **Ordered Execution**: Operations execute in order
-- **Reference Resolution**: Use `$N.id` to reference previous operation results
-- **Partial Success**: Some operations can succeed while others fail
-- **Dependency Tracking**: Automatic dependency resolution
-
-```typescript
-const results = await client.batch.execute([
-  { type: 'people.create', data: { firstName: 'John' } },
-  { type: 'people.addEmail', personId: '$0.id', data: { address: 'john@example.com' } }
-]);
-// $0.id references the person created in step 0
 ```
 
 ## Patterns
@@ -271,10 +251,10 @@ All modules follow this consistent pattern:
 ```typescript
 // List operations
 getAll(params?: QueryParams): Promise<Paginated<Resource>>
-getAllPages(params?: QueryParams): Promise<Paginated<Resource>>
+getAll(options?: QueryParams): Promise<PaginationResult<Resource>>
 
 // Single resource operations
-getById(id: string, include?: string[]): Promise<ResourceResponse<Resource>>
+getById(id: string, options?: { include?: string[] }): Promise<Resource>
 
 // Mutations
 create(data: CreateData): Promise<ResourceResponse<Resource>>
@@ -286,7 +266,7 @@ delete(id: string): Promise<void>
 
 Query parameters use consistent naming:
 
-- `perPage` - Items per page (default: 25, max: 100)
+- `per_page` - Items per page (default: 25, max: 100)
 - `page` - Page number (1-indexed)
 - `include` - Related resources to include (array of strings)
 - `where` - Filter conditions (object with field conditions)
@@ -295,7 +275,7 @@ Query parameters use consistent naming:
 ```typescript
 // Example query
 const people = await client.people.getAll({
-  perPage: 50,
+  per_page: 50,
   include: ['emails', 'phone_numbers'],
   where: { status: 'active' },
   order: 'first_name'
@@ -330,17 +310,16 @@ const people = await client.people.getAll({
 2. **Module Initialization**: All modules initialized automatically
 3. **HTTP Client**: Internal HTTP client handles all requests
 4. **Rate Limiting**: Rate limiter initialized (100 req/20s)
-5. **Event System**: Event emitter initialized for monitoring
+5. **Debug** (optional): If `config.debug` is set, request/response logging is enabled
 
 ### Request Lifecycle
 
 1. **Rate Limit Check**: Wait if at limit
-2. **Request Start Event**: Emit `request:start` event
-3. **HTTP Request**: Make authenticated request
-4. **Response Handling**: Parse JSON:API response
-5. **Error Handling**: Wrap errors in `PcoApiError` or `PcoError`
-6. **Request Complete Event**: Emit `request:complete` or `request:error` event
-7. **Rate Limit Update**: Update rate limit tracking
+2. **HTTP Request**: Make authenticated request
+3. **Response Handling**: Parse JSON:API response
+4. **Error Handling**: Wrap errors in `PcoApiError` (check `error.status`)
+5. **Rate Limit Update**: Update rate limit tracking
+6. **Debug Logging** (if enabled): Log request start, complete, or error
 
 ### Token Refresh Lifecycle (OAuth)
 
@@ -370,7 +349,7 @@ Use batch operations for multiple mutations:
 
 ### Pagination
 
-- **Automatic**: Use `getAllPages()` for convenience
+- **Automatic**: Use `getAll()` for convenience
 - **Manual**: Use `getAll()` for control over pagination
 - **Large Datasets**: Use streaming for very large datasets
 

@@ -1,30 +1,25 @@
 # Planning Center API Clients
 
-TypeScript client libraries for Planning Center Online APIs.
+TypeScript client libraries for Planning Center Online (People and Check-Ins) APIs.
 
 ## Packages
 
 This monorepo contains three packages:
 
-### [People API Client](/people) (External Documentation)
+### [People API Client](./concepts#people-package)
 **Package**: `@rachelallyson/planning-center-people-ts`
-**Version**: v2.14.0
 
-Complete TypeScript client for Planning Center People API with 11 specialized modules (people, fields, workflows, contacts, households, notes, lists, campus, serviceTime, forms, reports).
-
-**Note**: See package-specific documentation at `/people` for People API guides and reference.
+Complete TypeScript client for Planning Center People API with 11 modules: people, fields, workflows, contacts, households, notes, lists, campus, serviceTime, forms, reports. See [Quick Start](./guides/quickstart) and [API Reference](./api/) for usage.
 
 ### [Check-Ins API Client](./concepts#check-ins-package)
 **Package**: `@rachelallyson/planning-center-check-ins-ts`
-**Version**: v2.0.0
 
-Complete TypeScript client for Planning Center Check-Ins API with specialized modules for events, locations, check-ins, stations, labels, and more.
+Complete TypeScript client for Planning Center Check-Ins API: events, check-ins, locations, event times, stations, labels, options, and more. Same patterns as People (getAll, getPage, getById, create, update, delete).
 
 ### [Base Package](./concepts#base-package)
 **Package**: `@rachelallyson/planning-center-base-ts`
-**Version**: v1.0.2
 
-Shared infrastructure for building PCO API clients - HTTP client, authentication, rate limiting, pagination, error handling, JSON:API types.
+Shared infrastructure for PCO API clients: HTTP client, auth, rate limiting, pagination, error handling, JSON:API types. Use when building custom clients.
 
 ## Quick Start
 
@@ -65,8 +60,8 @@ const client = new PcoClient({
 
 // Find or create a person
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@example.com'
 });
 
@@ -77,29 +72,37 @@ console.log(`Person ID: ${person.id}`);
 
 ## Documentation
 
+### Get started
+
+- **[Quick Start](./guides/quickstart)** — Install, authenticate, and run your first request (People or Check-Ins)
+- **[Core Concepts](./concepts)** — Packages, modules, pagination, and error handling
+
 ### Guides
 
-- **[Quick Start](./guides/quickstart)** - Get up and running in 5 minutes
-- **[Pagination](./guides/pagination)** - Handling paginated responses
-- **[Error Handling](./guides/error-handling)** - Typed errors, retries, recovery
-- **[Event System](./guides/event-system)** - Monitoring and observability
+- **[Pagination](./guides/pagination)** — `getAll()` vs `getPage()`, progress, and limits
+- **[Error Handling](./guides/error-handling)** — `PcoApiError`, status codes, retries
+- **[Debug & Observability](./guides/event-system)** — Debug logging and rate limit info
 
 ### Reference
 
-- **[Configuration](./reference/config)** - All config options and environment variables
-- **[API Reference](./api/)** - Complete API documentation
+- **[Configuration](./reference/config)** — Auth, baseURL, timeout, headers, debug
+- **[API Reference](./api/)** — Full TypeScript API docs (Base, People, Check-Ins)
+- **[PCO API vertices](/vertices/)** — People & Check-Ins vertex reference (from PCO docs)
 
-### Concepts
+### More
 
-- **[Core Concepts](./concepts)** - Architecture, mental models, invariants
+- **[Recipes](./recipes/examples)** — Copy-paste code snippets
+- **[Troubleshooting](./troubleshooting)** — Build and runtime issues
 
-### Examples
+## Package versions
 
-- **[Recipes](./recipes/examples)** - Copy-paste code snippets
+| Package | Version | npm |
+|---------|---------|-----|
+| Base | 2.0.0 | [@rachelallyson/planning-center-base-ts](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts) |
+| People | 4.0.0 | [@rachelallyson/planning-center-people-ts](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts) |
+| Check-Ins | 4.0.0 | [@rachelallyson/planning-center-check-ins-ts](https://www.npmjs.com/package/@rachelallyson/planning-center-check-ins-ts) |
 
-### Troubleshooting
-
-- **[Monorepo Issues](./troubleshooting)** - Common setup and build issues
+*Update this table when you release new versions (see [Publishing guide](https://github.com/rachelallyson/planning-center-monorepo/blob/main/docs/publishing.md) in the repo).*
 
 ## Requirements
 
@@ -109,8 +112,8 @@ console.log(`Person ID: ${person.id}`);
 ## Links
 
 - **GitHub**: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo)
-- **People Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts)
-- **Check-Ins Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-check-ins-ts)
-- **Base Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts)
-- **Contributing**: [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- **Contributing**: [CONTRIBUTING.md](https://github.com/rachelallyson/planning-center-monorepo/blob/main/CONTRIBUTING.md)
+- **People**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts)
+- **Check-Ins**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-check-ins-ts)
+- **Base**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts)
 

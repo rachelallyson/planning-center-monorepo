@@ -32,8 +32,8 @@ console.log(`Created person: ${person.id}`);
 
 ```typescript
 const person = await client.people.findOrCreate({
-  firstName: 'Jane',
-  lastName: 'Smith',
+  first_name: 'Jane',
+  last_name: 'Smith',
   email: 'jane@example.com',
   phone: '555-1234',
   matchStrategy: 'fuzzy' // or 'exact'
@@ -56,8 +56,8 @@ if (person.match?.found) {
 // Multi-step search tries multiple strategies in order until a match is found
 // This maximizes matching success and prevents duplicate creation
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@example.com',
   searchStrategy: 'multi-step', // Tries: fuzzy+age → fuzzy → exact+age → exact
   agePreference: 'adults',
@@ -77,8 +77,8 @@ console.log(`Person ID: ${person.id}`);
 // Falls back to name search when email/phone search fails
 // Validates contact info to prevent wrong-person matches
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@example.com',
   fallbackToNameSearch: true,
   contactValidation: 'domain' // 'strict' | 'domain' | 'similarity'
@@ -95,8 +95,8 @@ const person = await client.people.findOrCreate({
 // Different retry configs for different search phases
 // Prevents duplicates when PCO hasn't indexed contacts yet
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@example.com',
   searchStrategy: 'multi-step',
   retryConfigs: {
@@ -132,18 +132,15 @@ if (!exists) {
 ### Get Person with Relationships
 
 ```typescript
-const person = await client.people.getById('person-id', [
-  'emails',
-  'phone_numbers',
-  'addresses',
-  'household'
-]);
+const person = await client.people.getById('person-id', {
+  include: ['emails', 'phone_numbers', 'addresses', 'household']
+});
 
-console.log('Person:', person.attributes.first_name);
-console.log('Emails:', person.included?.filter(r => r.type === 'Email'));
+console.log('Person:', person.first_name);
+console.log('Emails:', person.emails);
 ```
 
-**Result**: `PersonResource` with related resources in `included` array
+**Result**: `PersonResource` (flattened: attributes and relationships at top level)
 
 ---
 
@@ -271,7 +268,7 @@ console.log(`Workflow card: ${card.id}`);
 
 ```typescript
 const cards = await client.workflows.getPersonWorkflowCards('person-id', {
-  perPage: 25
+  per_page: 25
 });
 
 cards.data.forEach(card => {
@@ -283,223 +280,106 @@ cards.data.forEach(card => {
 
 ---
 
-## Batch Operations
-
-### Create Person with Contact Info
-
-```typescript
-const results = await client.batch.execute([
-  {
-    type: 'people.create',
-    data: {
-      firstName: 'John',
-      lastName: 'Doe'
-    }
-  },
-  {
-    type: 'people.addEmail',
-    personId: '$0.id',  // Reference person from step 0
-    data: {
-      address: 'john@example.com',
-      primary: true
-    }
-  },
-  {
-    type: 'people.addPhone',
-    personId: '$0.id',
-    data: {
-      number: '555-1234',
-      primary: true
-    }
-  }
-]);
-
-console.log(`Successful: ${results.successful.length}`);
-console.log(`Failed: ${results.failed.length}`);
-```
-
-**Result**: `BatchResult` with `successful`, `failed`, and `summary` properties
-
----
-
-### Batch Create Multiple People
-
-```typescript
-const people = [
-  { firstName: 'John', lastName: 'Doe', email: 'john@example.com' },
-  { firstName: 'Jane', lastName: 'Smith', email: 'jane@example.com' },
-  { firstName: 'Bob', lastName: 'Jones', email: 'bob@example.com' }
-];
-
-const operations = people.map((person, index) => [
-  {
-    type: 'people.create',
-    data: { firstName: person.firstName, lastName: person.lastName }
-  },
-  {
-    type: 'people.addEmail',
-    personId: `$${index * 2}.id`,
-    data: { address: person.email, primary: true }
-  }
-]).flat();
-
-const results = await client.batch.execute(operations);
-```
-
-**Result**: All people created with emails in a single batch
-
----
-
 ## Pagination
 
 ### Get All People (Automatic)
 
 ```typescript
-const allPeople = await client.people.getAllPages({
-  perPage: 100,
+const result = await client.people.getAll({
   include: ['emails', 'phone_numbers']
 });
 
-console.log(`Total people: ${allPeople.data.length}`);
+console.log(`Total people: ${result.data.length}`);
 ```
 
-**Result**: `Paginated<PersonResource>` with all pages fetched
+**Result**: `PaginationResult<PersonResource>` with `data`, `totalCount`, `pagesFetched`
 
 ---
 
 ### Get People with Manual Pagination
 
 ```typescript
-let page = 1;
-let hasMore = true;
-const allPeople = [];
+const response = await client.people.getPage({
+  per_page: 50,
+  page: 1,
+  include: ['emails']
+});
 
-while (hasMore) {
-  const response = await client.people.getAll({
-    perPage: 50,
-    page: page,
-    include: ['emails']
-  });
-
-  allPeople.push(...response.data);
-  hasMore = response.links?.next !== undefined;
-  page++;
-}
-
-console.log(`Total people: ${allPeople.length}`);
+console.log(`Page 1: ${response.data.length} people`);
+console.log('Has more:', response.links?.next != null);
 ```
 
-**Result**: All people fetched page by page
+**Result**: Single page; use `getAll()` for all pages or loop with `getPage({ page: n })`.
 
 ---
 
 ## Error Handling
 
-### Try-Catch with Error Categories
+### Try-Catch with PcoApiError
 
 ```typescript
-import { PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
 
 try {
   await client.people.create({ first_name: 'John' });
 } catch (error) {
-  if (error instanceof PcoError) {
-    switch (error.category) {
-      case ErrorCategory.AUTHENTICATION:
-        console.error('Auth failed - check token');
-        break;
-      case ErrorCategory.RATE_LIMIT:
-        const delay = error.getRetryDelay();
-        await new Promise(resolve => setTimeout(resolve, delay));
-        // Retry...
-        break;
-      case ErrorCategory.VALIDATION:
-        error.errors.forEach(err => {
-          console.error(`${err.source?.pointer}: ${err.detail}`);
-        });
-        break;
+  if (error instanceof PcoApiError) {
+    if (error.status === 401) console.error('Auth failed - check token');
+    else if (error.status === 429) {
+      const delay = error.rateLimitHeaders?.['Retry-After'];
+      await new Promise(r => setTimeout(r, delay ? parseInt(String(delay), 10) * 1000 : 20000));
+      // Retry...
+    } else if (error.status === 422) {
+      error.errors.forEach(err => console.error(`${err.source?.pointer}: ${err.detail}`));
     }
   }
 }
 ```
 
-**Result**: Handled errors based on category
+**Result**: Handled by status code
 
 ---
 
-### Retry with Backoff
+### Retry on rate limit (429)
 
 ```typescript
-import { retryWithBackoff } from '@rachelallyson/planning-center-people-ts';
-
-const person = await retryWithBackoff(
-  () => client.people.getById('person-id'),
-  {
-    maxRetries: 3,
-    baseDelay: 1000
+async function getWithRetry() {
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await client.people.getById('person-id');
+    } catch (error) {
+      if (error instanceof PcoApiError && error.status === 429 && i < 2) {
+        const delay = error.rateLimitHeaders?.['Retry-After'];
+        await new Promise(r => setTimeout(r, delay ? parseInt(String(delay), 10) * 1000 : 20000));
+        continue;
+      }
+      throw error;
+    }
   }
-);
+}
 ```
 
-**Result**: Retries on failure with exponential backoff
+**Result**: Retries on 429 with optional Retry-After delay
 
 ---
 
-## Event Monitoring
+## Debug & observability
 
-### Track All Requests
+### Debug logging
 
 ```typescript
-client.on('request:start', (event) => {
-  console.log(`[${event.requestId}] ${event.method} ${event.endpoint}`);
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
 });
-
-client.on('request:complete', (event) => {
-  console.log(`[${event.requestId}] ${event.status} in ${event.duration}ms`);
-});
-
-client.on('error', (event) => {
-  console.error(`[${event.operation}] Error:`, event.error);
-});
+// All requests are logged (start, complete, error) to console
 ```
 
-**Result**: Console logs for all request activity
+**Result**: Request/response logs in console
 
 ---
 
-### Monitor Rate Limits
-
-```typescript
-client.on('rate:limit', (event) => {
-  console.warn(`Rate limit: ${event.remaining}/${event.limit} remaining`);
-  
-  if (event.remaining < 10) {
-    console.warn('Approaching rate limit - slowing down');
-  }
-});
-```
-
-**Result**: Rate limit warnings
-
----
-
-## Performance
-
-### Get Performance Metrics
-
-```typescript
-const metrics = client.getPerformanceMetrics();
-
-console.log('Average response time:', metrics.averageResponseTime, 'ms');
-console.log('Success rate:', metrics.successRate);
-console.log('Total requests:', metrics.totalRequests);
-```
-
-**Result**: `PerformanceMetrics` object
-
----
-
-### Get Rate Limit Info
+### Get rate limit info
 
 ```typescript
 const info = client.getRateLimitInfo();
@@ -541,8 +421,8 @@ async function importPeopleFromCSV(filePath: string) {
   for (const row of csvData) {
     try {
       const person = await client.people.findOrCreate({
-        firstName: row.firstName,
-        lastName: row.lastName,
+        first_name: row.first_name,
+        last_name: row.last_name,
         email: row.email,
         matchStrategy: 'fuzzy'
       });
@@ -570,7 +450,7 @@ async function importPeopleFromCSV(filePath: string) {
         );
       }
     } catch (error) {
-      console.error(`Error importing ${row.firstName} ${row.lastName}:`, error);
+      console.error(`Error importing ${row.first_name} ${row.last_name}:`, error);
       results.errors++;
     }
   }
@@ -688,7 +568,7 @@ if (trust.shouldTrust) {
 ### Extend BaseModule
 
 ```typescript
-import { BaseModule, PcoHttpClient, PaginationHelper, PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { BaseModule, PcoHttpClient, PaginationHelper } from '@rachelallyson/planning-center-base-ts';
 
 class MyApiModule extends BaseModule {
   async getResource(id: string) {
@@ -701,13 +581,13 @@ class MyApiModule extends BaseModule {
 }
 
 // Usage
-const httpClient = new PcoHttpClient(config, eventEmitter);
+const httpClient = new PcoHttpClient(config);
 const paginationHelper = new PaginationHelper(httpClient);
-const myModule = new MyApiModule(httpClient, paginationHelper, eventEmitter);
+const myModule = new MyApiModule(httpClient, paginationHelper, () => config);
 ```
 
 **Result**: Custom module following the same patterns as People API modules
 
 ---
 
-**More Examples**: See [People Package Recipes](/people/recipes/examples) for additional examples.
+**More Examples**: See the rest of this page and the [Quick Start](/guides/quickstart) guide.

@@ -8,7 +8,7 @@
 
 **Monorepo** with npm workspaces containing three packages:
 
-1. **Base** (`packages/planning-center-base-ts`): Infrastructure (HTTP, auth, rate limiting, errors, JSON:API types, batch operations)
+1. **Base** (`packages/planning-center-base-ts`): Infrastructure (HTTP, auth, rate limiting, errors, JSON:API types)
 2. **People** (`packages/planning-center-people-ts`): People API client using base package
 3. **Check-Ins** (`packages/planning-center-check-ins-ts`): Check-Ins API client using base package
 
@@ -29,11 +29,11 @@
 
 ### Base Package (`@rachelallyson/planning-center-base-ts`)
 
-**Classes**: `PcoHttpClient`, `PcoRateLimiter`, `PaginationHelper`, `BaseModule`, `PcoEventEmitter`, `BatchExecutor`, `PcoApiError`, `PcoError`
+**Classes**: `PcoHttpClient`, `PcoRateLimiter`, `PaginationHelper`, `BaseModule`, `PcoApiError`
 
-**Functions**: `retryWithBackoff()`, `withErrorBoundary()`, `shouldNotRetry()`, `handleNetworkError()`, `handleTimeoutError()`, `handleValidationError()`
+**Functions**: `buildQueryParams()`, `createDebugLogger()`, `resolveIncluded()`, `flattenResource()`, `mapIncludedToRelationships()`, `rateLimitHeadersFromResponse()`
 
-**Types**: See `packages/planning-center-base-ts/src/index.ts` for full list (includes JSON:API types, config types, event types, batch types)
+**Types**: See `packages/planning-center-base-ts/src/index.ts` for full list (JSON:API types, config types, flattened types)
 
 ### People Package (`@rachelallyson/planning-center-people-ts`)
 
@@ -47,7 +47,7 @@
 
 **Main Export**: `PcoCheckInsClient` - Main client class for Check-Ins API
 
-**Modules** (properties of `PcoCheckInsClient`): `events`, `checkIns`, `locations`, `eventTimes`, `stations`, `labels`, `options`, `checkInGroups`, `preChecks`, `passes`, `headcounts`, `attendanceTypes`, `rosterListPersons`, `organization`, `integrationLinks`, `themes`, `batch`
+**Modules** (properties of `PcoCheckInsClient`): `events`, `checkIns`, `locations`, `eventTimes`, `stations`, `labels`, `options`, `checkInGroups`, `preChecks`, `passes`, `headcounts`, `attendanceTypes`, `rosterListPersons`, `organization`, `integrationLinks`, `themes`
 
 **Types**: See `packages/planning-center-check-ins-ts/src/index.ts` for full list (includes Check-Ins resource types)
 
@@ -56,9 +56,8 @@
 1. **Creating a client**: Use `new PcoClient(config)` with `PcoClientConfig`
 2. **Authentication**: See [config reference](./reference/config.mdx#authentication) - three methods supported
 3. **Finding/creating people**: `client.people.findOrCreate()` with matching strategies
-4. **Pagination**: Use `getAllPages()` or manual pagination - see [pagination guide](./guides/pagination.mdx)
-5. **Error handling**: Catch `PcoApiError` or `PcoError`, use retry utilities - see [error handling guide](./guides/error-handling.mdx)
-6. **Batch operations**: Use `client.batch.execute()` for multiple operations with dependency resolution
+4. **Pagination**: Use `getAll()` for all pages or `getPage()` for a single page - see [pagination guide](./guides/pagination.mdx)
+5. **Error handling**: Catch `PcoApiError`, check `error.status` (401, 422, 429, etc.) - see [error handling guide](./guides/error-handling.mdx)
 
 ## Don'ts (Guardrails)
 
@@ -83,17 +82,13 @@
 
 **Environment variables**: `PCO_APP_ID`, `PCO_APP_SECRET` (used if not provided in config)
 
-**Defaults**: See config reference for retry defaults (maxRetries: 3, baseDelay: 1000ms, maxDelay: 10000ms)
+**Defaults**: See [config reference](./reference/config.mdx) for baseURL, timeout, and debug options.
 
 ## Error Handling
 
-**Error hierarchy**:
-- `PcoApiError` - Base API error (status, statusText, errors array)
-- `PcoError extends PcoApiError` - Enhanced with category, severity, context
+**Error type**: `PcoApiError` (status, statusText, errors array, rateLimitHeaders)
 
-**Error categories**: `EXTERNAL_API`, `VALIDATION`, `NETWORK`, `AUTHENTICATION`, `AUTHORIZATION`
-
-**Retry strategy**: Exponential backoff (1000ms base, max 10000ms, 3 retries by default)
+**Handling**: Check `error.status` (401 auth, 404 not found, 422 validation, 429 rate limit). Use `error.rateLimitHeaders?.['Retry-After']` for 429 retry delay.
 
 ## HTTP & API Surface
 
@@ -119,5 +114,5 @@
 2. Check [config reference](./reference/config.mdx) for configuration
 3. Look at [recipes](./recipes/examples.mdx) for patterns
 4. Review [concepts](./concepts.mdx) for architecture understanding
-5. Check [People API docs](/people) for People API specifics
+5. Check [Quick Start](/guides/quickstart) and [API Reference](/api/) for People API usage
 

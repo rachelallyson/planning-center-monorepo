@@ -114,10 +114,9 @@ const client = new PcoClient({
 ```typescript
 // Check token validity
 try {
-  await client.people.getAll({ perPage: 1 });
+  await client.people.getAll({ per_page: 1 });
 } catch (error) {
-  if (error instanceof PcoError && 
-      error.category === ErrorCategory.AUTHENTICATION) {
+  if (error instanceof PcoApiError && error.status === 401) {
     // Token invalid - regenerate or refresh
   }
 }
@@ -144,13 +143,6 @@ if (info.remaining < 10) {
   // Slow down requests
   await new Promise(resolve => setTimeout(resolve, 1000));
 }
-
-// Listen to rate limit events
-client.on('rate:limit', (event) => {
-  if (event.remaining < 10) {
-    console.warn('Approaching rate limit - slowing down');
-  }
-});
 ```
 
 **Prevention**: Use batch operations to reduce request count
@@ -302,13 +294,21 @@ const client = new PcoClient({
 **Fix**:
 
 ```typescript
-// Enable error logging
-client.on('error', (event) => {
-  console.error('Error:', event.error);
-  if (event.error instanceof PcoApiError) {
-    console.error('Response:', event.error.errors);
-  }
+// Enable debug logging to see request/response and errors
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
 });
+
+// Or wrap calls in try/catch and log
+try {
+  await client.people.getById('1');
+} catch (error) {
+  console.error('Error:', error);
+  if (error instanceof PcoApiError) {
+    console.error('Response:', error.errors);
+  }
+}
 ```
 
 **Check**: Verify API response format matches JSON:API 1.0 spec
@@ -356,6 +356,6 @@ npm run docs:build
 
 1. Check [Contributing Guide](../CONTRIBUTING.md) for setup instructions
 2. Review [Error Handling Guide](./guides/error-handling.mdx) for error patterns
-3. See [People Package Troubleshooting](/people/troubleshooting) for People API specific issues
+3. See [Error Handling](/guides/error-handling) and [Configuration](/reference/config) for People/Check-Ins specifics
 4. Check GitHub Issues: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo/issues)
 

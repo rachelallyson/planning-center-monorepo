@@ -32,14 +32,26 @@ All documentation content lives here and is served by Nextra:
 
 All package documentation is unified in this monorepo documentation site:
 
-- **[Documentation Index](./content/index.mdx)** - Complete documentation for both packages
+- **[Documentation Index](./content/index.mdx)** - Complete documentation for all three packages
 - **[Base Package Reference](./content/concepts.mdx#base-package)** - Base package overview
 - **[People Package Reference](./content/concepts.mdx#people-package)** - People package overview
+- **[Check-Ins Package Reference](./content/concepts.mdx#check-ins-package)** - Check-Ins package overview
 
 Individual package READMEs:
 
 - **[Base Package README](../packages/planning-center-base-ts/README.md)** - Base package quick reference
 - **[People Package README](../packages/planning-center-people-ts/README.md)** - People package quick reference
+- **[Check-Ins Package README](../packages/planning-center-check-ins-ts/README.md)** - Check-Ins package quick reference
+
+## Running locally
+
+From the monorepo root:
+
+```bash
+npm run docs:dev   # http://localhost:3333
+```
+
+**Search (⌘K)**: Search is powered by Pagefind and is built during `npm run docs:build`. When running the dev server, search will not work until you run a production build at least once.
 
 ## 🎯 Quick Links
 

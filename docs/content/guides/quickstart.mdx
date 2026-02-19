@@ -98,7 +98,7 @@ const client = new PcoClient({
 
 ```typescript
 // Get first page of people
-const people = await client.people.getAll({ perPage: 25 });
+const people = await client.people.getAll({ per_page: 25 });
 
 console.log(`Found ${people.data.length} people`);
 people.data.forEach(person => {
@@ -106,7 +106,7 @@ people.data.forEach(person => {
 });
 
 // Get all pages automatically
-const allPeople = await client.people.getAllPages({ perPage: 25 });
+const allPeople = await client.people.getAll({ per_page: 25 });
 console.log(`Total: ${allPeople.data.length} people`);
 ```
 
@@ -115,8 +115,8 @@ console.log(`Total: ${allPeople.data.length} people`);
 ```typescript
 // Find existing person or create new one
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@example.com',
   phone: '555-1234',
   matchStrategy: 'fuzzy' // or 'exact'
@@ -182,106 +182,40 @@ const workflowCard = await client.workflows.addPersonToWorkflow(
 ## Step 3: Error Handling
 
 ```typescript
-import { PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
 
 try {
   const person = await client.people.create({ first_name: 'John' });
 } catch (error) {
-  if (error instanceof PcoError) {
-    switch (error.category) {
-      case ErrorCategory.AUTHENTICATION:
-        console.error('Authentication failed - check your token');
-        break;
-      case ErrorCategory.RATE_LIMIT:
-        console.error('Rate limited - retry after:', error.getRetryDelay(), 'ms');
-        break;
-      case ErrorCategory.VALIDATION:
-        console.error('Validation error:', error.message);
-        break;
-      default:
-        console.error('Error:', error.message);
-    }
+  if (error instanceof PcoApiError) {
+    if (error.status === 401) console.error('Authentication failed - check your token');
+    else if (error.status === 429) console.error('Rate limited - retry after delay');
+    else if (error.status === 422) console.error('Validation error:', error.message);
+    else console.error('Error:', error.message);
   } else {
-    // Non-PCO error
     throw error;
   }
 }
 ```
 
-## Step 4: Advanced Features
+## Step 4: Pagination and more
 
-### Batch Operations
+Use `getPage()` for a single page or `getAll()` for all pages. Set `config.debug: true` for request logging. For more examples (create, update, contacts), see [Recipes: Examples](/docs/content/recipes/examples.mdx).
 
-```typescript
-const results = await client.batch.execute([
-  {
-    type: 'people.create',
-    data: {
-      firstName: 'John',
-      lastName: 'Doe'
-    }
-  },
-  {
-    type: 'people.addEmail',
-    personId: '$0.id', // Reference person from step 0
-    data: {
-      address: 'john@example.com',
-      primary: true
-    }
-  },
-  {
-    type: 'people.addPhone',
-    personId: '$0.id',
-    data: {
-      number: '555-1234',
-      primary: true
-    }
-  }
-]);
-
-console.log(`Success: ${results.successful.length}`);
-console.log(`Failed: ${results.failed.length}`);
-console.log(`Success rate: ${(results.successRate * 100).toFixed(1)}%`);
-```
-
-### Event Monitoring
-
-The client emits events throughout its lifecycle. You can listen to these events for monitoring, logging, and debugging:
+### Debug logging and rate limit info
 
 ```typescript
-// Listen to request events
-client.on('request:start', (event) => {
-  console.log(`Starting: ${event.method} ${event.endpoint}`);
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
 });
 
-client.on('request:complete', (event) => {
-  console.log(`Completed: ${event.status} in ${event.duration}ms`);
-});
-
-client.on('error', (event) => {
-  console.error(`Error in ${event.operation}:`, event.error);
-});
-
-client.on('rate:limit', (event) => {
-  console.warn(`Rate limit: ${event.remaining}/${event.limit} remaining`);
-});
-```
-
-**See [Event System Guide](./event-system.mdx) for complete documentation of all event types and advanced patterns.**
-
-### Performance Metrics
-
-```typescript
-// Get performance metrics
-const metrics = client.getPerformanceMetrics();
-console.log('Average response time:', metrics.averageResponseTime);
-console.log('Success rate:', metrics.successRate);
-
-// Get rate limit info
 const rateLimitInfo = client.getRateLimitInfo();
 console.log('Requests remaining:', rateLimitInfo.remaining);
 console.log('Window resets in:', rateLimitInfo.windowResetsIn, 'ms');
 ```
+
+See [Event System & Debug](./event-system.mdx) for debug options (prefix, payloads).
 
 ## Complete Example
 
@@ -295,21 +229,14 @@ async function main() {
       type: 'personal_access_token',
       personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
     },
-    caching: {
-      fieldDefinitions: true,
-      ttl: 300000 // 5 minutes
-    },
-    retry: {
-      enabled: true,
-      maxRetries: 3
-    }
+    debug: true // optional: request logging
   });
 
   try {
     // Find or create person
     const person = await client.people.findOrCreate({
-      firstName: 'John',
-      lastName: 'Doe',
+      first_name: 'John',
+      last_name: 'Doe',
       email: 'john@example.com',
       matchStrategy: 'fuzzy'
     });
@@ -338,7 +265,7 @@ main();
 
 - **[Pagination Guide](./pagination.mdx)** - Learn about pagination patterns
 - **[Error Handling Guide](./error-handling.mdx)** - Comprehensive error handling
-- **[Event System Guide](./event-system.mdx)** - Complete event monitoring and observability
+- **[Debug & Observability](./event-system.mdx)** - Debug logging and rate limit info
 - **[Configuration Reference](../reference/config.mdx)** - All configuration options
 - **[Examples & Recipes](../recipes/examples.mdx)** - More code examples
 
