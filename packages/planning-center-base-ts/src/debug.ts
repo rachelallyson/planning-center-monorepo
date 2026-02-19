@@ -1,181 +1,67 @@
-/**
- * Debug logging for PCO clients: turn logs on/off and see everything that happens.
- *
- * Enable via client config:
- *   const client = new PcoClient({ auth: {...}, debug: true });
- *   // or with options:
- *   const client = new PcoClient({ auth: {...}, debug: { prefix: '[MyApp]', includePayloads: false } });
- *
- * Toggle at runtime:
- *   client.updateConfig({ debug: true });
- *   client.updateConfig({ debug: false });
- */
-
-import type { PcoEvent } from './types/events';
-import type { PcoClientConfig, PcoDebugOptions } from './types/config';
+import type { PcoClientConfig, PcoDebugOptions } from './config';
 
 const DEFAULT_PREFIX = '[PCO]';
 
-function normalizeOptions(debug: boolean | PcoDebugOptions | undefined): PcoDebugOptions | null {
-    if (debug === undefined || debug === false) return null;
-    if (debug === true) return { prefix: DEFAULT_PREFIX, includePayloads: false };
-    return {
-        prefix: debug.prefix ?? DEFAULT_PREFIX,
-        includePayloads: debug.includePayloads ?? false,
-        onLog: debug.onLog,
-    };
+function normalize(debug: boolean | PcoDebugOptions | undefined): PcoDebugOptions | null {
+  if (!debug) return null;
+  if (debug === true) return { prefix: DEFAULT_PREFIX, includePayloads: false };
+  return {
+    prefix: debug.prefix ?? DEFAULT_PREFIX,
+    includePayloads: debug.includePayloads ?? false,
+    onLog: debug.onLog,
+  };
 }
 
-function output(options: PcoDebugOptions, line: string, data?: unknown): void {
-    const message = `${options.prefix} ${line}`;
-    if (options.onLog) {
-        options.onLog(message, data);
-    } else {
-        // eslint-disable-next-line no-console
-        if (data !== undefined) console.log(message, data);
-        else console.log(message);
-    }
+function output(opts: PcoDebugOptions, line: string, data?: object): void {
+  const payload = opts.includePayloads ? data : undefined;
+  if (opts.onLog) opts.onLog(line, payload);
+  else if (payload !== undefined) console.log(line, payload);
+  else console.log(line);
 }
 
-function formatEvent(event: PcoEvent, includePayloads: boolean): string {
-    const ts = 'timestamp' in event ? event.timestamp : '';
-    switch (event.type) {
-        case 'request:start': {
-            const paramsStr = event.params && Object.keys(event.params).length > 0
-                ? `  params=${JSON.stringify(event.params)}`
-                : '';
-            return `→ ${event.method} ${event.endpoint}${paramsStr}  (requestId: ${event.requestId}) ${ts}`;
-        }
-        case 'request:complete': {
-            const parts = [`← ${event.method} ${event.endpoint}  ${event.status}  ${event.duration}ms`];
-            if (event.params && Object.keys(event.params).length > 0) parts.push(`params=${JSON.stringify(event.params)}`);
-            if (event.retryCount != null && event.retryCount > 0) parts.push(`retries=${event.retryCount}`);
-            if (event.rateLimitRemaining != null) parts.push(`rate=${event.rateLimitRemaining}/${event.rateLimitLimit ?? '?'}`);
-            if (event.responseSummary) parts.push(event.responseSummary);
-            parts.push(`(requestId: ${event.requestId})`, ts);
-            return parts.join('  ');
-        }
-        case 'request:error': {
-            const paramsStr = event.params && Object.keys(event.params).length > 0
-                ? `  params=${JSON.stringify(event.params)}`
-                : '';
-            return `✗ ${event.method} ${event.endpoint}${paramsStr}  ERROR  (requestId: ${event.requestId}) ${ts}`;
-        }
-        case 'auth:success':
-            return `auth:success  type=${event.authType} ${ts}`;
-        case 'auth:failure':
-            return `auth:failure  type=${event.authType} ${ts}`;
-        case 'auth:refresh':
-            return `auth:refresh  success=${event.success} type=${event.authType} ${ts}`;
-        case 'rate:limit':
-            return `rate:limit  remaining=${event.remaining} limit=${event.limit} reset=${event.resetTime} ${ts}`;
-        case 'rate:available':
-            return `rate:available  remaining=${event.remaining} limit=${event.limit} ${ts}`;
-        case 'cache:hit':
-            return `cache:hit  key=${event.key} ${ts}`;
-        case 'cache:miss':
-            return `cache:miss  key=${event.key} ${ts}`;
-        case 'cache:set':
-            return `cache:set  key=${event.key} ${event.ttl != null ? `ttl=${event.ttl}ms` : ''} ${ts}`;
-        case 'cache:invalidate':
-            return `cache:invalidate  key=${event.key} ${ts}`;
-        case 'error':
-            return `error  operation=${event.operation} ${ts}`;
-        default:
-            return `event  type=${(event as PcoEvent).type} ${ts}`;
-    }
-}
-
-/** Minimal client interface for attaching the debug listener (avoids strict event type overloads). */
-export interface PcoDebugListenable {
-    on(type: string, handler: (e: PcoEvent) => void): void;
-    off(type: string, handler: (e: PcoEvent) => void): void;
-    getConfig(): PcoClientConfig;
-}
-
-/**
- * Attach a debug listener to a client that logs every event when config.debug is enabled.
- * Returns an unsubscribe function. The listener checks config on each event so you can
- * turn debug on/off at runtime via updateConfig({ debug: true }) or updateConfig({ debug: false }).
- */
-export function attachDebugListener(
-    client: PcoDebugListenable,
-    getConfig: () => PcoClientConfig
-): () => void {
-    const handler = (event: PcoEvent): void => {
-        const config = getConfig();
-        const options = normalizeOptions(config.debug);
-        if (!options) return;
-
-        const line = formatEvent(event, options.includePayloads ?? false);
-        if (options.includePayloads) {
-            output(options, line, event);
-        } else {
-            output(options, line);
-            if (event.type === 'request:error' && 'error' in event) {
-                output(options, `   error: ${(event as { error: Error }).error.message}`);
-            }
-            if (event.type === 'auth:failure' && 'error' in event) {
-                output(options, `   error: ${(event as { error: Error }).error.message}`);
-            }
-            if (event.type === 'error' && 'error' in event) {
-                output(options, `   error: ${(event as { error: Error }).error.message}`);
-            }
-        }
-    };
-
-    const eventTypes: Array<PcoEvent['type']> = [
-        'request:start',
-        'request:complete',
-        'request:error',
-        'auth:success',
-        'auth:failure',
-        'auth:refresh',
-        'rate:limit',
-        'rate:available',
-        'cache:hit',
-        'cache:miss',
-        'cache:set',
-        'cache:invalidate',
-        'error',
-    ];
-
-    for (const type of eventTypes) {
-        client.on(type, handler);
-    }
-
-    return () => {
-        for (const type of eventTypes) {
-            client.off(type, handler);
-        }
-    };
-}
-
-/**
- * Create a one-off debug logger for use inside a package (e.g. matching, helpers).
- * Only logs when the given config has debug enabled. Safe to call from any module.
- */
+/** Create a debug logger from client config. Returns { enabled, log }; log no-ops when debug is off. */
 export function createDebugLogger(config: { debug?: boolean | PcoDebugOptions } | null | undefined): {
-    log: (message: string, data?: unknown) => void;
-    enabled: boolean;
+  log: (message: string, data?: object) => void;
+  enabled: boolean;
 } {
-    const options = normalizeOptions(config?.debug);
-    return {
-        enabled: options !== null,
-        log(message: string, data?: unknown) {
-            if (!options) return;
-            if (options.includePayloads && data !== undefined) {
-                output(options, message, data);
-            } else {
-                output(options, message);
-            }
-        },
-    };
+  const opts = normalize(config?.debug);
+  return {
+    enabled: opts !== null,
+    log(message: string, data?: object) {
+      if (!opts) return;
+      output(opts, `${opts.prefix} ${message}`, data);
+    },
+  };
 }
 
-/**
- * Format an event as a single string (for tests or custom handlers).
- */
-export function formatDebugEvent(event: PcoEvent, includePayloads = false): string {
-    return formatEvent(event, includePayloads);
+/** Log outbound request (when config.debug is set). */
+export function logRequestStart(
+  config: PcoClientConfig | null | undefined,
+  data: { method: string; endpoint: string; requestId: string; params?: Record<string, string | number | boolean | undefined | null> },
+): void {
+  const opts = normalize(config?.debug);
+  if (!opts) return;
+  output(opts, `→ ${data.method} ${data.endpoint} ${data.requestId}`, opts.includePayloads ? data : undefined);
+}
+
+/** Log request completion (when config.debug is set). */
+export function logRequestComplete(
+  config: PcoClientConfig | null | undefined,
+  data: { method: string; endpoint: string; status: number; duration: number; requestId: string },
+): void {
+  const opts = normalize(config?.debug);
+  if (!opts) return;
+  output(opts, `← ${data.method} ${data.endpoint} ${data.status} ${data.duration}ms`);
+}
+
+/** Log request error (when config.debug is set). */
+export function logRequestError(
+  config: PcoClientConfig | null | undefined,
+  data: { method: string; endpoint: string; requestId: string; error: Error },
+): void {
+  const opts = normalize(config?.debug);
+  if (!opts) return;
+  const line = `✗ ${data.method} ${data.endpoint} ${data.error.message}`;
+  if (opts.onLog) opts.onLog(line);
+  else console.error(line);
 }

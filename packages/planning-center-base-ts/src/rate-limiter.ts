@@ -1,22 +1,11 @@
-/**
- * PCO Rate Limiter
- *
- * Planning Center Online has the following rate limits:
- * - 100 requests per 20 seconds (subject to change)
- * - Rate limit headers are returned on every response
- * - 429 responses include Retry-After header
- * - Limits and time periods can change dynamically
- *
- * This rate limiter tracks requests and enforces these limits.
- */
-
+/** Current rate limit state: limit, remaining requests, reset timestamp (ms). */
 export interface RateLimitInfo {
   limit: number;
   remaining: number;
   resetTime: number;
-  retryAfter?: number;
 }
 
+/** PCO rate-limit response headers (parsed from Response). */
 export interface RateLimitHeaders {
   'X-PCO-API-Request-Rate-Limit'?: string;
   'X-PCO-API-Request-Rate-Period'?: string;
@@ -24,52 +13,45 @@ export interface RateLimitHeaders {
   'Retry-After'?: string;
 }
 
+function parseNum(s: string | undefined): number | null {
+  if (s === undefined) return null;
+  const n = parseInt(s, 10);
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Tracks PCO rate limits and waits when needed. Used by PcoHttpClient; you typically
+ * call client.getRateLimitInfo() rather than using this class directly.
+ */
 export class PcoRateLimiter {
   private requestCount = 0;
   private windowStart = Date.now();
-  private readonly defaultLimit = 100; // requests per 20 seconds
-  private readonly defaultWindow = 20000; // 20 seconds in milliseconds
+  private readonly defaultLimit = 100;
+  private readonly defaultWindow = 20000;
   private limit: number;
   private windowMs: number;
 
+  /** @param limit Max requests per window (default 100). @param windowMs Window length in ms (default 20000). */
   constructor(limit?: number, windowMs?: number) {
-    this.limit = limit || this.defaultLimit;
-    this.windowMs = windowMs || this.defaultWindow;
+    this.limit = limit ?? this.defaultLimit;
+    this.windowMs = windowMs ?? this.defaultWindow;
   }
 
-  /**
-   * Check if a request can be made
-   */
-  canMakeRequest(): boolean {
-    this.updateWindow();
-
-    return this.requestCount < this.limit;
-  }
-
-  /**
-   * Record a request
-   */
+  /** Record one request (call after each API request). */
   recordRequest(): void {
     this.updateWindow();
     this.requestCount++;
   }
 
-  /**
-   * Get time until next window reset
-   */
+  /** Milliseconds until the current window resets. */
   getTimeUntilReset(): number {
     this.updateWindow();
-    const now = Date.now();
-
-    return Math.max(0, this.windowStart + this.windowMs - now);
+    return Math.max(0, this.windowStart + this.windowMs - Date.now());
   }
 
-  /**
-   * Get current rate limit info
-   */
+  /** Current limit, remaining, and reset timestamp. */
   getRateLimitInfo(): RateLimitInfo {
     this.updateWindow();
-
     return {
       limit: this.limit,
       remaining: Math.max(0, this.limit - this.requestCount),
@@ -77,97 +59,35 @@ export class PcoRateLimiter {
     };
   }
 
-  /**
-   * Update rate limit info from response headers
-   */
+  /** Update state from response headers (e.g. after a 429 or successful request). */
   updateFromHeaders(headers: RateLimitHeaders): void {
-    if (headers['X-PCO-API-Request-Rate-Limit']) {
-      this.limit = parseInt(headers['X-PCO-API-Request-Rate-Limit'], 10);
-    }
+    const limitVal = parseNum(headers['X-PCO-API-Request-Rate-Limit']);
+    if (limitVal !== null) this.limit = limitVal;
 
-    if (headers['X-PCO-API-Request-Rate-Period']) {
-      // Update window period from server (in seconds, convert to milliseconds)
-      const periodSeconds = parseInt(headers['X-PCO-API-Request-Rate-Period'], 10);
-      if (!isNaN(periodSeconds)) {
-        this.windowMs = periodSeconds * 1000;
-      }
-    }
+    const periodVal = parseNum(headers['X-PCO-API-Request-Rate-Period']);
+    if (periodVal !== null) this.windowMs = periodVal * 1000;
 
-    if (headers['X-PCO-API-Request-Rate-Count']) {
-      this.requestCount = parseInt(headers['X-PCO-API-Request-Rate-Count'], 10);
-    }
+    const countVal = parseNum(headers['X-PCO-API-Request-Rate-Count']);
+    if (countVal !== null) this.requestCount = countVal;
 
-    if (headers['Retry-After']) {
-      // Update reset time based on retry-after header
-      const retryAfterSeconds = parseInt(headers['Retry-After'], 10);
-      if (!isNaN(retryAfterSeconds)) {
-        this.windowStart = Date.now() - (this.windowMs - retryAfterSeconds * 1000);
-      }
-    }
+    const retryVal = parseNum(headers['Retry-After']);
+    if (retryVal !== null) this.windowStart = Date.now() - (this.windowMs - retryVal * 1000);
   }
 
-  /**
-   * Wait until a request can be made
-   */
-  async waitForAvailability() {
+  /** Wait until under the limit (used before retrying after 429). */
+  async waitForAvailability(): Promise<void> {
     this.updateWindow();
-
-    if (this.requestCount < this.limit) {
-      return;
-    }
-
-    const waitTime = this.getTimeUntilReset();
-
-    if (waitTime > 0) {
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-
+    if (this.requestCount < this.limit) return;
+    const wait = this.getTimeUntilReset();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     this.updateWindow();
   }
 
-  /**
-   * Get debug information about the rate limiter state
-   */
-  getDebugInfo() {
-    this.updateWindow();
-    
-    return {
-      canMakeRequest: this.canMakeRequest(),
-      limit: this.limit,
-      requestCount: this.requestCount,
-      timeUntilReset: this.getTimeUntilReset(),
-      windowMs: this.windowMs,
-      windowStart: this.windowStart,
-    };
-  }
-
-  /**
-   * Parse rate limit error details from error message
-   */
-  static parseRateLimitError(errorDetail: string): { current: number; limit: number; period: number } | null {
-    const match = errorDetail.match(/Rate limit exceeded: (\d+) of (\d+) requests per (\d+) seconds/);
-    
-    if (!match) {
-      return null;
-    }
-
-    return {
-      current: parseInt(match[1], 10),
-      limit: parseInt(match[2], 10),
-      period: parseInt(match[3], 10),
-    };
-  }
-
-  /**
-   * Update the window if needed
-   */
   private updateWindow(): void {
     const now = Date.now();
-
     if (now - this.windowStart >= this.windowMs) {
       this.requestCount = 0;
       this.windowStart = now;
     }
   }
 }
-

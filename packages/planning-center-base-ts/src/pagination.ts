@@ -1,419 +1,309 @@
-/**
- * v2.0.0 Pagination Utilities
- */
-
-import type { PcoClientConfig } from './types/config';
-import type { ResourceObject, Paginated, Meta, TopLevelLinks } from './types/json-api';
+import type { PcoClientConfig } from './config';
 import type { PcoHttpClient } from './http-client';
+import type { ResourceObject, Meta, TopLevelLinks, JsonValue } from './json-api';
+import type { FlattenedResourceResult } from './flattened';
 import { mapIncludedToRelationships } from './included-resolver';
-import type { FlattenedResource } from './types/flattened-resource';
+import { buildQueryParams, type QueryOptions, type FlatQueryParams } from './query-params';
 import { createDebugLogger } from './debug';
+import { isRecord, isResourceLike, isTopLevelLinks } from './typed';
 
+/** Options for getAllPages: cap on pages, progress callback, delay between pages. */
 export interface PaginationOptions {
-    /** Maximum number of pages to fetch */
-    maxPages?: number;
-    /** Items per page */
-    perPage?: number;
-    /** Progress callback */
-    onProgress?: (current: number, total: number) => void;
-    /** Delay between requests in milliseconds */
-    delay?: number;
+  maxPages?: number;
+  onProgress?: (current: number, total: number) => void;
+  delay?: number;
 }
 
-export interface PaginationResult<
-    T extends ResourceObject<string, any, any>, 
-    TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-    TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
-    TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
-> {
-    data: FlattenedResource<
-        T['type'],
-        T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-        T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never,
-        TRelResourceMap,
-        TResourceTypeToRelMap
-   >[];
-    totalCount: number;
-    pagesFetched: number;
-    duration: number;
-    /** Meta information from the API response (from last page) */
-    meta?: Meta;
-    /** Links from the API response (from last page) */
-    links?: TopLevelLinks;
+/** Options for getAllPages. Fetches all pages using max per_page (100); per_page and page are not accepted. */
+export type GetAllPagesOptions = Omit<QueryOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Result of getAllPages: flattened data array, totalCount from meta, pagesFetched, duration, last page meta/links. */
+export interface PaginationResult<T = FlattenedResourceResult> {
+  data: T[];
+  totalCount: number;
+  pagesFetched: number;
+  duration: number;
+  meta?: Meta;
+  links?: TopLevelLinks;
 }
 
-export class PaginationHelper {
-    constructor(
-        private httpClient: PcoHttpClient,
-        private getConfig?: () => PcoClientConfig
-    ) { }
+function extractPageData(doc: Record<string, JsonValue>): ResourceObject<string, object, object>[] {
+  const data = doc.data;
+  if (!Array.isArray(data)) return [];
+  const filtered = data.filter((item) => isResourceLike(item));
+  /* eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-restricted-types -- JSON:API data array; filter yields resource-like; double cast required */
+  return filtered as unknown as ResourceObject<string, object, object>[];
+}
 
-    private debugLog(message: string, data?: unknown): void {
-        const logger = createDebugLogger(this.getConfig?.());
-        if (logger.enabled) logger.log(message, data);
-    }
+function mergeIncluded(doc: Record<string, JsonValue>, includedMap: Map<string, ResourceObject<string, object, object>>): void {
+  const included = doc.included;
+  if (!Array.isArray(included)) return;
+  for (const inc of included) {
+    if (!isResourceLike(inc)) continue;
+    const key = `${inc.type}:${inc.id}`;
+    if (!includedMap.has(key)) includedMap.set(key, inc);
+  }
+}
 
-    async getAllPages<
-        T extends ResourceObject<string, any, any>, 
-        TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>,
-        TRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> = Record<string, never>,
-        TResourceTypeToRelMap extends Record<string, object> = Record<string, never>
-    >(
-        endpoint: string,
-        params: Record<string, any> = {},
-        options: PaginationOptions = {}
-    ) {
-        // Ensure endpoint is a string
-        if (typeof endpoint !== 'string') {
-            throw new Error(`Expected endpoint to be a string, got ${typeof endpoint}`);
-        }
-        const {
-            maxPages = 1000,
-            perPage = 100,
-            onProgress,
-            delay = 50,
-        } = options;
+function getTotalCount(doc: Record<string, JsonValue>): number {
+  const meta = doc.meta;
+  if (!isRecord(meta) || typeof meta.total_count === 'undefined') return 0;
+  return Number(meta.total_count) || 0;
+}
 
-        const startTime = Date.now();
-        this.debugLog('pagination  getAllPages start', { endpoint, maxPages, perPage });
-        const allData: T[] = [];
-        // Use Map to deduplicate included resources by type+id
-        const includedMap = new Map<string, TIncluded>();
-        let page = 1;
-        let offset: number | null = null;
-        let previousOffset: number | null = null;
-        let hasMore = true;
-        let totalCount = 0;
-        let useOffsetPagination = false;
-        // Preserve meta and links from the last page response
-        let lastPageMeta: Meta | undefined;
-        let lastPageLinks: TopLevelLinks | undefined;
+function getNextLink(doc: Record<string, JsonValue>): string | undefined {
+  const links = doc.links;
+  if (!isRecord(links) || typeof links.next !== 'string') return undefined;
+  return links.next;
+}
 
-        while (hasMore && page <= maxPages) {
-            const requestParams: Record<string, any> = {
-                ...params,
-            };
+function parseOffsetFromNext(nextLink: string): number | null {
+  const m = nextLink.match(/offset=(\d+)/);
+  if (!m?.[1]) return null;
+  return parseInt(m[1], 10);
+}
 
-            // Use offset if detected, otherwise use page
-            if (useOffsetPagination && offset !== null) {
-                requestParams.offset = offset;
-            } else {
-                requestParams.page = page;
-            }
-            requestParams.per_page = perPage;
+function buildPageParams(
+  rest: Omit<GetAllPagesOptions, 'maxPages' | 'onProgress' | 'delay'>,
+  perPage: number,
+  page: number,
+  useOffset: boolean,
+  offset: number | null,
+): FlatQueryParams {
+  const params = buildQueryParams({ ...rest, per_page: perPage, page });
+  if (useOffset && offset !== null) params.offset = offset;
+  else params.page = page;
+  return params;
+}
 
-            const response = await this.httpClient.request<Paginated<T, TIncluded>>({
-                method: 'GET',
-                endpoint,
-                params: requestParams,
-            });
+interface PageFetchResult {
+  pageData: ResourceObject<string, object, object>[];
+  nextLink: string | undefined;
+  totalCount: number;
+  meta: Meta | undefined;
+  links: TopLevelLinks | undefined;
+}
 
-            const pageData = Array.isArray(response.data?.data) ? response.data.data : [];
-            this.debugLog('pagination  page', { endpoint, page, count: pageData.length });
+function getMetaFromDoc(doc: Record<string, JsonValue>): Meta | undefined {
+  return isRecord(doc.meta) ? doc.meta : undefined;
+}
 
-            // Capture meta and links from each page (will be overwritten, keeping the last page's)
-            lastPageMeta = response.data.meta;
-            lastPageLinks = response.data.links;
+function getLinksFromDoc(doc: Record<string, JsonValue>): TopLevelLinks | undefined {
+  return isTopLevelLinks(doc.links) ? doc.links : undefined;
+}
 
-            if (response.data.data && Array.isArray(response.data.data)) {
-                allData.push(...response.data.data);
-            }
+function pageFetchResultFromDoc(doc: Record<string, JsonValue> | null): PageFetchResult {
+  if (!doc) {
+    return { pageData: [], nextLink: undefined, totalCount: 0, meta: undefined, links: undefined };
+  }
+  return {
+    pageData: extractPageData(doc),
+    nextLink: getNextLink(doc),
+    totalCount: getTotalCount(doc),
+    meta: getMetaFromDoc(doc),
+    links: getLinksFromDoc(doc),
+  };
+}
 
-            // Collect included resources, deduplicating by type+id
-            if (response.data.included && Array.isArray(response.data.included)) {
-                for (const included of response.data.included) {
-                    const key = `${included.type}:${included.id}`;
-                    if (!includedMap.has(key)) {
-                        includedMap.set(key, included as TIncluded);
-                    }
-                }
-            }
+async function fetchOnePage(
+  httpClient: PcoHttpClient,
+  endpoint: string,
+  params: FlatQueryParams,
+  includedMap: Map<string, ResourceObject<string, object, object>>,
+): Promise<PageFetchResult> {
+  const res = await httpClient.request({ method: 'GET', endpoint, params });
+  const doc: Record<string, JsonValue> | null = isRecord(res.data) ? res.data : null;
+  const result = pageFetchResultFromDoc(doc);
+  if (doc) mergeIncluded(doc, includedMap);
+  return result;
+}
 
-            if (response.data.meta?.total_count) {
-                totalCount = Number(response.data.meta.total_count) || 0;
-            }
+interface NextPageState {
+  offset: number | null;
+  page: number;
+  useOffset: boolean;
+  hasMore: boolean;
+}
 
-            // Check if we have a next link and detect pagination type
-            const nextLink = response.data.links?.next;
-            hasMore = !!nextLink;
-            
-            // Detect if API uses offset-based pagination
-            if (nextLink && nextLink.includes('offset=') && !useOffsetPagination) {
-                useOffsetPagination = true;
-            }
+function useOffsetPagination(nextLink: string | undefined, current: boolean): boolean {
+  return current || (typeof nextLink === 'string' && nextLink.includes('offset='));
+}
 
-            // Extract offset from next link if using offset pagination
-            if (hasMore && useOffsetPagination && nextLink) {
-                const offsetMatch = nextLink.match(/offset=(\d+)/);
-                if (offsetMatch) {
-                    previousOffset = offset;
-                    offset = parseInt(offsetMatch[1], 10);
-                    
-                    // Loop detection: if new offset equals previous offset, we're stuck
-                    if (previousOffset !== null && offset === previousOffset) {
-                        this.debugLog('pagination  loop detected (offset not advancing)', { offset });
-                        hasMore = false;
-                    }
-                } else {
-                    hasMore = false; // No offset found, assume we're done
-                }
-            }
-            
-            // Additional safeguard for page-based pagination
-            if (hasMore && nextLink && !useOffsetPagination && nextLink.includes(`page=${page}`)) {
-                this.debugLog('pagination  loop detected (next link same page)', { page });
-                hasMore = false;
-            }
-            
-            if (!useOffsetPagination) {
-                page++;
-            }
+function parseNextOffset(nextLink: string | undefined, useOffset: boolean, currentOffset: number | null): { nextOffset: number | null; hasMore: boolean } {
+  if (!nextLink || !useOffset) return { nextOffset: currentOffset, hasMore: false };
+  const parsed = parseOffsetFromNext(nextLink);
+  return { nextOffset: parsed ?? currentOffset, hasMore: parsed !== null };
+}
 
-            if (onProgress) {
-                onProgress(allData.length, totalCount || allData.length);
-            }
+function computeNextPageState(
+  nextLink: string | undefined,
+  useOffset: boolean,
+  offset: number | null,
+  page: number,
+): NextPageState {
+  const nextUseOffset = useOffsetPagination(nextLink, useOffset);
+  const { nextOffset, hasMore: stillHasMore } = parseNextOffset(nextLink, nextUseOffset, offset);
+  const nextPage = nextUseOffset ? page : page + 1;
+  const hasMore = !!nextLink && (!nextUseOffset || stillHasMore);
+  return { offset: nextOffset, page: nextPage, useOffset: nextUseOffset, hasMore };
+}
 
-            // Add delay between requests to respect rate limits
-            if (hasMore && delay > 0) {
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
+interface PageLoopState {
+  page: number;
+  offset: number | null;
+  useOffset: boolean;
+  hasMore: boolean;
+  allData: ResourceObject<string, object, object>[];
+  totalCount: number;
+  lastMeta: Meta | undefined;
+  lastLinks: TopLevelLinks | undefined;
+}
 
-        const pagesFetched = page - 1;
-        const duration = Date.now() - startTime;
-        this.debugLog('pagination  getAllPages complete', { endpoint, pagesFetched, totalCount: allData.length, duration });
+function initialPageLoopState(): PageLoopState {
+  return {
+    page: 1,
+    offset: null,
+    useOffset: false,
+    hasMore: true,
+    allData: [],
+    totalCount: 0,
+    lastMeta: undefined,
+    lastLinks: undefined,
+  };
+}
 
-        // Map included resources to relationships in all collected data
-        // Always flatten, even if no included data (to maintain consistent return type)
-        const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
-        const mappedData = mapIncludedToRelationships(allData, includedArray);
+function buildFlattenedData(
+  allData: ResourceObject<string, object, object>[],
+  includedMap: Map<string, ResourceObject<string, object, object>>,
+): FlattenedResourceResult[] {
+  const included = includedMap.size ? Array.from(includedMap.values()) : undefined;
+  return mapIncludedToRelationships(allData, included);
+}
 
-        return {
-            data: mappedData,
-            totalCount,
-            pagesFetched,
-            duration,
-            meta: lastPageMeta,
-            links: lastPageLinks,
-        };
-    }
+function buildPaginationResult(
+  data: FlattenedResourceResult[],
+  state: PageLoopState,
+  startTime: number,
+): PaginationResult<FlattenedResourceResult> {
+  return {
+    data,
+    totalCount: state.totalCount,
+    pagesFetched: state.page - 1,
+    duration: Date.now() - startTime,
+    meta: state.lastMeta,
+    links: state.lastLinks,
+  };
+}
 
-    async getPage<T extends ResourceObject<string, any, any>, TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
-        endpoint: string,
-        page: number = 1,
-        perPage: number = 100,
-        params: Record<string, any> = {}
-    ) {
-        const response = await this.httpClient.request<Paginated<T, TIncluded>>({
-            method: 'GET',
-            endpoint,
-            params: {
-                ...params,
-                page,
-                per_page: perPage,
-            },
-        });
+function logGetAllPagesStart(
+  logger: { enabled: boolean; log: (msg: string, data: object) => void },
+  endpoint: string,
+  maxPages: number,
+  perPage: number,
+): void {
+  if (logger.enabled) logger.log('getAllPages start', { endpoint, maxPages, per_page: perPage });
+}
 
-        return response.data;
-    }
+function logGetAllPagesDone(
+  logger: { enabled: boolean; log: (msg: string, data: object) => void },
+  endpoint: string,
+  count: number,
+  startTime: number,
+): void {
+  if (logger.enabled) logger.log('getAllPages done', { endpoint, count, duration: Date.now() - startTime });
+}
 
-    async* streamPages<T extends ResourceObject<string, any, any>>(
-        endpoint: string,
-        params: Record<string, any> = {},
-        options: PaginationOptions = {}
-    ): AsyncGenerator<T[], void, unknown> {
-        const {
-            maxPages = 1000,
-            perPage = 100,
-            delay = 50,
-        } = options;
+async function runPageLoop(
+  httpClient: PcoHttpClient,
+  endpoint: string,
+  rest: Omit<GetAllPagesOptions, 'maxPages' | 'onProgress' | 'delay'>,
+  perPage: number,
+  maxPages: number,
+  delay: number,
+  onProgress: ((current: number, total: number) => void) | undefined,
+): Promise<{ state: PageLoopState; includedMap: Map<string, ResourceObject<string, object, object>> }> {
+  const includedMap = new Map<string, ResourceObject<string, object, object>>();
+  let state = initialPageLoopState();
+  while (state.hasMore && state.page <= maxPages) {
+    state = await processOnePage(httpClient, endpoint, rest, perPage, includedMap, state, delay, onProgress);
+  }
+  return { state, includedMap };
+}
 
-        let page = 1;
-        let hasMore = true;
+function appendPageData(
+  allData: ResourceObject<string, object, object>[],
+  pageData: ResourceObject<string, object, object>[],
+): void {
+  for (const item of pageData) allData.push(item);
+}
 
-        while (hasMore && page <= maxPages) {
-            const response = await this.httpClient.request<Paginated<T>>({
-                method: 'GET',
-                endpoint,
-                params: {
-                    ...params,
-                    page,
-                    per_page: perPage,
-                },
-            });
+async function maybeDelay(hasMore: boolean, delayMs: number): Promise<void> {
+  if (hasMore && delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+}
 
-            if (response.data.data && Array.isArray(response.data.data)) {
-                yield response.data.data;
-            }
-
-            // Check if we have a next link and if it's different from current page
-            const nextLink = response.data.links?.next;
-            hasMore = !!nextLink;
-            
-            // Additional safeguard: if we're getting the same page repeatedly, break the loop
-            if (hasMore && nextLink && nextLink.includes(`page=${page}`)) {
-                this.debugLog('pagination  loop detected (streamPages same page)', { page });
-                hasMore = false;
-            }
-            
-            page++;
-
-            if (hasMore && delay > 0) {
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    }
-
-    /**
-     * Get all pages with parallel processing for better performance
-     */
-    async getAllPagesParallel<T extends ResourceObject<string, any, any>, TIncluded extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
-        endpoint: string,
-        params: Record<string, any> = {},
-        options: PaginationOptions & { maxConcurrency?: number } = {}
-    ) {
-        const {
-            maxPages = 1000,
-            perPage = 100,
-            maxConcurrency = 3,
-            onProgress,
-        } = options;
-
-        const startTime = Date.now();
-
-        // First, get the first page to determine total count
-        const firstPage = await this.getPage<T, TIncluded>(endpoint, 1, perPage, params);
-        const totalCount = Number(firstPage.meta?.total_count) || 0;
-        const totalPages = Math.min(Math.ceil(totalCount / perPage), maxPages);
-
-        const allData: T[] = [...(firstPage.data || [])];
-        // Use Map to deduplicate included resources by type+id
-        const includedMap = new Map<string, TIncluded>();
-        
-        // Collect included from first page
-        if (firstPage.included && Array.isArray(firstPage.included)) {
-            for (const included of firstPage.included) {
-                const key = `${included.type}:${included.id}`;
-                if (!includedMap.has(key)) {
-                    includedMap.set(key, included as TIncluded);
-                }
-            }
-        }
-
-        // Track last page's meta and links (will be updated as we process pages)
-        let lastPageMeta: Meta | undefined = firstPage.meta;
-        let lastPageLinks: TopLevelLinks | undefined = firstPage.links;
-
-        if (totalPages <= 1) {
-            // Map included resources to relationships
-            // Always flatten, even if no included data (to maintain consistent return type)
-            const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
-            const mappedData = mapIncludedToRelationships(allData, includedArray);
-            
-            return {
-                data: mappedData,
-                totalCount,
-                pagesFetched: 1,
-                duration: Date.now() - startTime,
-                meta: lastPageMeta,
-                links: lastPageLinks,
-            };
-        }
-
-        // Process remaining pages in parallel batches
-        const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-        const semaphore = new Semaphore(maxConcurrency);
-
-        const pagePromises = remainingPages.map(async (pageNum) => {
-            await semaphore.acquire();
-            try {
-                const page = await this.getPage<T, TIncluded>(endpoint, pageNum, perPage, params);
-                return {
-                    pageNum,
-                    data: page.data || [],
-                    included: page.included || [],
-                    meta: page.meta,
-                    links: page.links
-                };
-            } finally {
-                semaphore.release();
-            }
-        });
-
-        const pageResults = await Promise.all(pagePromises);
-
-        // Sort by page number to ensure we process in order and get the actual last page
-        pageResults.sort((a, b) => a.pageNum - b.pageNum);
-
-        for (const pageResult of pageResults) {
-            allData.push(...pageResult.data);
-            
-            // Collect included resources, deduplicating by type+id
-            for (const included of pageResult.included) {
-                const key = `${included.type}:${included.id}`;
-                if (!includedMap.has(key)) {
-                    includedMap.set(key, included as TIncluded);
-                }
-            }
-
-            // Update last page meta and links (will keep the last one processed, which is the highest page number)
-            if (pageResult.meta) {
-                lastPageMeta = pageResult.meta;
-            }
-            if (pageResult.links) {
-                lastPageLinks = pageResult.links;
-            }
-
-            if (onProgress) {
-                onProgress(allData.length, totalCount);
-            }
-        }
-
-        // Map included resources to relationships
-        // Always flatten, even if no included data (to maintain consistent return type)
-        const includedArray = includedMap.size > 0 ? Array.from(includedMap.values()) : undefined;
-        const mappedData = mapIncludedToRelationships(allData, includedArray);
-        
-        return {
-            data: mappedData,
-            totalCount,
-            pagesFetched: totalPages,
-            duration: Date.now() - startTime,
-            meta: lastPageMeta,
-            links: lastPageLinks,
-        };
-    }
+async function processOnePage(
+  httpClient: PcoHttpClient,
+  endpoint: string,
+  rest: Omit<GetAllPagesOptions, 'maxPages' | 'onProgress' | 'delay'>,
+  perPage: number,
+  includedMap: Map<string, ResourceObject<string, object, object>>,
+  state: PageLoopState,
+  delay: number,
+  onProgress: ((current: number, total: number) => void) | undefined,
+): Promise<PageLoopState> {
+  const params = buildPageParams(rest, perPage, state.page, state.useOffset, state.offset);
+  const result = await fetchOnePage(httpClient, endpoint, params, includedMap);
+  appendPageData(state.allData, result.pageData);
+  const next = computeNextPageState(result.nextLink, state.useOffset, state.offset, state.page);
+  const newState: PageLoopState = {
+    page: next.page,
+    offset: next.offset,
+    useOffset: next.useOffset,
+    hasMore: next.hasMore,
+    allData: state.allData,
+    totalCount: result.totalCount,
+    lastMeta: result.meta,
+    lastLinks: result.links,
+  };
+  if (onProgress) onProgress(newState.allData.length, newState.totalCount || newState.allData.length);
+  await maybeDelay(newState.hasMore, delay);
+  return newState;
 }
 
 /**
- * Semaphore for controlling concurrency
+ * Fetches all pages of a JSON:API list endpoint with a fixed per_page (100), merging data and
+ * included. Used by BaseModule.getAllPages; typically you use module.getAll() or module.getPage()
+ * rather than calling this directly.
  */
-class Semaphore {
-    private permits: number;
-    private waiting: (() => void)[] = [];
+export class PaginationHelper {
+  constructor(
+    private httpClient: PcoHttpClient,
+    private getConfig?: () => PcoClientConfig,
+  ) {}
 
-    constructor(permits: number) {
-        this.permits = permits;
-    }
+  /** Fetch every page of the collection and return flattened data, totalCount, and meta/links from the last page. */
+  async getAllPages(
+    endpoint: string,
+    options: GetAllPagesOptions = {},
+  ): Promise<PaginationResult<FlattenedResourceResult>> {
+    const { maxPages = 1000, delay = 50, onProgress, ...rest } = options;
+    const per_page = 100;
+    const start = Date.now();
+    const logger = createDebugLogger(this.getConfig?.());
+    logGetAllPagesStart(logger, endpoint, maxPages, per_page);
 
-    async acquire() {
-        if (this.permits > 0) {
-            this.permits--;
-            return;
-        }
+    const { state, includedMap } = await runPageLoop(
+      this.httpClient,
+      endpoint,
+      rest,
+      per_page,
+      maxPages,
+      delay,
+      onProgress,
+    );
 
-        return new Promise<void>(resolve => {
-            this.waiting.push(() => resolve());
-        });
-    }
-
-    release(): void {
-        this.permits++;
-        if (this.waiting.length > 0) {
-            const resolve = this.waiting.shift()!;
-            this.permits--;
-            resolve();
-        }
-    }
+    const data = buildFlattenedData(state.allData, includedMap);
+    logGetAllPagesDone(logger, endpoint, data.length, start);
+    return buildPaginationResult(data, state, start);
+  }
 }
-

@@ -1,40 +1,37 @@
-// Main exports for @rachelallyson/planning-center-base-ts
+/**
+ * @rachelallyson/planning-center-base-ts
+ * Minimal, strictly-typed base for PCO API clients (People, Check-ins).
+ * getSingle/getList/getAllPages/createResource/updateResource return flattened resources by default.
+ * Pass TOut (e.g. PersonResource) for strict return types; omit for FlattenedResourceResult.
+ */
 
-// HTTP Client
 export { PcoHttpClient } from './http-client';
-export type { HttpRequestOptions, HttpResponse } from './http-client';
+export type { HttpRequestOptions, HttpResponse } from './http-client-types';
 
-// Pagination
 export { PaginationHelper } from './pagination';
-export type { PaginationOptions, PaginationResult } from './pagination';
+export type { PaginationOptions, PaginationResult, GetAllPagesOptions } from './pagination';
 
-// Base Module
 export { BaseModule } from './base-module';
-export type { QueryOptions } from './base-module';
+export { singleFromCreateResponse } from './base-module';
+export type {
+  GetSingleOptions,
+  CreateUpdateOptions,
+  CreateResponse,
+  DeleteOptions,
+  GetAllPagesOptionsFor,
+} from './base-module';
+export type { QueryOptions } from './query-params';
 
-// Included Resources Resolver
-export { mapIncludedToRelationships } from './included-resolver';
+export { buildQueryParams } from './query-params';
+export type { FlatQueryParams, WhereValue } from './query-params';
 
-// Query Parameters
-export { buildQueryParams, buildIncludeParams } from './query-params';
+export { resolveIncluded, flattenResource, mapIncludedToRelationships } from './included-resolver';
 
-// Monitoring
-export { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from './monitoring';
-
-// Rate Limiting
 export { PcoRateLimiter } from './rate-limiter';
-export type { RateLimitHeaders, RateLimitInfo } from './rate-limiter';
+export type { RateLimitInfo, RateLimitHeaders } from './rate-limiter';
 
-// Error Handling
-export { PcoApiError } from './errors/api-error';
-export { PcoError, ErrorCategory, ErrorSeverity, retryWithBackoff, withErrorBoundary, shouldNotRetry, handleNetworkError, handleTimeoutError, handleValidationError } from './errors/error-handling';
-export type { ErrorContext } from './errors/error-handling';
+export { PcoApiError, rateLimitHeadersFromResponse } from './errors';
 
-// Batch Operations
-export { BatchExecutor } from './batch';
-export type { BatchClient } from './batch';
-
-// Types
 export type {
   PcoClientConfig,
   PcoAuthConfig,
@@ -42,46 +39,9 @@ export type {
   PersonalAccessTokenAuth,
   OAuthAuth,
   BasicAuth,
-  ErrorEvent,
-  AuthFailureEvent,
-  RequestStartEvent,
-  RequestCompleteEvent,
-  RateLimitEvent,
-  CacheEvent,
-} from './types/config';
+} from './config';
 
-// Debug (turn logs on/off, see everything that happens)
-export { attachDebugListener, createDebugLogger, formatDebugEvent } from './debug';
-export type { PcoDebugListenable } from './debug';
-
-export type {
-  PcoEvent,
-  EventHandler,
-  EventType,
-  EventEmitter,
-  RequestStartEvent as EventRequestStartEvent,
-  RequestCompleteEvent as EventRequestCompleteEvent,
-  RequestErrorEvent,
-  AuthSuccessEvent,
-  AuthFailureEvent as EventAuthFailureEvent,
-  AuthRefreshEvent,
-  RateLimitEvent as EventRateLimitEvent,
-  RateAvailableEvent,
-  CacheHitEvent,
-  CacheMissEvent,
-  CacheSetEvent,
-  CacheInvalidateEvent,
-  ErrorEvent as EventErrorEvent,
-} from './types/events';
-
-export type {
-  BatchOperation,
-  BatchResult,
-  BatchOptions,
-  BatchSummary,
-  OperationReference,
-  ResolvedBatchOperation,
-} from './types/batch';
+export { createDebugLogger, logRequestStart, logRequestComplete, logRequestError } from './debug';
 
 export type {
   JsonValue,
@@ -92,24 +52,41 @@ export type {
   PaginationLinks,
   TopLevelLinks,
   TopLevelJsonApi,
+  ListResponse,
   ResourceIdentifier,
   Relationship,
   ToOne,
   ToMany,
   Attributes,
   ResourceObject,
-  JsonApiBase,
+  ResolvedResourceResult,
   ErrorObject,
+  JsonApiBase,
   ErrorDocument,
   DataDocumentSingle,
   DataDocumentMany,
-  JsonApiDocument,
   Paginated,
   Response,
-} from './types/json-api';
+} from './json-api';
 
 export type {
   FlattenedResource,
-  FlattenedResourceArray,
-} from './types/flattened-resource';
+  FlattenedResourceResult,
+  AttrsOf,
+  RelMapOf,
+  DefaultFlattenedFor,
+} from './flattened';
+export { asFlattened, asFlattenedArray } from './flattened';
 
+export {
+  isRecord,
+  ensureRecord,
+  isErrorArray,
+  isErrorObject,
+  getOptionalString,
+  setAt,
+  getRequestUrl,
+  hasDataArray,
+  isResourceLike,
+  isTopLevelLinks,
+} from './typed';

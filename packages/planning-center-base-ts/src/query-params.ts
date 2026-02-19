@@ -1,95 +1,128 @@
 /**
- * Query parameter building utilities for Planning Center API
- * 
- * These functions transform complex parameter objects into flat query parameters
- * that can be used in API requests.
+ * Query options and building. Packages extend ListOptions with strict where/include/order per vertex.
  */
 
-/**
- * Transform complex params object into flat query params for API calls
- * Supports both typed where clauses and generic Record types
- * 
- * @param params - Query parameters including where clause, include, pagination, and ordering
- * @returns Flat object with query parameters ready for URL encoding
- * 
- * @example
- * ```typescript
- * const params = buildQueryParams({
- *   where: { status: 'active', first_name: 'John' },
- *   include: ['emails', 'phone_numbers'],
- *   per_page: 25,
- *   page: 1,
- *   order: 'first_name'
- * });
- * // Returns: {
- * //   'where[status]': 'active',
- * //   'where[first_name]': 'John',
- * //   include: 'emails,phone_numbers',
- * //   per_page: 25,
- * //   offset: 0,
- * //   page: 1,
- * //   order: 'first_name'
- * // }
- * ```
- */
-export function buildQueryParams(params?: {
-    where?: Record<string, string | number | boolean | undefined>;
-    include?: string[] | string;
-    per_page?: number;
-    page?: number;
-    order?: string;
-}): Record<string, string | number | boolean | undefined> {
-    const queryParams: Record<string, string | number | boolean | undefined> = {};
+import type { JsonValue } from './json-api';
+import { setAt, isRecord } from './typed';
 
-    if (params?.where) {
-        Object.entries(params.where).forEach(([key, value]) => {
-            queryParams[`where[${key}]`] = value as string | number | boolean | undefined;
-        });
-    }
+/** Value allowed in where clause (scalar, array, or null). */
+export type WhereValue = string | number | boolean | string[] | number[] | undefined | null;
 
-    if (params?.include) {
-        queryParams.include = Array.isArray(params.include) ? params.include.join(',') : params.include;
-    }
-
-    if (params?.per_page) {
-        queryParams.per_page = params.per_page;
-    }
-
-    if (params?.page) {
-        // Planning Center API uses offset-based pagination
-        // Convert page number to offset: offset = (page - 1) * per_page
-        const perPage = params.per_page || 25; // Default per_page if not specified
-        const offset = (params.page - 1) * perPage;
-        queryParams.offset = offset;
-        // Also include page parameter for API compatibility (some endpoints may use it)
-        queryParams.page = params.page;
-    }
-
-    if (params?.order) {
-        queryParams.order = params.order;
-    }
-
-    return queryParams;
+/** Options for list requests: where, include, per_page, page, order, filter. Packages extend with strict include/where/order. */
+export interface QueryOptions {
+  where?: Record<string, WhereValue> | object;
+  include?: string[];
+  per_page?: number;
+  page?: number;
+  order?: string;
+  filter?: string[];
 }
 
-/**
- * Build simple query params for include-only requests (like getById)
- * 
- * @param include - Array of resource types to include
- * @returns Object with include parameter, or empty object if no includes
- * 
- * @example
- * ```typescript
- * const params = buildIncludeParams(['emails', 'phone_numbers']);
- * // Returns: { include: 'emails,phone_numbers' }
- * 
- * const emptyParams = buildIncludeParams();
- * // Returns: {}
- * ```
- */
-export function buildIncludeParams(include?: string[]): Record<string, string | undefined> {
-    if (!include || include.length === 0) {
-        return {};
-    }
-    return { include: include.join(',') };
+/** Serialized query params (where[key], include as string, etc.) for HTTP. */
+export interface FlatQueryParams {
+  include?: string;
+  per_page?: number;
+  offset?: number;
+  page?: number;
+  order?: string;
+  [key: `where[${string}]`]: string | number | boolean | undefined;
+  [key: string]: string | number | boolean | undefined;
+}
+
+const KNOWN_KEYS = new Set(['where', 'include', 'per_page', 'page', 'order', 'filter']);
+
+/** Value that may appear in query options (where, filter, or passthrough). */
+type ParamValue = JsonValue | undefined | string[] | number[];
+
+function isScalarJsonValue(value: JsonValue): value is string | number | boolean {
+  const t = value === null || value === undefined ? null : typeof value;
+  return t === 'string' || t === 'number' || t === 'boolean';
+}
+
+function asQueryValue(value: WhereValue): string | number | boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (Array.isArray(value)) return undefined;
+  return isScalarJsonValue(value) ? value : undefined;
+}
+
+function addWhere(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (!params?.where || typeof params.where !== 'object') return;
+  for (const [k, v] of Object.entries(params.where)) {
+    out[`where[${k}]`] = asQueryValue(v);
+  }
+}
+
+function addInclude(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (!params?.include?.length) return;
+  out.include = params.include.join(',');
+}
+
+function setPerPage(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (params?.per_page == null) return;
+  out.per_page = typeof params.per_page === 'number' ? params.per_page : Number(params.per_page);
+}
+
+function getPerPage(params: QueryOptions | undefined): number {
+  if (params?.per_page == null) return 25;
+  return typeof params.per_page === 'number' ? params.per_page : Number(params.per_page) || 25;
+}
+
+function setPage(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (params?.page == null) return;
+  const perPage = getPerPage(params);
+  const pageNum = Number(params.page);
+  out.offset = (pageNum - 1) * perPage;
+  out.page = pageNum;
+}
+
+function addPagination(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  setPerPage(params, out);
+  setPage(params, out);
+}
+
+function addOrder(params: QueryOptions | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (params?.order === undefined) return;
+  out.order = String(params.order);
+}
+
+function hasFilterArray(params: Record<string, ParamValue> | undefined): params is Record<string, ParamValue> & { filter: string[] } {
+  return isRecord(params) && 'filter' in params && Array.isArray(params.filter);
+}
+
+function addFilter(params: Record<string, ParamValue> | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (!hasFilterArray(params)) return;
+  for (const name of params.filter) {
+    if (typeof name === 'string') setAt(out, name, true);
+  }
+}
+
+function isPrimitive(value: ParamValue): value is string | number | boolean {
+  const t = typeof value;
+  return t === 'string' || t === 'number' || t === 'boolean';
+}
+
+function shouldPassthroughKey(key: string, value: ParamValue): value is string | number | boolean {
+  return !KNOWN_KEYS.has(key) && value !== undefined && isPrimitive(value);
+}
+
+function addPassthrough(params: Record<string, ParamValue> | undefined, out: Record<string, string | number | boolean | undefined>): void {
+  if (!params || typeof params !== 'object') return;
+  for (const [key, value] of Object.entries(params)) {
+    if (shouldPassthroughKey(key, value)) setAt(out, key, value);
+  }
+}
+
+/** Build HTTP query params from QueryOptions (where → where[key], include → comma-separated, etc.). */
+export function buildQueryParams<T extends QueryOptions = QueryOptions>(params?: T): FlatQueryParams {
+  const out: Record<string, string | number | boolean | undefined> = {};
+  /* eslint-disable-next-line no-restricted-syntax -- T extends QueryOptions; treat as ParamValue bag for filter/passthrough */
+  const p = params as unknown as Record<string, ParamValue> | undefined;
+  addWhere(params, out);
+  addInclude(params, out);
+  addPagination(params, out);
+  addOrder(params, out);
+  addFilter(p, out);
+  addPassthrough(p, out);
+  /* eslint-disable-next-line no-restricted-syntax -- out satisfies FlatQueryParams at runtime */
+  return out as FlatQueryParams;
 }

@@ -1,175 +1,163 @@
 /**
- * JSON:API Included Resources Resolver
- * 
- * Automatically maps included resources to their relationships in JSON:API responses.
+ * Resolve + flatten JSON:API responses.
+ *
+ * API returns data + included with relationships as { data: { type, id } }.
+ * - resolveIncluded: replace those refs with full resources from included (keep JSON:API shape).
+ * - flattenResource: optional helper to put one resource's attributes + relationship data at top level.
  */
+import type { ResourceObject, JsonValue } from './json-api';
+import type { FlattenedResourceResult } from './flattened';
+import { setAt, isResourceLike, isRecord } from './typed';
 
-import type { ResourceObject } from './types/json-api';
-import type { FlattenedResource } from './types/flattened-resource';
+type ResourceLike = Record<string, JsonValue> & { id: string; type: string };
+type ResourceOrLike = ResourceObject<string, object, object> | ResourceLike;
+type FlattenedValue = object | string | number | null | boolean | object[];
+type ResourceIdentifier = { type: string; id: string };
 
-/**
- * Create a lookup map for included resources by type and id
- * 
- * This is more efficient than searching the array multiple times.
- */
-function createIncludedLookup(
-    included: ResourceObject<string, any, any>[] | undefined
-): Map<string, ResourceObject<string, any, any>> {
-    const lookup = new Map<string, ResourceObject<string, any, any>>();
-    
-    if (!included || !Array.isArray(included)) {
-        return lookup;
-    }
-    
-    for (const resource of included) {
-        const key = `${resource.type}:${resource.id}`;
-        lookup.set(key, resource);
-    }
-    
-    return lookup;
+function createLookup(included: ResourceOrLike[] | undefined): Map<string, ResourceOrLike> {
+  const m = new Map<string, ResourceOrLike>();
+  if (!included?.length) return m;
+  for (const r of included) {
+    if (!isResourceLike(r)) continue;
+    m.set(`${r.type}:${r.id}`, r);
+  }
+  return m;
 }
 
-/**
- * Recursively resolve a resource's relationships from the included lookup.
- * Nested includes (e.g. headcounts.attendance_type) are resolved so nested resources get full objects.
- */
-function resolveResourceRelationships(
-    resource: ResourceObject<string, any, any>,
-    lookup: Map<string, ResourceObject<string, any, any>>
-): ResourceObject<string, any, any> {
-    if (!resource.relationships) return resource;
-    const resolved = { ...resource, relationships: { ...resource.relationships } } as ResourceObject<string, any, any>;
-    for (const [key, relationship] of Object.entries(resource.relationships)) {
-        if (!relationship || typeof relationship !== 'object' || !('data' in relationship)) continue;
-        const relationshipData = relationship.data;
-        if (Array.isArray(relationshipData)) {
-            const resolvedArray = relationshipData.map((ref) => {
-                if (ref && typeof ref === 'object' && 'type' in ref && 'id' in ref) {
-                    const found = lookup.get(`${ref.type}:${ref.id}`);
-                    if (found) {
-                        return resolveResourceRelationships(found, lookup);
-                    }
-                    return ref;
-                }
-                return ref;
-            });
-            (resolved.relationships as Record<string, unknown>)[key] = { ...relationship, data: resolvedArray };
-        } else if (relationshipData && typeof relationshipData === 'object' && 'type' in relationshipData && 'id' in relationshipData) {
-            const found = lookup.get(`${relationshipData.type}:${relationshipData.id}`);
-            if (found) {
-                (resolved.relationships as Record<string, unknown>)[key] = {
-                    ...relationship,
-                    data: resolveResourceRelationships(found, lookup),
-                };
-            }
-        }
-    }
-    return resolved;
+function resolveOneRef(ref: ResourceOrLike | ResourceIdentifier, lookup: Map<string, ResourceOrLike>): ResourceOrLike {
+  if (!isResourceLike(ref)) {
+    const found = lookup.get(`${ref.type}:${ref.id}`);
+    /* eslint-disable-next-line no-restricted-syntax -- ResourceIdentifier returned as ResourceOrLike when not in included */
+    return found ? resolveRelationships(found, lookup) : (ref as ResourceOrLike);
+  }
+  const found = lookup.get(`${ref.type}:${ref.id}`);
+  return found ? resolveRelationships(found, lookup) : ref;
 }
 
-/**
- * Flatten a single resource object by moving attributes and relationships to the top level
- * 
- * Transforms: { type, id, attributes: { name: 'John' }, relationships: { emails: {...} } }
- * Into: { type, id, name: 'John', emails: [...] }
- */
-function flattenResource(resource: ResourceObject<string, any, any>): any {
-    const flattened: any = {
-        type: resource.type,
-        id: resource.id,
-    };
-    
-    // Flatten attributes to top level
-    if (resource.attributes) {
-        Object.assign(flattened, resource.attributes);
-    }
-    
-    // Flatten relationships to top level (and recursively flatten included resources)
-    if (resource.relationships) {
-        for (const [key, relationship] of Object.entries(resource.relationships)) {
-            if (relationship && typeof relationship === 'object' && 'data' in relationship) {
-                const relationshipData = relationship.data;
-                
-                if (relationshipData) {
-                    if (Array.isArray(relationshipData)) {
-                        // To-many: flatten each resource in the array
-                        flattened[key] = relationshipData.map((item) => {
-                            if (item && typeof item === 'object' && 'type' in item && 'id' in item && !('attributes' in item)) {
-                                // It's just an identifier, return as-is
-                                return item;
-                            }
-                            // It's a full resource object, flatten it
-                            return flattenResource(item as ResourceObject<string, any, any>);
-                        });
-                    } else if (relationshipData && typeof relationshipData === 'object') {
-                        if ('type' in relationshipData && 'id' in relationshipData) {
-                            if ('attributes' in relationshipData) {
-                                // It's a full resource object, flatten it
-                                flattened[key] = flattenResource(relationshipData as ResourceObject<string, any, any>);
-                            } else {
-                                // It's just an identifier
-                                flattened[key] = relationshipData;
-                            }
-                        }
-                    }
-                } else {
-                    flattened[key] = null;
-                }
-            }
-        }
-    }
-    
-    // Preserve links and meta if they exist
-    if (resource.links) {
-        flattened.links = resource.links;
-    }
-    if (resource.meta) {
-        flattened.meta = resource.meta;
-    }
-    
-    return flattened;
+type RelData = ResourceIdentifier | ResourceIdentifier[] | ResourceOrLike | ResourceOrLike[] | null | undefined;
+
+function resolveRelData(
+  data: RelData,
+  relCopy: Record<string, JsonValue | object | undefined>,
+  key: string,
+  origRel: Record<string, JsonValue>,
+  lookup: Map<string, ResourceOrLike>,
+): void {
+  if (Array.isArray(data)) {
+    const resolved = data.map((ref) => resolveOneRef(ref, lookup));
+    setAt(relCopy, key, { ...origRel, data: resolved });
+  } else if (isResourceLike(data)) {
+    setAt(relCopy, key, { ...origRel, data: resolveOneRef(data, lookup) });
+  }
 }
 
-/**
- * Automatically map included resources to their relationships and flatten the structure
- * 
- * This transforms JSON:API responses to a flatter, more convenient structure:
- * - Relationships are moved to the top level (person.emails instead of personemails)
- * - Attributes are moved to the top level (email.address instead of email.attributes.address)
- * - Included resources are automatically resolved and flattened
- * 
- * @param data - Array of resource objects with relationships
- * @param included - Array of included resources from JSON:API response
- * @returns The data array with relationships resolved and structure flattened
- * 
- * @example
- * ```typescript
- * // Before: personemails.data[0].attributes.address
- * // After: person.emails[0].address
- * const mapped = mapIncludedToRelationships(response.data, response.included);
- * ```
- */
-export function mapIncludedToRelationships<T extends ResourceObject<string, any, any>>(
-    data: T[],
-    included: ResourceObject<string, any, any>[] | undefined
-): FlattenedResource<
-    T['type'],
-    T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-    T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
->[] {
-    // Create lookup map for efficient resolution
-    const lookup = included && included.length > 0 
-        ? createIncludedLookup(included)
-        : new Map<string, ResourceObject<string, any, any>>();
-    
-    // Always flatten resources, even if no included data (for consistent return type)
-    return data.map((resource) => {
-        // Resolve relationships (and nested relationships) from included, then flatten
-        const resolved = resolveResourceRelationships(resource, lookup);
-        return flattenResource(resolved) as FlattenedResource<
-            T['type'],
-            T extends ResourceObject<string, infer TAttrs, any> ? TAttrs : never,
-            T extends ResourceObject<any, any, infer TRelMap> ? TRelMap : never
-        >;
-    });
+function shouldSkipRel(rel: JsonValue | object): boolean {
+  return rel == null || typeof rel !== 'object' || !('data' in rel);
+}
+
+function hasDataKey(r: JsonValue): r is Record<string, JsonValue> & { data: JsonValue } {
+  return isRecord(r) && 'data' in r;
+}
+
+function parseRelData(d: JsonValue): ResourceOrLike[] | ResourceOrLike | null | undefined {
+  if (d === undefined) return undefined;
+  if (d === null) return null;
+  if (Array.isArray(d)) return d.filter((x): x is ResourceLike => isResourceLike(x));
+  return isResourceLike(d) ? d : undefined;
+}
+
+function getRelDataFromEntry(rel: JsonValue): ResourceOrLike[] | ResourceOrLike | null | undefined {
+  if (!hasDataKey(rel)) return undefined;
+  return parseRelData(rel.data);
+}
+
+function processOneRelationship(
+  key: string,
+  rel: JsonValue,
+  relCopy: Record<string, JsonValue | object | undefined>,
+  lookup: Map<string, ResourceOrLike>,
+): void {
+  if (shouldSkipRel(rel)) return;
+  const relObj = isRecord(rel) ? rel : {};
+  const relData = getRelDataFromEntry(rel) ?? null;
+  resolveRelData(relData, relCopy, key, relObj, lookup);
+}
+
+function resolveRelationships(resource: ResourceOrLike, lookup: Map<string, ResourceOrLike>): ResourceOrLike {
+  if (!isResourceLike(resource)) return resource;
+  const r = resource;
+  if (!isRecord(r.relationships)) return r;
+  const relCopy: Record<string, JsonValue | object | undefined> = { ...r.relationships };
+  for (const [key, rel] of Object.entries(r.relationships)) {
+    processOneRelationship(key, rel, relCopy, lookup);
+  }
+  return { ...r, relationships: relCopy };
+}
+
+function flattenRelValue(item: ResourceOrLike | ResourceIdentifier): FlattenedValue {
+  if (!isResourceLike(item)) return item;
+  return 'attributes' in item ? flattenOne(item) : item;
+}
+
+function flattenRelData(d: ResourceOrLike[] | ResourceOrLike | null | undefined): FlattenedValue {
+  if (Array.isArray(d)) return d.map((item) => flattenRelValue(item));
+  if (isResourceLike(d)) return flattenRelValue(d);
+  return null;
+}
+
+function getRelData(rel: JsonValue): ResourceOrLike[] | ResourceOrLike | null | undefined {
+  return getRelDataFromEntry(rel);
+}
+
+/** Accepts relationship maps from JSON:API (data may be ResourceIdentifier or full resource). */
+function setFlattenedRels(
+  out: Record<string, FlattenedValue> & { type: string; id: string },
+  relationships: Record<string, JsonValue> | Record<string, { data?: JsonValue }> | null | undefined,
+): void {
+  if (relationships == null) return;
+  for (const [key, rel] of Object.entries(relationships)) {
+    const data = getRelData(rel);
+    if (data !== undefined) out[key] = flattenRelData(data);
+  }
+}
+
+function applyRelationshipsToOut(
+  out: Record<string, FlattenedValue> & { type: string; id: string },
+  relationships: JsonValue | object | null | undefined,
+): void {
+  if (relationships == null || typeof relationships !== 'object' || Array.isArray(relationships)) return;
+  /* eslint-disable-next-line no-restricted-syntax -- relationships object narrowed to relationship map for setFlattenedRels */
+  setFlattenedRels(out, relationships as Record<string, JsonValue>);
+}
+
+function flattenOne(resource: ResourceOrLike): FlattenedResourceResult {
+  const out: Record<string, FlattenedValue> & { type: string; id: string } = { type: resource.type, id: resource.id };
+  if (resource.attributes) Object.assign(out, resource.attributes);
+  applyRelationshipsToOut(out, resource.relationships);
+  if (resource.links) out.links = resource.links;
+  if (resource.meta) out.meta = resource.meta;
+  /* eslint-disable-next-line no-restricted-syntax -- out is flat shape; FlattenedResourceResult excludes attributes/relationships/included */
+  return out as FlattenedResourceResult;
+}
+
+/** Resolve relationship refs from included; returns resources in JSON:API shape with relationship data inlined. */
+export function resolveIncluded(
+  data: ResourceOrLike[],
+  included: ResourceOrLike[] | undefined,
+): ResourceOrLike[] {
+  const lookup = included?.length ? createLookup(included) : new Map();
+  return data.map((r) => resolveRelationships(r, lookup));
+}
+
+/** Optional: flatten one resolved resource to top-level attributes + relationship data. Reusable when flat shape is needed. */
+export function flattenResource(resource: ResourceOrLike): FlattenedResourceResult {
+  return flattenOne(resource);
+}
+
+/** Resolve then flatten (for callers that want the flat shape). Prefer resolveIncluded + typed ResourceObject when possible. */
+export function mapIncludedToRelationships(
+  data: ResourceOrLike[],
+  included: ResourceOrLike[] | undefined,
+): FlattenedResourceResult[] {
+  return resolveIncluded(data, included).map(flattenOne);
 }

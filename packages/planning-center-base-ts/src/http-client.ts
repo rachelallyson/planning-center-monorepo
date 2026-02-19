@@ -1,620 +1,277 @@
-/**
- * v2.0.0 HTTP Client
- */
-
-import type { PcoClientConfig } from './types/config';
-import { PcoEventEmitter, RequestIdGenerator, PerformanceMetrics, RateLimitTracker } from './monitoring';
+import ky, { type KyInstance } from 'ky';
+import { OAuth2Client, OAuth2Fetch } from '@badgateway/oauth2-client';
+import type { PcoClientConfig } from './config';
+import type { JsonValue } from './json-api';
 import { PcoRateLimiter } from './rate-limiter';
-import { PcoApiError } from './errors/api-error';
-import { createDebugLogger } from './debug';
+import { PcoApiError, rateLimitHeadersFromResponse } from './errors';
+import { createDebugLogger, logRequestStart, logRequestComplete } from './debug';
+import { getAuthHeader } from './auth';
+import { ensureRecord, getRequestUrl, isRecord, isErrorObject } from './typed';
+import type { HttpRequestOptions, HttpResponse } from './http-client-types';
 
-export interface HttpRequestOptions {
-    method: string;
-    endpoint: string;
-    data?: any;
-    params?: Record<string, any>;
-    headers?: Record<string, string>;
-    timeout?: number;
+export type { HttpRequestOptions, HttpResponse } from './http-client-types';
+
+function getOAuthClientId(auth: Extract<PcoClientConfig['auth'], { type: 'oauth' }>): string {
+  return String(auth.clientId ?? (typeof process !== 'undefined' ? process.env?.PCO_APP_ID : undefined) ?? '');
 }
 
-export interface HttpResponse<T = any> {
-    data: T;
-    status: number;
-    headers: Record<string, string>;
-    requestId: string;
-    duration: number;
-    /** Set when the request succeeded after one or more retries (e.g. 429/401). */
-    retryCount?: number;
+function getOAuthClientSecret(auth: Extract<PcoClientConfig['auth'], { type: 'oauth' }>): string | undefined {
+  const v = auth.clientSecret ?? (typeof process !== 'undefined' ? process.env?.PCO_APP_SECRET : undefined);
+  return v != null ? String(v) : undefined;
 }
 
+const OAUTH_AUTH_METHOD = 'client_secret_post' satisfies 'client_secret_post';
+
+function getOAuthClientConfig(auth: Extract<PcoClientConfig['auth'], { type: 'oauth' }>, origin: string) {
+  return {
+    server: origin,
+    tokenEndpoint: '/oauth/token',
+    clientId: getOAuthClientId(auth),
+    clientSecret: getOAuthClientSecret(auth),
+    authenticationMethod: OAUTH_AUTH_METHOD,
+  } satisfies { server: string; tokenEndpoint: string; clientId: string; clientSecret: string | undefined; authenticationMethod: 'client_secret_post' };
+}
+
+function getOutboundMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  if (init?.method) return init.method;
+  if (input instanceof Request) return input.method;
+  return 'GET';
+}
+
+function getBodyInfoFromInit(init?: RequestInit): string {
+  if (init?.body == null) return '';
+  if (typeof init.body === 'string') return `body=${init.body.length}`;
+  return 'body=present';
+}
+
+function getOutboundBodyInfo(input: RequestInfo | URL, init?: RequestInit): string {
+  const fromInit = getBodyInfoFromInit(init);
+  if (fromInit) return fromInit;
+  if (input instanceof Request && input.body != null) return 'body=present';
+  return '';
+}
+
+function logOutboundRequest(config: PcoClientConfig, input: RequestInfo | URL, init?: RequestInit): void {
+  const logger = createDebugLogger(config);
+  if (!logger.enabled) return;
+  const method = getOutboundMethod(input, init);
+  const url = getRequestUrl(input);
+  const bodyInfo = getOutboundBodyInfo(input, init);
+  const msg = bodyInfo ? `outbound fetch: ${method} ${url} ${bodyInfo}` : `outbound fetch: ${method} ${url}`;
+  logger.log(msg);
+}
+
+function createOAuthFetch(config: PcoClientConfig, baseURL: string): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  const auth = config.auth;
+  if (auth.type !== 'oauth') throw new Error('Expected oauth auth');
+  const origin = new URL(baseURL).origin;
+  const client = new OAuth2Client(getOAuthClientConfig(auth, origin));
+  const oauthFetch = new OAuth2Fetch({
+    client,
+    getStoredToken: () => ({ accessToken: auth.accessToken, refreshToken: auth.refreshToken, expiresAt: null }),
+    storeToken: (t) => {
+      auth.accessToken = t.accessToken;
+      auth.refreshToken = t.refreshToken ?? auth.refreshToken;
+      void auth.onRefresh({ accessToken: t.accessToken, refreshToken: auth.refreshToken });
+    },
+    getNewToken: async () => null,
+    onError: (err) => void auth.onRefreshFailure(err),
+    scheduleRefresh: false,
+  });
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    logOutboundRequest(config, input, init);
+    return oauthFetch.fetch(input instanceof URL ? input.toString() : input, init);
+  };
+}
+
+function createStaticAuthFetch(config: PcoClientConfig): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    logOutboundRequest(config, input, init);
+    const url = getRequestUrl(input);
+    const headers = new Headers(init?.headers);
+    const h = getAuthHeader(config.auth);
+    if (h) headers.set('Authorization', h);
+    return fetch(url, { ...init, headers });
+  };
+}
+
+function createAuthFetch(config: PcoClientConfig, baseURL: string): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return config.auth.type === 'oauth' ? createOAuthFetch(config, baseURL) : createStaticAuthFetch(config);
+}
+
+type ParamValue = string | number | boolean | null | undefined | object;
+
+function isScalarParam(v: ParamValue): v is string | number | boolean {
+  return v !== undefined && v !== null && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+}
+
+function buildSearchParams(params: HttpRequestOptions['params']): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  if (!params) return out;
+  for (const [k, v] of Object.entries(params)) {
+    if (isScalarParam(v)) out[k] = v;
+  }
+  return out;
+}
+
+type ErrorObject = import('./json-api').ErrorObject;
+
+function parseErrorData(raw: Record<string, JsonValue>): { errors?: ErrorObject[] } {
+  if (!Array.isArray(raw.errors)) return {};
+  const errors = raw.errors.filter((e): e is ErrorObject => isErrorObject(e));
+  return { errors };
+}
+
+/**
+ * HTTP client for PCO APIs: auth, retries, rate limiting, and JSON:API error handling.
+ * Used by BaseModule and package clients (People, Check-ins). Prefer using PcoClient /
+ * PcoCheckInsClient rather than constructing this directly unless you need low-level requests.
+ */
 export class PcoHttpClient {
-    private config: PcoClientConfig;
-    private eventEmitter: PcoEventEmitter;
-    private requestIdGenerator: RequestIdGenerator;
-    private performanceMetrics: PerformanceMetrics;
-    private rateLimitTracker: RateLimitTracker;
-    private rateLimiter: PcoRateLimiter;
+  private config: PcoClientConfig;
+  private rateLimiter: PcoRateLimiter;
+  private kyInstance: KyInstance;
+  private requestCounter = 0;
 
-    constructor(config: PcoClientConfig, eventEmitter: PcoEventEmitter) {
-        this.config = config;
-        this.eventEmitter = eventEmitter;
-        this.requestIdGenerator = new RequestIdGenerator();
-        this.performanceMetrics = new PerformanceMetrics();
-        this.rateLimitTracker = new RateLimitTracker();
+  /** @param config Auth, baseURL, timeout, and optional debug options. */
+  constructor(config: PcoClientConfig) {
+    this.config = config;
+    this.rateLimiter = new PcoRateLimiter(100, 20000);
+    const baseURL = (config.baseURL ?? 'https://api.planningcenteronline.com/people/v2').replace(/\/$/, '');
+    const timeout = config.timeout ?? 30000;
+    this.kyInstance = ky.create({
+      prefixUrl: baseURL,
+      timeout,
+      fetch: createAuthFetch(config, baseURL),
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...config.headers },
+      throwHttpErrors: false,
+      retry: { limit: 5 },
+      hooks: {
+        beforeRetry: [async () => this.rateLimiter.waitForAvailability()],
+      },
+    });
+  }
 
-        // Initialize rate limiter
-        this.rateLimiter = new PcoRateLimiter(100, 20000); // 100 requests per 20 seconds
+  private requestId(): string {
+    return `req_${Date.now()}_${++this.requestCounter}`;
+  }
+
+  private applyRateLimit(response: Response): void {
+    this.rateLimiter.updateFromHeaders(rateLimitHeadersFromResponse(response));
+    this.rateLimiter.recordRequest();
+  }
+
+  private async executeOnce(
+    path: string,
+    options: HttpRequestOptions,
+    kyOpts: { searchParams: Record<string, string | number | boolean>; timeout: number; prefixUrl?: string },
+  ): Promise<Response> {
+    const method = options.method;
+    if (method === 'GET') return this.kyInstance.get(path, kyOpts);
+    if (method === 'POST') return this.kyInstance.post(path, { ...kyOpts, json: this.buildBody(options) });
+    if (method === 'PATCH') return this.kyInstance.patch(path, { ...kyOpts, json: this.buildBody(options) });
+    if (method === 'DELETE') return this.kyInstance.delete(path, kyOpts);
+    return this.kyInstance(path, { method, ...kyOpts });
+  }
+
+  private async runWith429Retry(
+    path: string,
+    options: HttpRequestOptions,
+    kyOpts: { searchParams: Record<string, string | number | boolean>; timeout: number; prefixUrl?: string },
+  ): Promise<Response> {
+    let response: Response = await this.executeOnce(path, options, kyOpts);
+    for (let i = 0; i < 5 && response.status === 429; i++) {
+      this.applyRateLimit(response);
+      await this.rateLimiter.waitForAvailability();
+      response = await this.executeOnce(path, options, kyOpts);
     }
+    this.applyRateLimit(response);
+    return response;
+  }
 
-    /** Log only when config.debug is set; no-op otherwise */
-    private debugLog(message: string, data?: unknown): void {
-        const logger = createDebugLogger(this.config);
-        if (logger.enabled) logger.log(message, data);
+  private async throwIfNotOk(response: Response): Promise<void> {
+    if (response.status === 429) throw new Error('Rate limit exceeded after retries');
+    if (!response.ok) {
+      const raw = await response.json().catch((): Record<string, JsonValue> => ({}));
+      const errorData = isRecord(raw) ? parseErrorData(raw) : {};
+      throw PcoApiError.fromFetchError(response, errorData);
     }
+  }
 
-    async request<T = any>(options: HttpRequestOptions) {
-        const requestId = this.requestIdGenerator.generate();
-        const startTime = Date.now();
+  private responseToHeaders(response: Response): Record<string, string> {
+    const out: Record<string, string> = {};
+    response.headers.forEach((v, k) => { out[k] = v; });
+    return out;
+  }
 
-        // Emit request start event
-        this.eventEmitter.emit({
-            type: 'request:start',
-            endpoint: options.endpoint,
-            method: options.method,
-            requestId,
-            timestamp: new Date().toISOString(),
-            ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
-        });
-
-        try {
-            this.debugLog('http  rate limiter waiting', { method: options.method, endpoint: options.endpoint });
-            await this.rateLimiter.waitForAvailability();
-            this.debugLog('http  rate limiter acquired', { method: options.method, endpoint: options.endpoint });
-
-            const response = await this.makeRequest<T>(options, requestId);
-            const duration = Date.now() - startTime;
-
-            // Record performance metrics
-            this.performanceMetrics.record(`${options.method} ${options.endpoint}`, duration, true);
-
-            // Update rate limit tracking
-            this.updateRateLimitTracking(options.endpoint, response.headers);
-
-            // Emit request complete event
-            const headers = response.headers;
-            const rateLimitRemaining = this.getRateLimitRemaining(headers);
-            const rateLimitLimit = this.getRateLimitLimit(headers);
-            const responseSummary = this.getResponseSummary(response.data);
-            this.eventEmitter.emit({
-                type: 'request:complete',
-                endpoint: options.endpoint,
-                method: options.method,
-                status: response.status,
-                duration,
-                requestId,
-                timestamp: new Date().toISOString(),
-                ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
-                ...(response.retryCount != null && response.retryCount > 0 && { retryCount: response.retryCount }),
-                ...(rateLimitRemaining != null && { rateLimitRemaining }),
-                ...(rateLimitLimit != null && { rateLimitLimit }),
-                ...(responseSummary && { responseSummary }),
-            });
-
-            this.debugLog('http  request complete', {
-                method: options.method,
-                endpoint: options.endpoint,
-                status: response.status,
-                duration,
-                requestId,
-            });
-
-            return response;
-        } catch (error) {
-            const duration = Date.now() - startTime;
-
-            // Record performance metrics
-            this.performanceMetrics.record(`${options.method} ${options.endpoint}`, duration, false);
-
-            // Emit request error event
-            this.eventEmitter.emit({
-                type: 'request:error',
-                endpoint: options.endpoint,
-                method: options.method,
-                error: error instanceof Error ? error : new Error(String(error)),
-                requestId,
-                timestamp: new Date().toISOString(),
-                ...(Object.keys(options.params || {}).length > 0 && { params: options.params as Record<string, unknown> }),
-            });
-
-            throw error;
-        }
+  private async parseSuccessBody<T>(response: Response, options: HttpRequestOptions): Promise<T> {
+    if (options.method === 'DELETE' || response.status === 204) {
+      /* eslint-disable-next-line no-restricted-syntax -- generic empty; T not constructible */
+      return {} as T;
     }
+    const raw = await response.json();
+    const data = ensureRecord(raw);
+    /* eslint-disable-next-line no-restricted-syntax -- FlattenedResourceResult→TOut; no type guard for generic */
+    return data as T;
+  }
 
-    private async makeRequest<T>(options: HttpRequestOptions, requestId: string, retryCount: number = 0): Promise<HttpResponse<T>> {
-        if (retryCount > 0) {
-            this.debugLog('http  retry attempt', { method: options.method, endpoint: options.endpoint, retryCount });
-        }
-        const baseURL = this.config.baseURL || 'https://api.planningcenteronline.com/people/v2';
-        let url = options.endpoint.startsWith('http') ? options.endpoint : `${baseURL}${options.endpoint}`;
+  private buildKyOpts(options: HttpRequestOptions): { searchParams: Record<string, string | number | boolean>; timeout: number; prefixUrl?: string } {
+    const path = options.endpoint.startsWith('http') ? options.endpoint : options.endpoint.replace(/^\//, '');
+    const isAbsolute = path.startsWith('http');
+    return {
+      searchParams: buildSearchParams(options.params),
+      timeout: options.timeout ?? this.config.timeout ?? 30000,
+      ...(isAbsolute && { prefixUrl: '' }),
+    };
+  }
 
-        // Add query parameters
-        if (options.params) {
-            const searchParams = new URLSearchParams();
-            Object.entries(options.params).forEach(([key, value]) => {
-                if (value !== undefined && value !== null) {
-                    searchParams.append(key, String(value));
-                }
-            });
-            const queryString = searchParams.toString();
-            if (queryString) {
-                url += url.includes('?') ? `&${queryString}` : `?${queryString}`;
-            }
-        }
+  /** Execute an HTTP request. Throws PcoApiError on non-2xx; retries on 429. */
+  async request<T = Record<string, JsonValue>>(options: HttpRequestOptions): Promise<HttpResponse<T>> {
+    const requestId = this.requestId();
+    const start = Date.now();
+    const logger = createDebugLogger(this.config);
+    if (logger.enabled) logRequestStart(this.config, { method: options.method, endpoint: options.endpoint, requestId, params: options.params });
 
-        // Prepare headers
-        const headers: Record<string, string> = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            ...this.config.headers,
-            ...options.headers,
-        };
+    await this.rateLimiter.waitForAvailability();
 
-        // Add authentication
-        this.addAuthentication(headers);
+    const path = options.endpoint.startsWith('http') ? options.endpoint : options.endpoint.replace(/^\//, '');
+    const response = await this.runWith429Retry(path, options, this.buildKyOpts(options));
+    await this.throwIfNotOk(response);
 
-        // Prepare request options
-        const requestOptions: RequestInit = {
-            headers,
-            method: options.method,
-        };
+    const headersRecord = this.responseToHeaders(response);
+    const duration = Date.now() - start;
+    if (logger.enabled) logRequestComplete(this.config, { method: options.method, endpoint: options.endpoint, status: response.status, duration, requestId });
 
-        // Add body for POST/PATCH requests
-        if ((options.method === 'POST' || options.method === 'PATCH') && options.data) {
-            // Determine resource type from endpoint
-            const resourceType = this.getResourceTypeFromEndpoint(options.endpoint);
+    const data = await this.parseSuccessBody<T>(response, options);
+    return { data, status: response.status, headers: headersRecord, requestId, duration };
+  }
 
-            // Separate attributes and relationships
-            const { relationships, ...attributes } = options.data;
+  private buildBody(options: HttpRequestOptions): { data: { type: string; attributes: Record<string, JsonValue>; relationships?: Record<string, JsonValue> } } {
+    const data = options.data != null && isRecord(options.data) ? options.data : {};
+    const type = this.inferType(options.endpoint);
+    const { relationships, ...attributes } = data;
+    const body: { data: { type: string; attributes: Record<string, JsonValue>; relationships?: Record<string, JsonValue> } } = {
+      data: { type, attributes: isRecord(attributes) ? attributes : {} },
+    };
+    if (isRecord(relationships)) body.data.relationships = relationships;
+    return body;
+  }
 
-            const jsonApiData: any = {
-                data: {
-                    type: resourceType,
-                    attributes
-                }
-            };
+  private inferType(endpoint: string): string {
+    const parts = endpoint.split('/').filter(Boolean);
+    const last = parts[parts.length - 1] ?? '';
+    const pascal = last.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+    if (pascal.length > 3 && pascal.endsWith('s')) return pascal.slice(0, -1);
+    return pascal;
+  }
 
-            // Add relationships if present
-            if (relationships) {
-                jsonApiData.data.relationships = relationships;
-            }
+  /** Current rate limit state (count, limit, period). Updated after each request. */
+  getRateLimitInfo() {
+    return this.rateLimiter.getRateLimitInfo();
+  }
 
-            requestOptions.body = JSON.stringify(jsonApiData);
-        }
-
-        // Add timeout
-        const timeout = options.timeout || this.config.timeout || 30000;
-        // Note: AbortController may not be available in all Node.js versions or polyfills
-        let controller: AbortController | undefined;
-        let timeoutId: NodeJS.Timeout;
-
-        try {
-            controller = new AbortController();
-            timeoutId = setTimeout(() => controller && controller.abort(), timeout);
-            if (controller) {
-                requestOptions.signal = controller.signal;
-            }
-        } catch (error) {
-            // AbortController not available, skip timeout
-            timeoutId = setTimeout(() => {}, 0); // No-op
-        }
-
-        try {
-            this.debugLog('http  fetch', { method: options.method, endpoint: options.endpoint, url });
-            let response = await fetch(url, requestOptions);
-
-            if (!response) {
-                this.debugLog('http  fetch returned null, using HTTPS fallback', { url });
-                response = await this.makeHttpsRequest(url, requestOptions);
-            }
-
-            this.debugLog('http  response', { method: options.method, endpoint: options.endpoint, status: response?.status });
-            if (!response) {
-                throw new Error('Both fetch and HTTPS fallback returned null/undefined response');
-            }
-            clearTimeout(timeoutId);
-
-            // Update rate limiter from headers (handle case where headers might be undefined)
-            const rateLimitHeaders = {
-                'Retry-After': response.headers?.get('retry-after') || undefined,
-                'X-PCO-API-Request-Rate-Count': response.headers?.get('x-pco-api-request-rate-count') || undefined,
-                'X-PCO-API-Request-Rate-Limit': response.headers?.get('x-pco-api-request-rate-limit') || undefined,
-                'X-PCO-API-Request-Rate-Period': response.headers?.get('x-pco-api-request-rate-period') || undefined,
-            };
-
-            this.rateLimiter.updateFromHeaders(rateLimitHeaders);
-            this.rateLimiter.recordRequest();
-
-            // Handle 429 responses
-            if (response.status === 429) {
-                this.debugLog('http  rate limit 429', { endpoint: options.endpoint, retryCount });
-                if (retryCount >= 5) {
-                    throw new Error(`Rate limit exceeded after ${retryCount} retries`);
-                }
-                await this.rateLimiter.waitForAvailability();
-                return this.makeRequest<T>(options, requestId, retryCount + 1);
-            }
-
-            // Handle other errors
-            if (!response.ok) {
-                // Handle 401 errors with token refresh if available
-                if (response.status === 401 && this.config.auth.type === 'oauth') {
-                    this.debugLog('http  auth 401 attempting token refresh', { endpoint: options.endpoint, retryCount });
-                    if (retryCount >= 3) {
-                        throw new Error(`Authentication failed after ${retryCount} retries`);
-                    }
-                    try {
-                        await this.attemptTokenRefresh();
-                        this.debugLog('http  auth 401 token refresh success', { endpoint: options.endpoint });
-                        return this.makeRequest<T>(options, requestId, retryCount + 1);
-                    } catch (refreshError) {
-                        this.debugLog('http  auth 401 token refresh failed', { error: String(refreshError) });
-                        await this.config.auth.onRefreshFailure(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
-                        throw refreshError;
-                    }
-                }
-
-                let errorData: any;
-                try {
-                    errorData = await response.json();
-                } catch {
-                    errorData = {};
-                }
-
-                throw PcoApiError.fromFetchError(response, errorData);
-            }
-
-            // Parse response
-            if (options.method === 'DELETE') {
-                return {
-                    data: undefined as any,
-                    status: response.status,
-                    headers: this.extractHeaders(response),
-                    requestId,
-                    duration: 0, // Will be set by caller
-                    ...(retryCount > 0 && { retryCount }),
-                };
-            }
-
-            // Handle empty responses (e.g., 204 No Content)
-            const contentType = response.headers.get('content-type') || '';
-            const contentLength = response.headers.get('content-length');
-            let data: any;
-            
-            // Check for JSON content types (including JSON:API format)
-            const isJsonContent = contentType.includes('application/json') || 
-                                  contentType.includes('application/vnd.api+json') ||
-                                  contentType.includes('application/vnd+json');
-            
-            if (response.status === 204 || contentLength === '0' || !isJsonContent) {
-                if (response.status !== 204 && contentLength !== '0') {
-                    this.debugLog('http  non-JSON response', { status: response.status, contentType, contentLength });
-                }
-                data = {};
-            } else {
-                // Read body once. Prefer response.text() when available (real Response); fall back to response.json() for mocks that only provide .json()
-                if (typeof (response as any).text === 'function') {
-                    const text = await (response as any).text();
-                    try {
-                        if (!text || (text as string).trim() === '') {
-                            this.debugLog('http  empty response body', { method: options.method, endpoint: options.endpoint });
-                            data = {};
-                        } else {
-                            data = JSON.parse(text as string);
-                            if (!data || typeof data !== 'object') {
-                                this.debugLog('http  unexpected response structure', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
-                            } else if (!data.data && options.method !== 'DELETE') {
-                                this.debugLog('http  response missing data property', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
-                            }
-                        }
-                    } catch (parseError) {
-                        this.debugLog('http  JSON parse error', { method: options.method, endpoint: options.endpoint, error: String(parseError), sample: (text as string)?.substring(0, 500) });
-                        data = {};
-                    }
-                } else if (typeof (response as any).json === 'function') {
-                    try {
-                        data = await (response as any).json();
-                        if (!data || typeof data !== 'object') {
-                            this.debugLog('http  unexpected response structure', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
-                            data = data ?? {};
-                        } else if (!data.data && options.method !== 'DELETE') {
-                            this.debugLog('http  response missing data property', { method: options.method, endpoint: options.endpoint, sample: JSON.stringify(data).substring(0, 200) });
-                        }
-                    } catch (parseError) {
-                        this.debugLog('http  JSON parse error', { method: options.method, endpoint: options.endpoint, error: String(parseError) });
-                        data = {};
-                    }
-                } else {
-                    data = {};
-                }
-            }
-            return {
-                data,
-                status: response.status,
-                headers: this.extractHeaders(response),
-                requestId,
-                duration: 0, // Will be set by caller
-                ...(retryCount > 0 && { retryCount }),
-            };
-        } catch (error) {
-            clearTimeout(timeoutId);
-            // Handle timeout/abort errors
-            if (error instanceof Error && error.name === 'AbortError') {
-                throw new Error(`Request timeout after ${timeout}ms`);
-            }
-            throw error;
-        }
-    }
-
-    private addAuthentication(headers: Record<string, string>): void {
-        if (this.config.auth.type === 'personal_access_token') {
-            // Personal Access Tokens use client_id:secret format with HTTP Basic Auth
-
-            // Get client ID from config (required)
-            const clientId = this.config.auth.personalAccessToken;
-
-            // Get client secret from config or environment (with config taking precedence)
-            const clientSecret = this.config.auth.personalAccessTokenSecret ||
-                                process.env.PCO_PERSONAL_ACCESS_SECRET;
-
-            if (!clientId) {
-                throw new Error('personalAccessToken is required for personal access token authentication');
-            }
-
-            if (!clientSecret) {
-                throw new Error('personalAccessTokenSecret (in config) or PCO_PERSONAL_ACCESS_SECRET environment variable is required for personal access token authentication');
-            }
-
-            const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-            headers.Authorization = `Basic ${credentials}`;
-        } else if (this.config.auth.type === 'oauth') {
-            headers.Authorization = `Bearer ${this.config.auth.accessToken}`;
-        } else if (this.config.auth.type === 'basic') {
-            // Basic auth with app credentials
-            const credentials = Buffer.from(`${this.config.auth.appId}:${this.config.auth.appSecret}`).toString('base64');
-            headers.Authorization = `Basic ${credentials}`;
-        }
-    }
-
-    private getResourceTypeFromEndpoint(endpoint: string): string {
-        // Extract resource type from endpoint
-        // /households -> Household
-        // /people -> Person
-        // /emails -> Email
-        // etc.
-        const pathParts = endpoint.split('/').filter(part => part.length > 0);
-        const resourcePath = pathParts[pathParts.length - 1];
-
-        // Convert kebab-case to PascalCase and make singular
-        const pascalCase = resourcePath
-            .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join('');
-
-        // Make singular (remove trailing 's' if it exists and the word is longer than 3 characters)
-        if (pascalCase.endsWith('s') && pascalCase.length > 3) {
-            return pascalCase.slice(0, -1);
-        }
-
-        return pascalCase;
-    }
-
-    /** Build a short summary of JSON:API response for logging (e.g. "25 items", "person:abc123"). */
-    private getResponseSummary(data: any): string | undefined {
-        if (!data || typeof data !== 'object') return undefined;
-        const payload = data.data;
-        if (Array.isArray(payload)) return `${payload.length} items`;
-        if (payload && typeof payload === 'object' && payload.id != null) {
-            const type = payload.type ?? 'resource';
-            return `${type}:${payload.id}`;
-        }
-        if (data.meta?.total_count != null) return `total ${data.meta.total_count}`;
-        return undefined;
-    }
-
-    private getRateLimitRemaining(headers: Record<string, string>): number | undefined {
-        const raw = headers['x-pco-api-request-rate-count'] ?? headers['X-PCO-API-Request-Rate-Count'];
-        if (raw == null) return undefined;
-        const n = parseInt(raw, 10);
-        return Number.isNaN(n) ? undefined : n;
-    }
-
-    private getRateLimitLimit(headers: Record<string, string>): number | undefined {
-        const raw = headers['x-pco-api-request-rate-limit'] ?? headers['X-PCO-API-Request-Rate-Limit'];
-        if (raw == null) return undefined;
-        const n = parseInt(raw, 10);
-        return Number.isNaN(n) ? undefined : n;
-    }
-
-    private extractHeaders(response: Response): Record<string, string> {
-        const headers: Record<string, string> = {};
-        
-        // Handle case where headers might be undefined
-        if (!response.headers) {
-            return headers;
-        }
-        
-        // Handle different header structures (browser vs Node.js)
-        if (typeof response.headers.forEach === 'function') {
-            // Browser or polyfilled Headers with forEach
-            response.headers.forEach((value, key) => {
-                headers[key] = value;
-            });
-        } else {
-            // Node.js Headers - iterate using entries() with type assertion
-            // TypeScript may not recognize entries() on Headers, but it exists in Node.js
-            const headersObj = response.headers as any;
-            if (typeof headersObj.entries === 'function') {
-                for (const [key, value] of headersObj.entries()) {
-                    headers[key as string] = value as string;
-                }
-            } else if (typeof headersObj.keys === 'function') {
-                // Fallback: iterate using keys if entries() is not available
-                const headerKeys = Array.from(headersObj.keys()) as string[];
-                for (const key of headerKeys) {
-                    headers[key] = headersObj.get(key) as string;
-                }
-            } else {
-                // Last resort: try to access as object (some polyfills)
-                for (const key in headersObj) {
-                    if (headersObj.hasOwnProperty(key)) {
-                        headers[key] = headersObj[key];
-                    }
-                }
-            }
-        }
-        
-        return headers;
-    }
-
-    private async attemptTokenRefresh() {
-        if (this.config.auth.type !== 'oauth') {
-            throw new Error('Token refresh is only available for OAuth authentication');
-        }
-        this.debugLog('http  auth  token refresh start', {});
-
-        const baseURL = this.config.baseURL || 'https://api.planningcenteronline.com/people/v2';
-        const tokenUrl = baseURL.replace('/people/v2', '/oauth/token');
-
-        // Prepare the request body for token refresh
-        const body = new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: this.config.auth.refreshToken,
-        });
-
-        // Add client credentials if available from the config or environment
-        const clientId = this.config.auth.clientId || process.env.PCO_APP_ID;
-        const clientSecret = this.config.auth.clientSecret || process.env.PCO_APP_SECRET;
-        
-        if (clientId && clientSecret) {
-            body.append('client_id', clientId);
-            body.append('client_secret', clientSecret);
-        }
-
-        const response = await fetch(tokenUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json',
-            },
-            body: body.toString(),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Token refresh failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
-        }
-
-        const tokens = await response.json();
-
-        // Update the config with new tokens
-        this.config.auth.accessToken = tokens.access_token;
-        this.config.auth.refreshToken = tokens.refresh_token;
-
-        // Call the onRefresh callback
-        await this.config.auth.onRefresh({
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-        });
-    }
-
-    private updateRateLimitTracking(endpoint: string, headers: Record<string, string>): void {
-        const limit = headers['x-pco-api-request-rate-limit'];
-        const remaining = headers['x-pco-api-request-rate-count'];
-        const resetTime = headers['retry-after'];
-
-        if (limit && remaining && resetTime) {
-            this.rateLimitTracker.update(
-                endpoint,
-                parseInt(limit),
-                parseInt(remaining),
-                Date.now() + parseInt(resetTime) * 1000
-            );
-        }
-    }
-
-    getPerformanceMetrics() {
-        return this.performanceMetrics.getMetrics();
-    }
-
-    getRateLimitInfo() {
-        return this.rateLimitTracker.getAllLimits();
-    }
-
-    /**
-     * Get authentication header for external services (like file uploads).
-     * Uses the same auth as the main API so upload.planningcenteronline.com accepts it.
-     */
-    getAuthHeader(): string {
-        if (this.config.auth.type === 'personal_access_token') {
-            const clientId = this.config.auth.personalAccessToken;
-            const clientSecret = this.config.auth.personalAccessTokenSecret ??
-                (typeof process !== 'undefined' && process.env && process.env.PCO_PERSONAL_ACCESS_SECRET);
-            if (!clientId || !clientSecret) {
-                return '';
-            }
-            const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-            return `Basic ${credentials}`;
-        }
-        if (this.config.auth.type === 'oauth') {
-            return `Bearer ${this.config.auth.accessToken}`;
-        }
-        if (this.config.auth.type === 'basic') {
-            const credentials = Buffer.from(`${this.config.auth.appId}:${this.config.auth.appSecret}`).toString('base64');
-            return `Basic ${credentials}`;
-        }
-        return '';
-    }
-
-    /**
-     * Fallback HTTP request method using Node.js https for environments where fetch is broken
-     */
-    private async makeHttpsRequest(url: string, options: RequestInit): Promise<any> {
-        const https = require('https');
-        const urlObj = new URL(url);
-
-        const requestOptions = {
-            hostname: urlObj.hostname,
-            path: urlObj.pathname + urlObj.search,
-            method: options.method || 'GET',
-            headers: options.headers as Record<string, string> || {},
-        };
-
-        return new Promise((resolve, reject) => {
-            const req = https.request(requestOptions, (res: any) => {
-                let data = '';
-                res.on('data', (chunk: Buffer) => data += chunk);
-                res.on('end', () => {
-                    // Create a response-like object
-                    resolve({
-                        status: res.statusCode,
-                        headers: {
-                            get: (name: string) => res.headers[name.toLowerCase()],
-                        },
-                        text: () => Promise.resolve(data),
-                        json: () => Promise.resolve(JSON.parse(data)),
-                        ok: res.statusCode >= 200 && res.statusCode < 300,
-                    });
-                });
-            });
-
-            req.on('error', reject);
-
-            if (options.body) {
-                req.write(options.body);
-            }
-
-            req.end();
-        });
-    }
+  /** Authorization header value for use in external requests (e.g. file upload to PCO upload service). */
+  getAuthHeader(): string {
+    return getAuthHeader(this.config.auth);
+  }
 }
-
