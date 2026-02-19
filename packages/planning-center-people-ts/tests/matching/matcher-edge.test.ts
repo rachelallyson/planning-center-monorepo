@@ -1,8 +1,8 @@
 import { PersonMatcher } from '../../src/matching/matcher';
 import type { PeopleModule } from '../../src/modules/people';
-import type { FlattenedPersonResource, PersonAttributes } from '../../src/types';
+import type { PersonAttributes, PersonResource } from '../../src/types';
 
-function mkPerson(id: string, attrs: Partial<PersonAttributes> = {}): FlattenedPersonResource {
+function mkPerson(id: string, attrs: Partial<PersonAttributes> = {}): PersonResource {
   return {
     id,
     type: 'Person',
@@ -46,19 +46,19 @@ describe('PersonMatcher edge cases', () => {
 
     // Verify only person 2 matches by email
     people.getEmails.mockImplementation(async (id: string) =>
-      id === '2' ? ({ 
-        data: [{ 
-          id: 'e1', 
-          type: 'Email', 
+      id === '2' ? ({
+        data: [{
+          id: 'e1',
+          type: 'Email',
           address: 'x@y.com',
           location: 'Home',
           primary: true,
-        }] 
+        }]
       }) : ({ data: [] })
     );
     people.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const res = await matcher.findMatch({ email: 'x@y.com', firstName: 'A', lastName: 'B', matchStrategy: 'fuzzy' });
+    const res = await matcher.findMatch({ email: 'x@y.com', first_name: 'A', last_name: 'B', matchStrategy: 'fuzzy' });
     expect(res?.person.id).toBe('2');
     expect(res?.isVerifiedContactMatch).toBe(true);
   });

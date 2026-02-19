@@ -1,25 +1,20 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import type { PeopleModule } from '../../src/modules/people';
-import type { FlattenedPersonResource, PersonResource, PersonAttributes } from '../../src/types';
+import type { PersonMatcherDeps } from '../../src/modules/people';
+import type { PersonResource, PersonAttributes } from '../../src/types';
 
-const makePerson = (id: string, attrs: Partial<PersonAttributes> = {}): FlattenedPersonResource => {
-  return {
-    id,
-    type: 'Person',
-    ...attrs,
-  } as FlattenedPersonResource;
+function isPersonResource(o: object): o is PersonResource {
+  const id = Object.getOwnPropertyDescriptor(o, 'id')?.value;
+  const type = Object.getOwnPropertyDescriptor(o, 'type')?.value;
+  return typeof id === 'string' && type === 'Person';
+}
+
+const makePerson = (id: string, attrs: Partial<PersonAttributes> = {}): PersonResource => {
+  const obj = { id, type: 'Person', ...attrs };
+  if (!isPersonResource(obj)) throw new Error('Invalid person shape');
+  return obj;
 };
 
-const makePersonResource = (id: string, attrs: Partial<PersonAttributes> = {}): PersonResource => {
-  return {
-    id,
-    type: 'Person',
-    attributes: attrs as PersonAttributes,
-    relationships: {},
-  };
-};
-
-const peopleModule: jest.Mocked<Pick<PeopleModule, 'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'>> = {
+const peopleModule: jest.Mocked<PersonMatcherDeps> = {
   search: jest.fn(),
   getEmails: jest.fn(),
   getPhoneNumbers: jest.fn(),
@@ -46,9 +41,9 @@ describe('PersonMatcher branches', () => {
       .mockResolvedValue({ data: [] }); // name search fallback
 
     peopleModule.getEmails.mockResolvedValue({
-      data: [{ 
-        id: 'e1', 
-        type: 'Email', 
+      data: [{
+        id: 'e1',
+        type: 'Email',
         address: 'test@example.com',
         location: 'Home',
         primary: true,
@@ -59,8 +54,8 @@ describe('PersonMatcher branches', () => {
     const exact = await matcher.findMatch({
       email: 'test@example.com',
       matchStrategy: 'exact',
-      firstName: 'John',
-      lastName: 'Doe',
+      first_name: 'John',
+      last_name: 'Doe',
     });
 
     expect(exact?.person?.id).toBe('p1');
@@ -80,9 +75,9 @@ describe('PersonMatcher branches', () => {
 
     // phone verified
     peopleModule.getPhoneNumbers.mockResolvedValue({
-      data: [{ 
-        id: 'p1', 
-        type: 'PhoneNumber', 
+      data: [{
+        id: 'p1',
+        type: 'PhoneNumber',
         number: '+1 (555) 000-1111',
         location: 'Home',
         primary: true,
@@ -93,8 +88,8 @@ describe('PersonMatcher branches', () => {
     peopleModule.getById.mockResolvedValue(candidate);
 
     const result = await matcher.findOrCreate({
-      firstName: 'Jane',
-      lastName: 'Doe',
+      first_name: 'Jane',
+      last_name: 'Doe',
       email: 'jane@example.com',
       phone: '555-000-1111',
       addMissingContactInfo: true,
@@ -111,7 +106,7 @@ describe('PersonMatcher branches', () => {
     peopleModule.getPhoneNumbers.mockResolvedValue({ data: [] });
 
     await expect(
-      matcher.findOrCreate({ firstName: 'No', lastName: 'Match', createIfNotFound: false })
+      matcher.findOrCreate({ first_name: 'No', last_name: 'Match', createIfNotFound: false })
     ).rejects.toThrow('No matching person found and creation is disabled');
   });
 
@@ -119,7 +114,7 @@ describe('PersonMatcher branches', () => {
     const person = makePerson('p3', { first_name: 'John', last_name: 'Smith' });
     peopleModule.getById.mockResolvedValue(person);
 
-    const result = await matcher.isMatch('p3', { firstName: 'John', lastName: 'Smith' });
+    const result = await matcher.isMatch('p3', { first_name: 'John', last_name: 'Smith' });
 
     expect(result?.person?.id).toBe('p3');
     expect((result?.score ?? 0)).toBeGreaterThan(0.5);

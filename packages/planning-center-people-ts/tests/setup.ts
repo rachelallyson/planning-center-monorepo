@@ -7,12 +7,19 @@ import { resolve } from 'path';
 
 try {
   config({ path: resolve(__dirname, '../.env.test'), quiet: true });
-} catch (error) {
+} catch {
   // Ignore if .env.test doesn't exist or can't be loaded
 }
 
 // Store the original fetch before any mocking
 const originalFetch = global.fetch;
+
+function isJestMockedFetch(f: typeof global.fetch): f is typeof fetch & { mockClear?: () => void } {
+  return typeof f === 'function' && f !== null && 'mockClear' in f;
+}
+function isJestMockWithMock(f: typeof global.fetch): f is typeof fetch & { mock?: object } {
+  return typeof f === 'function' && f !== null && 'mock' in f;
+}
 
 // Check if credentials are available (tests with credentials need real API calls)
 const hasCredentials = 
@@ -55,7 +62,7 @@ if (shouldMockFetch) {
   // Reset all mocks before each test
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.MockedFunction<typeof fetch>)?.mockClear();
+    if (isJestMockedFetch(global.fetch)) global.fetch.mockClear?.();
   });
   
   // Clean up after all tests
@@ -64,9 +71,7 @@ if (shouldMockFetch) {
   });
 } else {
   // For integration tests or tests with credentials, ensure real fetch is used
-  // Restore original fetch if it was mocked
-  if (typeof global.fetch === 'function' && (global.fetch as any).mock) {
+  if (isJestMockWithMock(global.fetch) && global.fetch.mock) {
     global.fetch = originalFetch;
   }
-  // Don't mock console for integration tests so we can see real output
 }

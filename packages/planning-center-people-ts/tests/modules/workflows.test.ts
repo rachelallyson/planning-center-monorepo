@@ -7,40 +7,40 @@ describe('WorkflowsModule - Real Integration Tests', () => {
   let testWorkflowId: string | null = null;
   let testWorkflowCardId: string | null = null;
   let testWorkflowCardNoteId: string | null = null;
-  let createdWorkflowIds: string[] = []; // Track workflows we created so we can clean them up
+  const createdWorkflowIds: string[] = []; // Track workflows we created so we can clean them up
 
   beforeAll(async () => {
     client = createTestClient();
-    
+
     // Create a test person for workflow operations
     const timestamp = Date.now();
     const person = await client.people.create({
-      firstName: `Test_Workflows_${timestamp}`,
-      lastName: `Person_${timestamp}`,
-      status: 'active' as const,
+      first_name: `Test_Workflows_${timestamp}`,
+      last_name: `Person_${timestamp}`,
+      status: 'active',
     });
     // create() returns ResourceObject which should have id property
     if (!person || !person.id) {
       throw new Error('Failed to create test person: API returned invalid response');
     }
     testPersonId = person.id;
-    
+
     // Always use workflow ID 332543 (user has granted permissions to this workflow)
-    const workflowsResponse = await client.workflows.getPage({ perPage: 25 });
+    const workflowsResponse = await client.workflows.getPage({ per_page: 25 });
     const workflow332543 = workflowsResponse.data.find(w => w.id === '332543');
     expect(workflow332543).toBeDefined();
     testWorkflowId = '332543';
-    
+
     // Create a workflow card for tests that need it
     expect(testPersonId).toBeDefined();
     expect(testWorkflowId).toBeDefined();
-    
+
     // Add an email to the test person (required for sendEmailWorkflowCard test)
     await client.contacts.createEmail(testPersonId!, {
       address: `test${timestamp}@gmail.com`,
       location: 'Home',
     });
-    
+
     const card = await client.workflows.createWorkflowCard(testWorkflowId, testPersonId!);
     testWorkflowCardId = card.id || null;
   }, 30000);
@@ -87,7 +87,7 @@ describe('WorkflowsModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of workflows', async () => {
-      const result = await client.workflows.getPage({ perPage: 25, page: 1 });
+      const result = await client.workflows.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -115,7 +115,7 @@ describe('WorkflowsModule - Real Integration Tests', () => {
       // Always use workflow ID 332543 (set in beforeAll)
       expect(testWorkflowId).toBe('332543');
 
-      const result = await client.workflows.getById(testWorkflowId!, ['workflow_cards']);
+      const result = await client.workflows.getById(testWorkflowId!, { include: ['category'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(testWorkflowId);
@@ -268,6 +268,7 @@ describe('WorkflowsModule - Real Integration Tests', () => {
       expect(result.note).toBe(noteData.note);
 
       testWorkflowCardNoteId = result.id || null;
+      expect(testWorkflowCardNoteId).toBeTruthy();
     }, 30000);
   });
 
@@ -341,7 +342,7 @@ describe('WorkflowsModule - Real Integration Tests', () => {
       // Create and remove a workflow card first
       const created = await client.workflows.createWorkflowCard(testWorkflowId!, testPersonId!);
       const cardId = created.id || '';
-      
+
       await client.workflows.removeWorkflowCard(testPersonId!, cardId);
 
       const result = await client.workflows.restoreWorkflowCard(testPersonId!, cardId);
@@ -362,7 +363,6 @@ describe('WorkflowsModule - Real Integration Tests', () => {
       // The email was added in beforeAll, so we should be able to get it
       const emails = await client.people.getEmails(testPersonId!);
       expect(emails.data.length).toBeGreaterThan(0);
-      const personEmails = emails.data;
 
       const emailData = {
         subject: 'Test Subject',

@@ -1,5 +1,23 @@
-import { PcoClient } from '../../src';
+import { PcoClient, type EmailAttributes, type PhoneNumberAttributes } from '../../src';
 import { createTestClient } from '../integration/test-config';
+
+async function cleanupContactTestData(
+  c: PcoClient,
+  ids: { email?: string | null; phone?: string | null; address?: string | null; social?: string | null; person?: string | null }
+): Promise<void> {
+  const keyToDelete: Array<keyof typeof ids> = ['email', 'phone', 'address', 'social', 'person'];
+  const deleteFns: Record<keyof typeof ids, (id: string) => Promise<void>> = {
+    email: (id) => c.contacts.deleteEmail(id),
+    phone: (id) => c.contacts.deletePhoneNumber(id),
+    address: (id) => c.contacts.deleteAddress(id),
+    social: (id) => c.contacts.deleteSocialProfile(id),
+    person: (id) => c.people.delete(id),
+  };
+  for (const key of keyToDelete) {
+    const id = ids[key];
+    if (id != null) await deleteFns[key](id);
+  }
+}
 
 describe('ContactsModule - Real Integration Tests', () => {
   let client: PcoClient;
@@ -11,13 +29,13 @@ describe('ContactsModule - Real Integration Tests', () => {
 
   beforeAll(async () => {
     client = createTestClient();
-    
+
     // Create a test person for contact operations
     const timestamp = Date.now();
     const person = await client.people.create({
-      firstName: `Test_Contacts_${timestamp}`,
-      lastName: `Person_${timestamp}`,
-      status: 'active' as const,
+      first_name: `Test_Contacts_${timestamp}`,
+      last_name: `Person_${timestamp}`,
+      status: 'active',
     });
     // create() returns ResourceObject which should have id property
     if (!person || !person.id) {
@@ -27,22 +45,13 @@ describe('ContactsModule - Real Integration Tests', () => {
   }, 30000);
 
   afterAll(async () => {
-    // Clean up test data
-    if (testEmailId) {
-      await client.contacts.deleteEmail(testEmailId);
-    }
-    if (testPhoneId) {
-      await client.contacts.deletePhoneNumber(testPhoneId);
-    }
-    if (testAddressId) {
-      await client.contacts.deleteAddress(testAddressId);
-    }
-    if (testSocialProfileId) {
-      await client.contacts.deleteSocialProfile(testSocialProfileId);
-    }
-    if (testPersonId) {
-      await client.people.delete(testPersonId);
-    }
+    await cleanupContactTestData(client, {
+      email: testEmailId,
+      phone: testPhoneId,
+      address: testAddressId,
+      social: testSocialProfileId,
+      person: testPersonId,
+    });
   }, 120000);
 
   describe('constructor', () => {
@@ -85,7 +94,7 @@ describe('ContactsModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       const timestamp = Date.now();
-      const emailData = {
+      const emailData: EmailAttributes = {
         address: `testemail${timestamp}@gmail.com`,
         location: 'Home',
         primary: false,
@@ -121,7 +130,7 @@ describe('ContactsModule - Real Integration Tests', () => {
 
       // Create an email to delete using PeopleModule (which works)
       const timestamp = Date.now();
-      const emailData = {
+      const emailData: EmailAttributes = {
         address: `testdelete${timestamp}@gmail.com`,
         location: 'Home',
         primary: false,
@@ -170,7 +179,7 @@ describe('ContactsModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       const timestamp = Date.now();
-      const phoneData = {
+      const phoneData: PhoneNumberAttributes = {
         number: `+1555${timestamp.toString().slice(-7)}`,
         location: 'Home',
         primary: false,
@@ -206,7 +215,7 @@ describe('ContactsModule - Real Integration Tests', () => {
 
       // Create a phone number to delete using PeopleModule (which works)
       const timestamp = Date.now();
-      const phoneData = {
+      const phoneData: PhoneNumberAttributes = {
         number: `+1555${timestamp.toString().slice(-7)}`,
         location: 'Home',
         primary: false,

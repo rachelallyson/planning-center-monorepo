@@ -47,7 +47,7 @@ describe('CampusModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of campuses', async () => {
-      const result = await client.campus.getPage({ perPage: 25, page: 1 });
+      const result = await client.campus.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -59,7 +59,7 @@ describe('CampusModule - Real Integration Tests', () => {
     it('should fetch a page with filtering options', async () => {
       const result = await client.campus.getPage({
         include: ['lists'],
-        perPage: 10,
+        per_page: 10,
         page: 1,
       });
 
@@ -71,7 +71,7 @@ describe('CampusModule - Real Integration Tests', () => {
   describe('getById', () => {
     it('should fetch campus by ID without include', async () => {
       // First get a campus ID
-      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      const campusesResponse = await client.campus.getPage({ per_page: 1 });
       expect(campusesResponse.data.length).toBeGreaterThan(0);
       const campusId = campusesResponse.data[0].id;
 
@@ -87,11 +87,11 @@ describe('CampusModule - Real Integration Tests', () => {
 
     it('should fetch campus by ID with include', async () => {
       // First get a campus ID
-      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      const campusesResponse = await client.campus.getPage({ per_page: 1 });
       expect(campusesResponse.data.length).toBeGreaterThan(0);
       const campusId = campusesResponse.data[0].id;
 
-      const result = await client.campus.getById(campusId, ['lists']);
+      const result = await client.campus.getById(campusId, { include: ['lists'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(campusId);
@@ -172,7 +172,7 @@ describe('CampusModule - Real Integration Tests', () => {
   describe('getLists', () => {
     it('should get lists for a campus', async () => {
       // Get a campus first
-      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      const campusesResponse = await client.campus.getPage({ per_page: 1 });
       expect(campusesResponse.data.length).toBeGreaterThan(0);
       const campusId = campusesResponse.data[0].id;
 
@@ -187,7 +187,7 @@ describe('CampusModule - Real Integration Tests', () => {
   describe('getServiceTimes', () => {
     it('should get service times for a campus', async () => {
       // Get a campus first
-      const campusesResponse = await client.campus.getPage({ perPage: 1 });
+      const campusesResponse = await client.campus.getPage({ per_page: 1 });
       expect(campusesResponse.data.length).toBeGreaterThan(0);
       const campusId = campusesResponse.data[0].id;
 

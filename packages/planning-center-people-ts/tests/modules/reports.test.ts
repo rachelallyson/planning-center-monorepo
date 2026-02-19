@@ -7,7 +7,7 @@ describe('ReportsModule - Real Integration Tests', () => {
 
   beforeAll(async () => {
     client = createTestClient();
-    
+
     // Create a test report for getById tests
     const timestamp = Date.now();
     const report = await client.reports.create({
@@ -53,7 +53,7 @@ describe('ReportsModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of reports', async () => {
-      const result = await client.reports.getPage({ perPage: 25, page: 1 });
+      const result = await client.reports.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -79,7 +79,7 @@ describe('ReportsModule - Real Integration Tests', () => {
     it('should fetch report by ID with include', async () => {
       expect(testReportId).toBeDefined();
 
-      const result = await client.reports.getById(testReportId!, ['created_by']);
+      const result = await client.reports.getById(testReportId!, { include: ['created_by'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(testReportId);

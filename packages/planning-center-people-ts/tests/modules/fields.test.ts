@@ -1,31 +1,48 @@
 import { PcoClient } from '../../src';
 import { createTestClient } from '../integration/test-config';
 
+function isStringOrTextType(dataType: string | undefined): boolean {
+  return dataType === 'string' || dataType === 'text' || dataType === undefined || dataType !== 'date';
+}
+
+function hasSlugOrName(f: Record<string, string | undefined>): boolean {
+  const keys: Array<'slug' | 'name'> = ['slug', 'name'];
+  for (const key of keys) {
+    if (key in f && f[key]) return true;
+  }
+  return false;
+}
+
+function fieldAcceptsStringValues(f: Record<string, string | undefined>): boolean {
+  const dataType = 'data_type' in f ? f.data_type : undefined;
+  return hasSlugOrName(f) && isStringOrTextType(dataType);
+}
+
 describe('FieldsModule - Real Integration Tests', () => {
   let client: PcoClient;
   let testPersonId: string | null = null;
   let testTabId: string | null = null;
-  let testFieldDefinitionId: string | null = null;
   let testFieldDataId: string | null = null;
+  let testFieldDefinitionId: string | null = null;
   // Track which field definitions are used by which tests to avoid conflicts
-  let usedFieldIds: Set<string> = new Set();
+  const usedFieldIds: Set<string> = new Set();
 
   beforeAll(async () => {
     client = createTestClient();
-    
+
     // Create a test person for field operations
     const timestamp = Date.now();
     const person = await client.people.create({
-      firstName: `Test_Fields_${timestamp}`,
-      lastName: `Person_${timestamp}`,
-      status: 'active' as const,
+      first_name: `Test_Fields_${timestamp}`,
+      last_name: `Person_${timestamp}`,
+      status: 'active',
     });
     // create() returns ResourceObject which should have id property
     if (!person || !person.id) {
       throw new Error('Failed to create test person: API returned invalid response');
     }
     testPersonId = person.id;
-    
+
     // Get a tab ID for field definition operations
     const tabsResponse = await client.fields.getTabs();
     expect(tabsResponse.data.length).toBeGreaterThan(0);
@@ -37,8 +54,9 @@ describe('FieldsModule - Real Integration Tests', () => {
     if (testFieldDataId && testPersonId) {
       await client.fields.deletePersonFieldData(testPersonId, testFieldDataId);
     }
-    // Note: testFieldDefinitionId is not set in tests, so we don't delete it
-    // Field definitions are typically system-level and shouldn't be deleted
+    if (testFieldDefinitionId && testTabId) {
+      await client.fields.deleteFieldDefinition(testFieldDefinitionId);
+    }
     expect(testPersonId).toBeDefined();
     await client.people.delete(testPersonId!);
   }, 120000);
@@ -63,7 +81,7 @@ describe('FieldsModule - Real Integration Tests', () => {
     }, 30000);
 
     it('should fetch field definitions with custom include', async () => {
-      // getAllFieldDefinitions accepts FieldDefinitionListOptions, not include array
+      // getAllFieldDefinitions accepts FieldDefinitionGetPageOptions, not include array
       const result = await client.fields.getAllFieldDefinitions({
         include: ['tab', 'field_options']
       });
@@ -149,9 +167,10 @@ describe('FieldsModule - Real Integration Tests', () => {
       const fieldData = {
         name: `Test Field ${timestamp}`,
         slug: `test-field-${timestamp}`,
-        data_type: 'string' as const,
+        data_type: 'string',
       };
-      const result = await client.fields.createFieldDefinition(testTabId, fieldData);
+      expect(testTabId).toBeDefined();
+      const result = await client.fields.createFieldDefinition(testTabId!, fieldData);
 
       expect(result).toBeDefined();
       expect(result.id).toBeTruthy();
@@ -170,11 +189,11 @@ describe('FieldsModule - Real Integration Tests', () => {
       const fieldData = {
         name: `Test Update ${timestamp}`,
         slug: `test-update-${timestamp}`,
-        data_type: 'string' as const,
+        data_type: 'string',
       };
       const created = await client.fields.createFieldDefinition(testTabId!, fieldData);
       const fieldDefinitionId = created.id!;
-      
+
       expect(fieldDefinitionId).toBeDefined();
 
       const updateData = { name: 'Updated Field Name' };
@@ -195,7 +214,7 @@ describe('FieldsModule - Real Integration Tests', () => {
       const fieldData = {
         name: `Test Delete ${timestamp}`,
         slug: `test-delete-${timestamp}`,
-        data_type: 'string' as const,
+        data_type: 'string',
       };
       const created = await client.fields.createFieldDefinition(testTabId!, fieldData);
       const fieldIdToDelete = created.id ?? '';
@@ -272,9 +291,9 @@ describe('FieldsModule - Real Integration Tests', () => {
       // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const stringField = fieldsResponse.data.find(f => {
         const dataType = 'data_type' in f ? f.data_type : undefined;
-        return dataType === 'string' || 
-               dataType === 'text' ||
-               (!dataType || dataType !== 'date');
+        return dataType === 'string' ||
+          dataType === 'text' ||
+          (!dataType || dataType !== 'date');
       });
       expect(stringField).toBeDefined();
       const fieldId = stringField!.id;
@@ -305,9 +324,9 @@ describe('FieldsModule - Real Integration Tests', () => {
       // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const stringFields = fieldsResponse.data.filter(f => {
         const dataType = 'data_type' in f ? f.data_type : undefined;
-        return dataType === 'string' || 
-               dataType === 'text' ||
-               (!dataType || dataType !== 'date');
+        return dataType === 'string' ||
+          dataType === 'text' ||
+          (!dataType || dataType !== 'date');
       });
       expect(stringFields.length).toBeGreaterThan(0);
       // Find a field that hasn't been used by other tests to avoid conflicts
@@ -351,17 +370,8 @@ describe('FieldsModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       // First get a field definition with a slug that accepts string values
-      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const fieldsResponse = await client.fields.getAllFieldDefinitions();
-      const fieldsWithSlug = fieldsResponse.data.filter(f => {
-        const hasSlug = 'slug' in f && f.slug;
-        const dataType = 'data_type' in f ? f.data_type : undefined;
-        return hasSlug && 
-               (dataType === 'string' || 
-                dataType === 'text' ||
-                !dataType || 
-                dataType !== 'date');
-      });
+      const fieldsWithSlug = fieldsResponse.data.filter(fieldAcceptsStringValues);
       expect(fieldsWithSlug.length).toBeGreaterThan(0);
       // Pick a field not yet used by other tests to avoid conflicts
       const fieldWithSlug = fieldsWithSlug.find(f => !usedFieldIds.has(f.id)) ?? fieldsWithSlug[0];
@@ -408,17 +418,8 @@ describe('FieldsModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       // First get a field definition with a name that accepts string values
-      // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const fieldsResponse = await client.fields.getAllFieldDefinitions();
-      const fieldsWithName = fieldsResponse.data.filter(f => {
-        const hasName = 'name' in f && f.name;
-        const dataType = 'data_type' in f ? f.data_type : undefined;
-        return hasName && 
-               (dataType === 'string' || 
-                dataType === 'text' ||
-                !dataType || 
-                dataType !== 'date');
-      });
+      const fieldsWithName = fieldsResponse.data.filter(fieldAcceptsStringValues);
       expect(fieldsWithName.length).toBeGreaterThan(0);
       // Pick a field not yet used by other tests to avoid conflicts
       const fieldWithName = fieldsWithName.find(f => !usedFieldIds.has(f.id)) ?? fieldsWithName[0];
@@ -472,9 +473,9 @@ describe('FieldsModule - Real Integration Tests', () => {
       // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const stringFields = fieldsResponse.data.filter(f => {
         const dataType = 'data_type' in f ? f.data_type : undefined;
-        return dataType === 'string' || 
-               dataType === 'text' ||
-               (!dataType || dataType !== 'date');
+        return dataType === 'string' ||
+          dataType === 'text' ||
+          (!dataType || dataType !== 'date');
       });
       expect(stringFields.length).toBeGreaterThan(0);
       // Pick a field not yet used by other tests to avoid conflicts
@@ -529,9 +530,9 @@ describe('FieldsModule - Real Integration Tests', () => {
       // getAllFieldDefinitions returns PaginationResult with data array (flattened resources)
       const stringFields = fieldsResponse.data.filter(f => {
         const dataType = 'data_type' in f ? f.data_type : undefined;
-        return dataType === 'string' || 
-               dataType === 'text' ||
-               (!dataType || dataType !== 'date');
+        return dataType === 'string' ||
+          dataType === 'text' ||
+          (!dataType || dataType !== 'date');
       });
       expect(stringFields.length).toBeGreaterThan(0);
       // Pick a field not yet used by other tests to avoid conflicts

@@ -9,29 +9,28 @@ describe('NotesModule - Real Integration Tests', () => {
 
   beforeAll(async () => {
     client = createTestClient();
-    
+
     // Create a test person for note operations
     const timestamp = Date.now();
     const person = await client.people.create({
-      firstName: `Test_Notes_${timestamp}`,
-      lastName: `Person_${timestamp}`,
-      status: 'active' as const,
+      first_name: `Test_Notes_${timestamp}`,
+      last_name: `Person_${timestamp}`,
+      status: 'active',
     });
     // create() returns ResourceObject which should have id property
     if (!person || !person.id) {
       throw new Error('Failed to create test person: API returned invalid response');
     }
     testPersonId = person.id;
-    
+
     // Create a test note for getById tests
     expect(testPersonId).toBeDefined();
-    
+
     // Get or create a note category first
     const categoriesResponse = await client.notes.getNoteCategories();
-    let noteCategoryId: string;
     expect(categoriesResponse.data.length).toBeGreaterThan(0);
-    noteCategoryId = categoriesResponse.data[0].id;
-    
+    const noteCategoryId = categoriesResponse.data[0].id;
+
     // Create a test note
     const note = await client.notes.create(testPersonId!, {
       note: `Test Note ${timestamp}`,
@@ -70,7 +69,7 @@ describe('NotesModule - Real Integration Tests', () => {
 
     it('should fetch notes with filtering options', async () => {
       const result = await client.notes.getAll({
-        include: ['note_category'],
+        include: ['category'],
       });
 
       expect(result).toHaveProperty('data');
@@ -80,7 +79,7 @@ describe('NotesModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of notes', async () => {
-      const result = await client.notes.getPage({ perPage: 25, page: 1 });
+      const result = await client.notes.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -93,7 +92,7 @@ describe('NotesModule - Real Integration Tests', () => {
   describe('getById', () => {
     it('should fetch note by ID without include', async () => {
       // First get a note ID
-      const notesResponse = await client.notes.getPage({ perPage: 1 });
+      const notesResponse = await client.notes.getPage({ per_page: 1 });
       expect(notesResponse.data.length).toBeGreaterThan(0);
       const noteId = notesResponse.data[0].id;
 
@@ -109,11 +108,11 @@ describe('NotesModule - Real Integration Tests', () => {
 
     it('should fetch note by ID with include', async () => {
       // First get a note ID
-      const notesResponse = await client.notes.getPage({ perPage: 1 });
+      const notesResponse = await client.notes.getPage({ per_page: 1 });
       expect(notesResponse.data.length).toBeGreaterThan(0);
       const noteId = notesResponse.data[0].id;
 
-      const result = await client.notes.getById(noteId, ['note_category']);
+      const result = await client.notes.getById(noteId, { include: ['category'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(noteId);
@@ -137,8 +136,8 @@ describe('NotesModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       const result = await client.notes.getNotesForPerson(testPersonId!, {
-        include: ['note_category'],
-        perPage: 10,
+        include: ['category'],
+        per_page: 10,
         page: 1,
       });
 
@@ -152,10 +151,9 @@ describe('NotesModule - Real Integration Tests', () => {
       expect(testPersonId).toBeDefined();
 
       // First get or create a note category (required)
-      let noteCategoryId: string;
       const categoriesResponse = await client.notes.getNoteCategories();
       expect(categoriesResponse.data.length).toBeGreaterThan(0);
-      noteCategoryId = categoriesResponse.data[0].id || '';
+      const noteCategoryId = categoriesResponse.data[0].id || '';
 
       const timestamp = Date.now();
       const noteData = {
@@ -271,7 +269,7 @@ describe('NotesModule - Real Integration Tests', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe(categoryId);
       expect(result.name).toBe(`Updated Category Name ${timestamp}`);
-      
+
       // Clean up the updated category
       await client.notes.deleteNoteCategory(categoryId);
     }, 30000);

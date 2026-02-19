@@ -45,7 +45,7 @@ describe('ListsModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of lists', async () => {
-      const result = await client.lists.getPage({ perPage: 25, page: 1 });
+      const result = await client.lists.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -58,7 +58,7 @@ describe('ListsModule - Real Integration Tests', () => {
   describe('getById', () => {
     it('should fetch list by ID without include', async () => {
       // First get a list ID
-      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      const listsResponse = await client.lists.getPage({ per_page: 1 });
       expect(listsResponse.data.length).toBeGreaterThan(0);
       const listId = listsResponse.data[0].id;
 
@@ -73,11 +73,11 @@ describe('ListsModule - Real Integration Tests', () => {
 
     it('should fetch list by ID with include', async () => {
       // First get a list ID
-      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      const listsResponse = await client.lists.getPage({ per_page: 1 });
       expect(listsResponse.data.length).toBeGreaterThan(0);
       const listId = listsResponse.data[0].id;
 
-      const result = await client.lists.getById(listId, ['list_category']);
+      const result = await client.lists.getById(listId, { include: ['category'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(listId);
@@ -145,7 +145,7 @@ describe('ListsModule - Real Integration Tests', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe(categoryId);
       expect(result.name).toBe(`Updated Category Name ${timestamp}`);
-      
+
       // Clean up the updated category
       await client.lists.deleteListCategory(categoryId);
     }, 30000);
@@ -172,7 +172,7 @@ describe('ListsModule - Real Integration Tests', () => {
   describe('getPeople', () => {
     it('should get people for a list', async () => {
       // First get a list ID
-      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      const listsResponse = await client.lists.getPage({ per_page: 1 });
       expect(listsResponse.data.length).toBeGreaterThan(0);
       const listId = listsResponse.data[0].id;
 
@@ -186,7 +186,7 @@ describe('ListsModule - Real Integration Tests', () => {
 
   describe('getRules', () => {
     it('should return rules for a list', async () => {
-      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      const listsResponse = await client.lists.getPage({ per_page: 1 });
       expect(listsResponse.data.length).toBeGreaterThan(0);
       const listId = listsResponse.data[0].id;
 
@@ -210,7 +210,7 @@ describe('ListsModule - Real Integration Tests', () => {
   describe('run', () => {
     it('should run a list', async () => {
       // First get a list ID
-      const listsResponse = await client.lists.getPage({ perPage: 1 });
+      const listsResponse = await client.lists.getPage({ per_page: 1 });
       expect(listsResponse.data.length).toBeGreaterThan(0);
       const listId = listsResponse.data[0].id;
 

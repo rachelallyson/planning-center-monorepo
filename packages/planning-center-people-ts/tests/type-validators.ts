@@ -1,17 +1,39 @@
 /**
  * Type Validation Helpers for Integration Tests
- * 
+ *
  * These functions validate that actual PCO API responses match our TypeScript type definitions
  */
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+type ResourceLike = Record<string, JsonValue> & { type: string; id: string };
+export type AttributesLike = Record<string, JsonValue>;
+
+export function isAttributesLike(obj: object | null): obj is AttributesLike {
+  return obj !== null && typeof obj === 'object';
+}
+
+type RelDataItem = Record<string, JsonValue> & { type: string; id: string };
+type RelationshipLike = { data: null | RelDataItem | RelDataItem[] };
+export type PaginationLinksLike = { self: string; next?: string | null; prev?: string | null };
+export type PaginationMetaLike = { count: number; total_count: number };
+
+export function isPaginationLinks(obj: object | null | undefined): obj is PaginationLinksLike {
+  return obj != null && typeof obj === 'object' && 'self' in obj;
+}
+export function isPaginationMeta(obj: object | null | undefined): obj is PaginationMetaLike {
+  return obj != null && typeof obj === 'object' && 'count' in obj && 'total_count' in obj;
+}
 
 /**
  * Validates basic resource structure (type, id)
  */
 export function validateResourceStructure(
-  resource: any,
+  resource: ResourceLike,
   expectedType: string,
-  context: string = 'resource'
+  context = 'resource'
 ) {
+  expect(context).toBeDefined();
   expect(resource).toBeDefined();
   expect(resource).toHaveProperty('type');
   expect(resource.type).toBe(expectedType);
@@ -21,24 +43,39 @@ export function validateResourceStructure(
 }
 
 /**
+ * Validates type and id when the resource type is not ResourceLike (e.g. flattened report).
+ */
+export function validateResourceTypeAndId(
+  resource: { type?: string; id?: string },
+  expectedType: string
+) {
+  expect(resource).toBeDefined();
+  expect(resource).toHaveProperty('type');
+  expect(resource.type).toBe(expectedType);
+  expect(resource).toHaveProperty('id');
+  expect(typeof resource.id).toBe('string');
+  if (resource.id) expect(resource.id.length).toBeGreaterThan(0);
+}
+
+/**
  * Validates that an attribute has one of the allowed types
  */
 export function validateAttributeType(
-  attributes: any,
+  attributes: AttributesLike,
   field: string,
   allowedTypes: string[],
-  context: string = 'attribute'
+  context = 'attribute'
 ) {
+  expect(context).toBeDefined();
   const actualType = attributes[field] === null ? 'null' : typeof attributes[field];
   expect(allowedTypes).toContain(actualType);
-
 }
 
 /**
  * Validates string attribute (can be string or undefined)
  */
 export function validateStringAttribute(
-  attributes: any,
+  attributes: AttributesLike,
   field: string
 ) {
   validateAttributeType(attributes, field, ['string', 'undefined', 'null'], field);
@@ -48,7 +85,7 @@ export function validateStringAttribute(
  * Validates nullable string attribute (can be string, null, or undefined)
  */
 export function validateNullableStringAttribute(
-  attributes: any,
+  attributes: AttributesLike,
   field: string
 ) {
   validateAttributeType(attributes, field, ['string', 'null', 'undefined'], field);
@@ -58,7 +95,7 @@ export function validateNullableStringAttribute(
  * Validates boolean attribute (can be boolean or undefined)
  */
 export function validateBooleanAttribute(
-  attributes: any,
+  attributes: AttributesLike,
   field: string
 ) {
   validateAttributeType(attributes, field, ['boolean', 'undefined'], field);
@@ -68,7 +105,7 @@ export function validateBooleanAttribute(
  * Validates number attribute (can be number or undefined)
  */
 export function validateNumberAttribute(
-  attributes: any,
+  attributes: AttributesLike,
   field: string
 ) {
   validateAttributeType(attributes, field, ['number', 'undefined'], field);
@@ -79,7 +116,7 @@ export function validateNumberAttribute(
  * Only validates if the field exists (handles optional date fields)
  */
 export function validateDateAttribute(
-  attributes: any,
+  attributes: AttributesLike,
   field: string
 ) {
   const value = attributes[field];
@@ -97,9 +134,8 @@ export function validateDateAttribute(
  * Handles optional relationships and null data
  */
 export function validateRelationship(
-  relationship: any,
+  relationship: RelationshipLike,
 ) {
-
   expect(relationship).toHaveProperty('data');
 
   // data can be null (valid JSON:API for optional relationships)
@@ -107,7 +143,7 @@ export function validateRelationship(
 
   // data is a resource identifier or array of resource identifiers
   if (Array.isArray(relationship.data)) {
-    relationship.data.forEach((item: any) => {
+    relationship.data.forEach((item: RelDataItem) => {
       expect(item).toHaveProperty('type');
       expect(item).toHaveProperty('id');
     });
@@ -121,7 +157,7 @@ export function validateRelationship(
  * Validates that included resources match expected types
  */
 export function validateIncludedResources(
-  included: any[],
+  included: ResourceLike[],
   expectedTypes: string[]
 ) {
   included.forEach(resource => {
@@ -130,33 +166,23 @@ export function validateIncludedResources(
     expect(resource).toHaveProperty('id');
     expect(typeof resource.id).toBe('string');
   });
-
 }
 
 /**
  * Validates pagination links structure
  */
-export function validatePaginationLinks(links: any) {
-
+export function validatePaginationLinks(links: PaginationLinksLike) {
   expect(links).toHaveProperty('self');
   expect(typeof links.self).toBe('string');
-
-  // next and prev can be null or strings
-  expect(['string', 'null', 'undefined']).toContain(typeof links.next === null ? 'null' : typeof links.next);
-
-  expect(['string', 'null', 'undefined']).toContain(typeof links.prev === null ? 'null' : typeof links.prev);
-
+  expect(['string', 'object', 'undefined']).toContain(links.next == null ? 'object' : typeof links.next);
+  expect(['string', 'object', 'undefined']).toContain(links.prev == null ? 'object' : typeof links.prev);
 }
 
 /**
  * Validates pagination metadata
  */
-export function validatePaginationMeta(meta: any) {
-
-  // Count is usually present
+export function validatePaginationMeta(meta: PaginationMetaLike) {
   expect(typeof meta.count).toBe('number');
-  // Total count may be present
   expect(typeof meta.total_count).toBe('number');
-
 }
 

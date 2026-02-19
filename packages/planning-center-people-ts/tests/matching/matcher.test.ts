@@ -1,9 +1,8 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import type { PeopleModule } from '../../src/modules/people';
-import type { PersonResource, PersonAttributes } from '../../src/types';
+import type { PersonMatcherDeps } from '../../src/modules/people';
+import type { PersonResource } from '../../src/types';
 
-// Mock the PeopleModule
-const mockPeopleModule: jest.Mocked<Pick<PeopleModule, 'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'>> = {
+const mockPeopleModule: jest.Mocked<PersonMatcherDeps> = {
   search: jest.fn(),
   getEmails: jest.fn(),
   getPhoneNumbers: jest.fn(),
@@ -33,27 +32,19 @@ describe('PersonMatcher', () => {
       const mockPerson: PersonResource = {
         id: '1',
         type: 'Person',
-        attributes: {
-          first_name: 'John',
-          last_name: 'Doe',
-        },
-        relationships: {},
+        first_name: 'John',
+        last_name: 'Doe',
       };
 
       mockPeopleModule.search.mockResolvedValue({ data: [] });
       mockPeopleModule.getEmails.mockResolvedValue({ data: [] });
       mockPeopleModule.getPhoneNumbers.mockResolvedValue({ data: [] });
-      mockPeopleModule.create.mockResolvedValueOnce(mockPerson);
-      mockPeopleModule.getById.mockResolvedValue({
-        id: '1',
-        type: 'Person',
-        first_name: 'John',
-        last_name: 'Doe',
-      });
+      mockPeopleModule.create.mockResolvedValueOnce({ data: mockPerson });
+      mockPeopleModule.getById.mockResolvedValue(mockPerson);
 
       const result = await matcher.findOrCreate({
-        firstName: 'John',
-        lastName: 'Doe',
+        first_name: 'John',
+        last_name: 'Doe',
       });
 
       expect(mockPeopleModule.create).toHaveBeenCalled();
@@ -67,7 +58,7 @@ describe('PersonMatcher', () => {
       mockPeopleModule.getEmails.mockResolvedValue({ data: [] });
       mockPeopleModule.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-      const result = await matcher.findMatch({ firstName: 'No', lastName: 'Match' });
+      const result = await matcher.findMatch({ first_name: 'No', last_name: 'Match' });
 
       expect(result).toBeNull();
     });

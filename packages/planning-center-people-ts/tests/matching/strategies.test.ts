@@ -21,10 +21,8 @@ describe('MatchStrategies', () => {
           person: {
             id: '1',
             type: 'Person',
-            attributes: {
-              first_name: 'John',
-              last_name: 'Doe',
-            },
+            first_name: 'John',
+            last_name: 'Doe',
           },
           score: 0.9,
           reason: 'Exact match',
@@ -33,10 +31,8 @@ describe('MatchStrategies', () => {
           person: {
             id: '2',
             type: 'Person',
-            attributes: {
-              first_name: 'Jane',
-              last_name: 'Doe',
-            },
+            first_name: 'Jane',
+            last_name: 'Doe',
           },
           score: 0.7,
           reason: 'Fuzzy match',
@@ -60,10 +56,8 @@ describe('MatchStrategies', () => {
           person: {
             id: '1',
             type: 'Person',
-            attributes: {
-              first_name: 'John',
-              last_name: 'Doe',
-            },
+            first_name: 'John',
+            last_name: 'Doe',
           },
           score: 0.9,
           reason: 'Exact match',
@@ -86,10 +80,8 @@ describe('MatchStrategies', () => {
           person: {
             id: '1',
             type: 'Person',
-            attributes: {
-              first_name: 'John',
-              last_name: 'Doe',
-            },
+            first_name: 'John',
+            last_name: 'Doe',
           },
           score: 0.9,
           reason: 'Exact match',
@@ -98,10 +90,8 @@ describe('MatchStrategies', () => {
           person: {
             id: '2',
             type: 'Person',
-            attributes: {
-              first_name: 'Jane',
-              last_name: 'Doe',
-            },
+            first_name: 'Jane',
+            last_name: 'Doe',
           },
           score: 0.7,
           reason: 'Fuzzy match',

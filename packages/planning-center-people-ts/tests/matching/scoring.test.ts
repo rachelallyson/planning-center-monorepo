@@ -16,7 +16,7 @@ describe('MatchScorer (Integration)', () => {
 
   beforeAll(async () => {
     logAuthStatus();
-    
+
     client = createTestClient();
   }, 30000);
 
@@ -31,7 +31,7 @@ describe('MatchScorer (Integration)', () => {
     it('should score a person match based on various criteria', async () => {
       const timestamp = Date.now();
       const testEmail = `${TEST_PREFIX}_score_${timestamp}@gmail.com`;
-      
+
       // Create a person with matching criteria
       const person = await client.people.create({
         first_name: `${TEST_PREFIX}_John_${timestamp}`,
@@ -51,8 +51,8 @@ describe('MatchScorer (Integration)', () => {
 
       // Use findOrCreate which uses scoring internally
       const match = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_John_${timestamp}`,
-        lastName: `${TEST_PREFIX}_Doe_${timestamp}`,
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Doe_${timestamp}`,
         email: testEmail,
         createIfNotFound: false,
       });
@@ -66,7 +66,7 @@ describe('MatchScorer (Integration)', () => {
     it('should score email matches', async () => {
       const timestamp = Date.now();
       const testEmail = `${TEST_PREFIX}_email_score_${timestamp}@gmail.com`;
-      
+
       // Create a person with email
       const person = await client.people.create({
         first_name: `${TEST_PREFIX}_Email_${timestamp}`,
@@ -100,7 +100,7 @@ describe('MatchScorer (Integration)', () => {
       // Use a valid phone format (10 digits)
       const phoneDigits = timestamp.toString().slice(-10).padStart(10, '0');
       const testPhone = `+1${phoneDigits}`;
-      
+
       // Create a person with phone
       const person = await client.people.create({
         first_name: `${TEST_PREFIX}_Phone_${timestamp}`,
@@ -132,7 +132,7 @@ describe('MatchScorer (Integration)', () => {
     it('should get match reason', async () => {
       const timestamp = Date.now();
       const testEmail = `${TEST_PREFIX}_reason_${timestamp}@gmail.com`;
-      
+
       // Create a person
       const person = await client.people.create({
         first_name: `${TEST_PREFIX}_Reason_${timestamp}`,
@@ -152,8 +152,8 @@ describe('MatchScorer (Integration)', () => {
 
       // Use findOrCreate which uses getMatchReason internally
       const match = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_Reason_${timestamp}`,
-        lastName: `${TEST_PREFIX}_Test_${timestamp}`,
+        first_name: `${TEST_PREFIX}_Reason_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Test_${timestamp}`,
         email: testEmail,
         createIfNotFound: false,
       });

@@ -16,7 +16,7 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
 
   beforeAll(async () => {
     logAuthStatus();
-    
+
     client = createTestClient();
   }, 30000);
 
@@ -32,7 +32,7 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
       const timestamp = Date.now();
       const testEmail = `${TEST_PREFIX}_adult_${timestamp}@gmail.com`;
       const adultBirthdate = '1985-05-15'; // Adult
-      
+
       // Create an adult person
       const person = await client.people.create({
         first_name: `${TEST_PREFIX}_John_${timestamp}`,
@@ -45,7 +45,7 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
       // Add email - test should fail if this fails
       await client.people.addEmail(person.id, {
         address: testEmail,
-        location: 'home',
+        location: 'Home',
         primary: true,
       });
 
@@ -54,14 +54,14 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
 
       // Use multi-step search with age preference
       const match = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_John_${timestamp}`,
-        lastName: `${TEST_PREFIX}_Doe_${timestamp}`,
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Doe_${timestamp}`,
         email: testEmail,
         agePreference: 'adults',
         searchStrategy: 'multi-step',
         createIfNotFound: false,
       });
-      
+
       expect(match).not.toBeNull();
       expect(match.id).toBe(person.id);
     }, 60000);
@@ -70,7 +70,7 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
       const timestamp = Date.now();
       const testEmail = `${TEST_PREFIX}_child_${timestamp}@gmail.com`;
       const childBirthdate = new Date().toISOString().split('T')[0]; // Recent date (child)
-      
+
       // Create a child person
       const child = await client.people.create({
         first_name: `${TEST_PREFIX}_John_${timestamp}`,
@@ -82,7 +82,7 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
 
       await client.people.addEmail(child.id, {
         address: testEmail,
-        location: 'home',
+        location: 'Home',
         primary: true,
       });
 
@@ -92,14 +92,14 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
       // Use multi-step search looking for adults, but should find the child
       // when it falls back to strategies without age preference
       const match = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_John_${timestamp}`,
-        lastName: `${TEST_PREFIX}_DoeJr_${timestamp}`,
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_DoeJr_${timestamp}`,
         email: testEmail,
         agePreference: 'adults', // Looking for adult
         searchStrategy: 'multi-step',
         createIfNotFound: false,
       });
-      
+
       // Should find the child when it tries strategies without age preference
       expect(match).not.toBeNull();
       expect(match.id).toBe(child.id);
@@ -108,12 +108,12 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
     it('returns null when no match found in any strategy', async () => {
       const timestamp = Date.now();
       const uniqueEmail = `${TEST_PREFIX}_nonexistent_${timestamp}@gmail.com`;
-      
+
       // Try to find a person that doesn't exist
       await expect(
         client.people.findOrCreate({
-          firstName: `${TEST_PREFIX}_NonExistent_${timestamp}`,
-          lastName: `${TEST_PREFIX}_Person_${timestamp}`,
+          first_name: `${TEST_PREFIX}_NonExistent_${timestamp}`,
+          last_name: `${TEST_PREFIX}_Person_${timestamp}`,
           email: uniqueEmail,
           searchStrategy: 'multi-step',
           createIfNotFound: false,
@@ -129,16 +129,16 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
     it('uses single strategy by default', async () => {
       const timestamp = Date.now();
       const uniqueEmail = `${TEST_PREFIX}_single_${timestamp}@gmail.com`;
-      
+
       // Create a person using default (single) strategy
       // If email domain is disallowed, the person will still be created but without email
       const person = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_John_${timestamp}`,
-        lastName: `${TEST_PREFIX}_Doe_${timestamp}`,
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Doe_${timestamp}`,
         email: uniqueEmail,
         // searchStrategy defaults to 'single'
       });
-      
+
       expect(person).toBeDefined();
       expect(person.id).toBeTruthy();
       createdPersonIds.push(person.id);
@@ -147,16 +147,16 @@ describe('PersonMatcher Multi-Step Search (Integration)', () => {
     it('uses multi-step strategy when specified', async () => {
       const timestamp = Date.now();
       const uniqueEmail = `${TEST_PREFIX}_multistep_${timestamp}@gmail.com`;
-      
+
       // Create a person using multi-step strategy
       // If email domain is disallowed, the person will still be created but without email
       const person = await client.people.findOrCreate({
-        firstName: `${TEST_PREFIX}_John_${timestamp}`,
-        lastName: `${TEST_PREFIX}_Doe_${timestamp}`,
+        first_name: `${TEST_PREFIX}_John_${timestamp}`,
+        last_name: `${TEST_PREFIX}_Doe_${timestamp}`,
         email: uniqueEmail,
         searchStrategy: 'multi-step',
       });
-      
+
       expect(person).toBeDefined();
       expect(person.id).toBeTruthy();
       createdPersonIds.push(person.id);

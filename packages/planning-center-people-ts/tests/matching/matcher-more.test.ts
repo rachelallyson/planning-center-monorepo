@@ -1,42 +1,26 @@
 import { PersonMatcher } from '../../src/matching/matcher';
-import type { PeopleModule } from '../../src/modules/people';
-import type { FlattenedPersonResource, PersonResource, EmailResource, PhoneNumberResource, PersonAttributes } from '../../src/types';
+import type { PersonMatcherDeps } from '../../src/modules/people';
+import type { PersonResource, PersonAttributes } from '../../src/types';
 
-const makePerson = (id: string, attrs: Partial<PersonAttributes> = {}): FlattenedPersonResource => {
-  return {
-    id,
-    type: 'Person',
-    ...attrs,
-  } as FlattenedPersonResource;
+function isPersonResource(o: object): o is PersonResource {
+  const id = Object.getOwnPropertyDescriptor(o, 'id')?.value;
+  const type = Object.getOwnPropertyDescriptor(o, 'type')?.value;
+  return typeof id === 'string' && type === 'Person';
+}
+
+const makePerson = (id: string, attrs: Partial<PersonAttributes> = {}): PersonResource => {
+  const obj = { id, type: 'Person', ...attrs };
+  if (!isPersonResource(obj)) throw new Error('Invalid person shape');
+  return obj;
 };
 
 const makePersonResource = (id: string, attrs: Partial<PersonAttributes> = {}): PersonResource => {
-  return {
-    id,
-    type: 'Person',
-    attributes: attrs as PersonAttributes,
-    relationships: {},
-  };
+  const obj = { id, type: 'Person', ...attrs };
+  if (!isPersonResource(obj)) throw new Error('Invalid person shape');
+  return obj;
 };
 
-const makeEmailResource = (id: string, address: string): EmailResource => {
-  return {
-    id,
-    type: 'Email',
-    attributes: {
-      address,
-      location: 'Home',
-      primary: true,
-    },
-    relationships: {
-      person: {
-        data: { type: 'Person', id: '1' },
-      },
-    },
-  };
-};
-
-const pm: jest.Mocked<Pick<PeopleModule, 'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'>> = {
+const pm: jest.Mocked<PersonMatcherDeps> = {
   search: jest.fn(),
   getEmails: jest.fn(),
   getPhoneNumbers: jest.fn(),
@@ -62,7 +46,7 @@ describe('PersonMatcher additional coverage', () => {
     pm.getEmails.mockResolvedValue({ data: [] });
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const result = await matcher.findMatch({ firstName: 'Anna', lastName: 'Lee' });
+    const result = await matcher.findMatch({ first_name: 'Anna', last_name: 'Lee' });
 
     expect(result?.person?.id).toBeDefined();
   });
@@ -72,14 +56,14 @@ describe('PersonMatcher additional coverage', () => {
     pm.search
       .mockResolvedValueOnce({ data: [dup, dup] }) // email search returns dup twice
       .mockResolvedValue({ data: [] }); // name fallback
-    pm.getEmails.mockResolvedValue({ 
-      data: [{ 
-        id: 'e1', 
-        type: 'Email', 
+    pm.getEmails.mockResolvedValue({
+      data: [{
+        id: 'e1',
+        type: 'Email',
         address: 'dup@example.com',
         location: 'Home',
         primary: true,
-      }] 
+      }]
     });
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
@@ -95,21 +79,21 @@ describe('PersonMatcher additional coverage', () => {
     pm.getEmails.mockResolvedValue({ data: [] });
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
-    const result = await matcher.findMatch({ firstName: 'Kid', lastName: 'User', minAge: 18 });
+    const result = await matcher.findMatch({ first_name: 'Kid', last_name: 'User', minAge: 18 });
     expect(result).toBeNull();
   });
 
   it('addMissingContactInfo adds phone when verified email matches', async () => {
     const person = makePerson('c1', { first_name: 'Cara', last_name: 'One' });
     pm.search.mockResolvedValueOnce({ data: [person] }); // email search
-    pm.getEmails.mockResolvedValue({ 
-      data: [{ 
-        id: 'e1', 
-        type: 'Email', 
+    pm.getEmails.mockResolvedValue({
+      data: [{
+        id: 'e1',
+        type: 'Email',
         address: 'cara@x.com',
         location: 'Home',
         primary: true,
-      }] 
+      }]
     });
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });
     pm.getById.mockResolvedValue(person);
@@ -124,10 +108,10 @@ describe('PersonMatcher additional coverage', () => {
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });
 
     const created = makePersonResource('new1', { first_name: 'New', last_name: 'User' });
-    pm.create.mockResolvedValue(created);
+    pm.create.mockResolvedValue({ data: created });
     pm.getById.mockResolvedValue(makePerson('new1', { first_name: 'New', last_name: 'User' }));
 
-    await matcher.findOrCreate({ firstName: 'New', lastName: 'User', campusId: 'camp-123' });
+    await matcher.findOrCreate({ first_name: 'New', last_name: 'User', campusId: 'camp-123' });
 
     expect(pm.setPrimaryCampus).toHaveBeenCalledWith('new1', 'camp-123');
   });
@@ -142,14 +126,14 @@ describe('PersonMatcher additional coverage', () => {
 
     // p1 has matching email, p2 does not
     pm.getEmails
-      .mockResolvedValueOnce({ 
-        data: [{ 
-          id: 'e1', 
-          type: 'Email', 
+      .mockResolvedValueOnce({
+        data: [{
+          id: 'e1',
+          type: 'Email',
           address: 'v@x.com',
           location: 'Home',
           primary: true,
-        }] 
+        }]
       })
       .mockResolvedValue({ data: [] });
     pm.getPhoneNumbers.mockResolvedValue({ data: [] });

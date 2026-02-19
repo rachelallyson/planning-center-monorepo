@@ -1,11 +1,18 @@
 // Integration test setup file
-// This file runs before integration tests
-// Unlike the regular setup.ts, this does NOT mock fetch since we need real HTTP requests
+// This file runs before integration tests.
 
-// Note: We do NOT mock fetch for integration tests
-// global.fetch remains the native fetch implementation
+import { config } from 'dotenv';
+import { resolve } from 'path';
 
-// Clean up after all tests
+// Load .env.test so PCO_PERSONAL_ACCESS_TOKEN etc. are available for createTestClient()
+try {
+  config({ path: resolve(__dirname, '../.env.test'), quiet: true });
+} catch {
+  // ignore
+}
+
+// Integration tests use the real ky and hit the live PCO API when credentials are set.
+
 afterAll(() => {
   // Any necessary cleanup
 });

@@ -9,7 +9,7 @@ describe('ServiceTimeModule - Real Integration Tests', () => {
   beforeAll(async () => {
     client = createTestClient();
 
-    const campusesResponse = await client.campus.getPage({ perPage: 1 });
+    const campusesResponse = await client.campus.getPage({ per_page: 1 });
     expect(campusesResponse.data.length).toBeGreaterThan(0);
     testCampusId = campusesResponse.data[0].id;
 
@@ -64,7 +64,7 @@ describe('ServiceTimeModule - Real Integration Tests', () => {
     it('should fetch a single page of service times', async () => {
       expect(testCampusId).toBeDefined();
 
-      const result = await client.serviceTime.getPage(testCampusId!, { perPage: 25, page: 1 });
+      const result = await client.serviceTime.getPage(testCampusId!, { per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -91,7 +91,7 @@ describe('ServiceTimeModule - Real Integration Tests', () => {
       expect(testCampusId).toBeDefined();
       expect(testServiceTimeId).toBeDefined();
 
-      const result = await client.serviceTime.getById(testCampusId!, testServiceTimeId!, ['campus']);
+      const result = await client.serviceTime.getById(testCampusId!, testServiceTimeId!, { include: ['campus'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(testServiceTimeId);

@@ -27,7 +27,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should fetch forms with filtering options', async () => {
       const result = await client.forms.getAll({
-        include: ['form_category'],
+        include: ['category'],
       });
 
       expect(result).toHaveProperty('data');
@@ -37,7 +37,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of forms', async () => {
-      const result = await client.forms.getPage({ perPage: 25, page: 1 });
+      const result = await client.forms.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -50,7 +50,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getById', () => {
     it('should fetch form by ID without include', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -66,11 +66,11 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should fetch form by ID with include', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
-      const result = await client.forms.getById(formId, ['form_category']);
+      const result = await client.forms.getById(formId, { include: ['category'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(formId);
@@ -81,7 +81,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormCategory', () => {
     it('should get form category for a form', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -97,7 +97,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormFields', () => {
     it('should get form fields for a form', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -110,13 +110,13 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should get form fields with parameters', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
       const result = await client.forms.getFormFields(formId, {
         include: ['form_field_options'],
-        perPage: 10,
+        per_page: 10,
         page: 1,
       });
 
@@ -128,7 +128,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormFieldOptions', () => {
     it('should get form field options for a form field', async () => {
       // First get a form ID and field ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -145,7 +145,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should get form field options with parameters', async () => {
       // First get a form ID and field ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
       const fieldsResponse = await client.forms.getFormFields(formId);
@@ -166,7 +166,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormSubmissions', () => {
     it('should get form submissions for a form', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -179,7 +179,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should get form submissions with parameters', async () => {
       // First get a form ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -199,7 +199,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormSubmissionById', () => {
     it('should get form submission by ID without include', async () => {
       // First get a form ID and submission ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -219,7 +219,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should get form submission by ID with include', async () => {
       // First get a form ID and submission ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -227,7 +227,7 @@ describe('FormsModule - Real Integration Tests', () => {
       expect(submissionsResponse.data.length).toBeGreaterThan(0);
       const submissionId = submissionsResponse.data[0].id;
 
-      const result = await client.forms.getFormSubmissionById(formId, submissionId, ['form_submission_values']);
+      const result = await client.forms.getFormSubmissionById(formId, submissionId, { include: ['form_submission_values'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(submissionId);
@@ -238,7 +238,7 @@ describe('FormsModule - Real Integration Tests', () => {
   describe('getFormSubmissionValues', () => {
     it('should get form submission values for a form submission', async () => {
       // First get a form ID and submission ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 
@@ -255,7 +255,7 @@ describe('FormsModule - Real Integration Tests', () => {
 
     it('should get form submission values with parameters', async () => {
       // First get a form ID and submission ID
-      const formsResponse = await client.forms.getPage({ perPage: 1 });
+      const formsResponse = await client.forms.getPage({ per_page: 1 });
       expect(formsResponse.data.length).toBeGreaterThan(0);
       const formId = formsResponse.data[0].id;
 

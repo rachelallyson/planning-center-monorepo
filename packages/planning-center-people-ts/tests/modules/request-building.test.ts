@@ -16,9 +16,9 @@ describe('PeopleModule request building (Integration)', () => {
 
   beforeAll(async () => {
     logAuthStatus();
-    
+
     client = createTestClient();
-    
+
     // Create a test person for getById tests
     const timestamp = Date.now();
     const person = await client.people.create({
@@ -38,16 +38,16 @@ describe('PeopleModule request building (Integration)', () => {
 
   it('getAll builds where/include params and fetches all pages', async () => {
     // Test that getAll correctly builds where and include parameters
-    const result = await client.people.getAll({ 
-      where: { status: 'active' }, 
-      include: ['emails'] 
+    const result = await client.people.getAll({
+      where: { status: 'active' },
+      include: ['emails']
     });
-    
+
     // Verify the request was successful and returned data
     expect(result).toHaveProperty('data');
     expect(result).toHaveProperty('meta');
     expect(Array.isArray(result.data)).toBe(true);
-    
+
     // If there are results, verify that emails are included when requested
     if (result.data.length > 0) {
       // The include parameter should have been applied (though we can't directly verify
@@ -58,46 +58,46 @@ describe('PeopleModule request building (Integration)', () => {
 
   it('getById builds include param', async () => {
     expect(testPersonId).toBeDefined();
-    
+
     // Test that getById correctly builds include parameter
-    const result = await client.people.getById(testPersonId!, ['primary_campus']);
-    
+    const result = await client.people.getById(testPersonId!, { include: ['primary_campus'] });
+
     // Verify the request was successful
     expect(result).toBeDefined();
     expect(result.id).toBe(testPersonId);
     expect(result.type).toBe('Person');
-    
+
     // The include parameter should have been applied
     // (primary_campus would be in included resources if available)
   }, 30000);
 
   it('getAll handles pagination correctly', async () => {
     // Test that getAll fetches all pages
-    const result = await client.people.getAll({ 
+    const result = await client.people.getAll({
       where: { status: 'active' }
     });
-    
+
     // Verify pagination metadata is present
     expect(result).toHaveProperty('meta');
     expect(result.meta).toHaveProperty('total_count');
-    
+
     // Verify we got results (or at least an empty array)
     expect(Array.isArray(result.data)).toBe(true);
   }, 120000);
 
-  it('getPage respects perPage and page parameters', async () => {
+  it('getPage respects per_page and page parameters', async () => {
     // Test that getPage correctly builds pagination parameters
-    const result = await client.people.getPage({ 
-      perPage: 25, 
-      page: 1 
+    const result = await client.people.getPage({
+      per_page: 25,
+      page: 1
     });
-    
+
     // Verify the request was successful
     expect(result).toHaveProperty('data');
     expect(result).toHaveProperty('meta');
     expect(Array.isArray(result.data)).toBe(true);
-    
-    // Verify we got at most perPage items
+
+    // Verify we got at most per_page items
     expect(result.data.length).toBeLessThanOrEqual(25);
   }, 30000);
 });

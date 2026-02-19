@@ -13,7 +13,7 @@ describe('helpers: age and file utilities', () => {
     expect(matchesAgeCriteria(childBirth.toISOString(), { agePreference: 'children' })).toBe(true);
 
     expect(matchesAgeCriteria(undefined, { agePreference: 'any' })).toBe(true);
-    expect(matchesAgeCriteria(undefined, {} as any)).toBe(true);
+    expect(matchesAgeCriteria(undefined, {})).toBe(true);
 
     // Test lenient age preference behavior
     expect(matchesAgeCriteria(undefined, { agePreference: 'adults', agePreferenceLenient: true })).toBe(true);
@@ -48,8 +48,7 @@ describe('helpers: age and file utilities', () => {
     expect(getFileExtension(html)).toBe('pdf');
     expect(getFilename(html)).toBe('file.pdf');
 
-    const processed = processFileValue(html, 'file') as any;
-    expect(processed.filename).toBe('file.pdf');
-    expect(processed.contentType).toBe('application/pdf');
+    const processed = processFileValue(html, 'file');
+    expect(processed).toMatchObject({ filename: 'file.pdf', contentType: 'application/pdf' });
   });
 });

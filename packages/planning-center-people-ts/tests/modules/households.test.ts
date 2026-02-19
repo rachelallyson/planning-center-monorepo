@@ -1,4 +1,5 @@
 import { PcoClient } from '../../src';
+import type { HouseholdCreatePayload } from '../../src/types';
 import { createTestClient } from '../integration/test-config';
 
 describe('HouseholdsModule - Real Integration Tests', () => {
@@ -42,7 +43,7 @@ describe('HouseholdsModule - Real Integration Tests', () => {
     it('should fetch households with filtering options', async () => {
       const result = await client.households.getPage({
         include: ['people'],
-        perPage: 10,
+        per_page: 10,
         page: 1,
       });
 
@@ -53,7 +54,7 @@ describe('HouseholdsModule - Real Integration Tests', () => {
 
   describe('getPage', () => {
     it('should fetch a single page of households', async () => {
-      const result = await client.households.getPage({ perPage: 25, page: 1 });
+      const result = await client.households.getPage({ per_page: 25, page: 1 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -65,7 +66,7 @@ describe('HouseholdsModule - Real Integration Tests', () => {
     it('should fetch a page with filtering options', async () => {
       const result = await client.households.getPage({
         include: ['people'],
-        perPage: 10,
+        per_page: 10,
         page: 1,
       });
 
@@ -77,7 +78,7 @@ describe('HouseholdsModule - Real Integration Tests', () => {
   describe('getById', () => {
     it('should fetch household by ID without include', async () => {
       // First get a household ID
-      const householdsResponse = await client.households.getPage({ perPage: 1 });
+      const householdsResponse = await client.households.getPage({ per_page: 1 });
       expect(householdsResponse.data.length).toBeGreaterThan(0);
       const householdId = householdsResponse.data[0].id;
 
@@ -92,11 +93,11 @@ describe('HouseholdsModule - Real Integration Tests', () => {
 
     it('should fetch household by ID with include', async () => {
       // First get a household ID
-      const householdsResponse = await client.households.getPage({ perPage: 1 });
+      const householdsResponse = await client.households.getPage({ per_page: 1 });
       expect(householdsResponse.data.length).toBeGreaterThan(0);
       const householdId = householdsResponse.data[0].id;
 
-      const result = await client.households.getById(householdId, ['people']);
+      const result = await client.households.getById(householdId, { include: ['people'] });
 
       expect(result).toBeDefined();
       expect(result.id).toBe(householdId);
@@ -109,9 +110,9 @@ describe('HouseholdsModule - Real Integration Tests', () => {
       // Create a person first (households typically need at least one person)
       const timestamp = Date.now();
       const person = await client.people.create({
-        firstName: `Test_Household_${timestamp}`,
-        lastName: `Person_${timestamp}`,
-        status: 'active' as const,
+        first_name: `Test_Household_${timestamp}`,
+        last_name: `Person_${timestamp}`,
+        status: 'active',
       });
       // create() returns ResourceObject which should have id property
       if (!person || !person.id) {
@@ -119,15 +120,14 @@ describe('HouseholdsModule - Real Integration Tests', () => {
       }
       testPersonId = person.id;
 
-      const householdData = {
+      const householdData: HouseholdCreatePayload = {
         name: `Test Household ${timestamp}`,
         relationships: {
           people: {
             data: [{ type: 'Person', id: person.id }]
           }
         }
-      } as any;
-      
+      };
       const result = await client.households.create(householdData);
 
       expect(result).toBeDefined();
@@ -157,23 +157,23 @@ describe('HouseholdsModule - Real Integration Tests', () => {
       // Create a person and household to delete
       const timestamp = Date.now();
       const person = await client.people.create({
-        firstName: `Test_Delete_${timestamp}`,
-        lastName: `Person_${timestamp}`,
-        status: 'active' as const,
+        first_name: `Test_Delete_${timestamp}`,
+        last_name: `Person_${timestamp}`,
+        status: 'active',
       });
       // create() returns ResourceObject which should have id property
       if (!person || !person.id) {
         throw new Error('Failed to create test person: API returned invalid response');
       }
-      
-      const householdData = {
+
+      const householdData: HouseholdCreatePayload = {
         name: `Test Delete ${timestamp}`,
         relationships: {
           people: {
             data: [{ type: 'Person', id: person.id }]
           }
         }
-      } as any;
+      };
       const created = await client.households.create(householdData);
       const householdIdToDelete = created.id || '';
 
@@ -182,7 +182,7 @@ describe('HouseholdsModule - Real Integration Tests', () => {
 
       // Verify it's deleted by trying to fetch it
       await expect(client.households.getById(householdIdToDelete)).rejects.toThrow();
-      
+
       // Cleanup person
       await client.people.delete(person.id);
     }, 30000);
