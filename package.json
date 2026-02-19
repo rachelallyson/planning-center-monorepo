@@ -1,32 +1,49 @@
 {
-    "name": "planning-center-monorepo",
-    "version": "1.0.0",
-    "private": true,
-    "type": "module",
-    "description": "Monorepo for Planning Center Online TypeScript API client libraries",
-    "scripts": {
-        "docs:dev": "cd docs && next dev",
-        "docs:build": "cd docs && next build",
-        "docs:start": "cd docs && next start",
-        "docs:api": "npm run docs:build:packages && typedoc",
-        "docs:build:packages": "(cd packages/planning-center-base-ts && npm run build) && (cd packages/planning-center-people-ts && npm run build) && (cd packages/planning-center-check-ins-ts && npm run build)",
-        "publish:prep": "npm run docs:build:packages",
-        "publish:prep:full": "npm run docs:build:packages && (cd packages/planning-center-base-ts && npm test) && (cd packages/planning-center-people-ts && npm run test:ci) && (cd packages/planning-center-check-ins-ts && npm run test:ci)",
-        "publish:dry-run": "npm run publish:prep && (cd packages/planning-center-base-ts && npm publish --dry-run) && (cd packages/planning-center-people-ts && npm publish --dry-run) && (cd packages/planning-center-check-ins-ts && npm publish --dry-run)"
-    },
-    "workspaces": [
-        "packages/*"
-    ],
-    "engines": {
-        "node": ">=16.0.0"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
-    },
-    "license": "MIT",
-    "devDependencies": {
-        "typedoc": "^0.28.14",
-        "typedoc-plugin-markdown": "^4.9.0"
-    }
+  "name": "planning-center-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Monorepo for Planning Center Online TypeScript API client libraries",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "docs:dev": "cd docs && npm run dev",
+    "docs:build": "cd docs; npm run build",
+    "docs:start": "cd docs; npm run start",
+    "docs:api": "npm run docs:build:packages && typedoc && node scripts/setup-api-docs-meta.js",
+    "docs:build:packages": "(cd packages/planning-center-base-ts && npm run build) && (cd packages/planning-center-people-ts && npm run build) && (cd packages/planning-center-check-ins-ts && npm run build)",
+    "publish:prep": "npm run docs:build:packages",
+    "publish:prep:full": "npm run docs:build:packages && (cd packages/planning-center-base-ts && npm test) && (cd packages/planning-center-people-ts && npm run test:ci) && (cd packages/planning-center-check-ins-ts && npm run test:ci)",
+    "publish:dry-run": "npm run publish:prep && (cd packages/planning-center-base-ts && npm publish --dry-run) && (cd packages/planning-center-people-ts && npm publish --dry-run) && (cd packages/planning-center-check-ins-ts && npm publish --dry-run)",
+    "publish:all": "npm run publish:prep:full && npm run publish:dry-run && echo '' && echo 'Dry run OK. To publish for real, run: npm run publish:all:real'",
+    "publish:all:real": "cd packages/planning-center-base-ts && npm publish && cd ../planning-center-people-ts && npm publish && cd ../planning-center-check-ins-ts && npm publish",
+    "docs:export-people-pdf": "node scripts/export-people-vertices-pdf.js",
+    "docs:export-people-markdown": "node scripts/export-people-vertices-markdown.js",
+    "docs:export-people-site": "node scripts/export-people-vertices-site.js",
+    "docs:export-check-ins-site": "node scripts/export-check-ins-vertices-site.js",
+    "docs:export-vertices": "npm run docs:export-people-site && npm run docs:export-check-ins-site && node scripts/combine-vertices-site.js"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rachelallyson/planning-center-monorepo.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^15.12.0",
+    "typedoc": "^0.28.14",
+    "typedoc-plugin-markdown": "^4.9.0",
+    "typescript-eslint": "^8.15.0",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.49.0",
+    "turndown": "^7.2.0"
+  }
 }
