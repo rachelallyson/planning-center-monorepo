@@ -2,7 +2,7 @@
  * v2.0.0 Basic Usage Examples
  */
 
-import { PcoClient, PcoClientManager } from '@rachelallyson/planning-center-people-ts';
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
 // Example 1: Basic client setup
 async function basicSetup() {
@@ -15,62 +15,23 @@ async function basicSetup() {
                 console.log('Tokens refreshed:', tokens);
                 // Save new tokens to your database
             },
-        },
-        caching: {
-            fieldDefinitions: true,
-            ttl: 300000, // 5 minutes
-        },
-        retry: {
-            enabled: true,
-            maxRetries: 3,
-            backoff: 'exponential',
-        },
-        events: {
-            onError: (event) => {
-                console.error('PCO Error:', event.error);
-                // Send to your error tracking service
-            },
-            onAuthFailure: (event) => {
-                console.error('Auth failed:', event.error);
-                // Notify administrators
+            onRefreshFailure: () => {
+                console.error('Token refresh failed');
             },
         },
+        debug: true, // optional: request logging
     });
 
     return client;
 }
 
-// Example 2: Using client manager for caching
-async function clientManagerExample() {
-    // Get a client with automatic caching
-    const client = PcoClientManager.getClient({
-        auth: {
-            type: 'oauth',
-            accessToken: 'your-access-token',
-        },
-    });
-
-    // Or for multi-tenant applications
-    const churchClient = await PcoClientManager.getClientForChurch(
-        'church-123',
-        async (churchId) => {
-            // Fetch configuration from your database
-            return {
-                auth: {
-                    type: 'oauth',
-                    accessToken: await getAccessTokenForChurch(churchId),
-                },
-            };
-        }
-    );
-
-    return { client, churchClient };
-}
+// Example 2: People operations (see Example 3)
+// For multi-tenant apps, create a new PcoClient per church/session or cache clients yourself.
 
 // Example 3: People operations with smart matching
 async function peopleOperations(client: PcoClient) {
-    // Get all people with pagination
-    const allPeople = await client.people.getAllPages({
+    // Get all people (all pages)
+    const allPeople = await client.people.getAll({
         where: { status: 'active' },
         include: ['emails', 'phone_numbers'],
     });
@@ -79,8 +40,8 @@ async function peopleOperations(client: PcoClient) {
 
     // Smart person matching and creation
     const person = await client.people.findOrCreate({
-        firstName: 'John',
-        lastName: 'Doe',
+        first_name: 'John',
+        last_name: 'Doe',
         email: 'john@gmail.com',
         phone: '555-1234',
         matchStrategy: 'fuzzy',
@@ -94,8 +55,8 @@ async function peopleOperations(client: PcoClient) {
 
     // Prefer adults (18+ years old)
     const adultPerson = await client.people.findOrCreate({
-        firstName: 'Jane',
-        lastName: 'Smith',
+        first_name: 'Jane',
+        last_name: 'Smith',
         email: 'jane@gmail.com',
         agePreference: 'adults',
         matchStrategy: 'fuzzy',
@@ -104,8 +65,8 @@ async function peopleOperations(client: PcoClient) {
 
     // Prefer children (under 18 years old)
     const childPerson = await client.people.findOrCreate({
-        firstName: 'Bobby',
-        lastName: 'Johnson',
+        first_name: 'Bobby',
+        last_name: 'Johnson',
         agePreference: 'children',
         matchStrategy: 'fuzzy',
     });
@@ -113,8 +74,8 @@ async function peopleOperations(client: PcoClient) {
 
     // Match by age range
     const youngAdult = await client.people.findOrCreate({
-        firstName: 'Alice',
-        lastName: 'Brown',
+        first_name: 'Alice',
+        last_name: 'Brown',
         email: 'alice@gmail.com',
         minAge: 20,
         maxAge: 30,
@@ -124,8 +85,8 @@ async function peopleOperations(client: PcoClient) {
 
     // Match by birth year
     const millennial = await client.people.findOrCreate({
-        firstName: 'David',
-        lastName: 'Wilson',
+        first_name: 'David',
+        last_name: 'Wilson',
         birthYear: 1990,
         matchStrategy: 'fuzzy',
     });
@@ -134,8 +95,8 @@ async function peopleOperations(client: PcoClient) {
     // Create person with contact information
     const personWithContacts = await client.people.createWithContacts(
         {
-            firstName: 'Jane',
-            lastName: 'Smith',
+            first_name: 'Jane',
+            last_name: 'Smith',
         },
         {
             email: { address: 'jane@gmail.com', primary: true },
@@ -165,7 +126,7 @@ async function fieldOperations(client: PcoClient) {
 
     // Get all field definitions
     const fieldDefinitions = await client.fields.getAllFieldDefinitions();
-    console.log(`Found ${fieldDefinitions.length} field definitions`);
+    console.log(`Found ${fieldDefinitions.data.length} field definitions`);
 }
 
 // Example 5: Smart workflow operations
@@ -187,84 +148,33 @@ async function workflowOperations(client: PcoClient) {
     console.log('Workflow card created:', workflowCard.id);
 
     // Get all workflows
-    const allWorkflows = await client.workflows.getAllPages();
+    const allWorkflows = await client.workflows.getAll();
     console.log(`Found ${allWorkflows.data.length} workflows`);
 }
 
-// Example 6: Batch operations
-async function batchOperations(client: PcoClient) {
-    const results = await client.batch.execute([
-        {
-            type: 'people.create',
-            data: {
-                firstName: 'John',
-                lastName: 'Doe',
-            },
-        },
-        {
-            type: 'people.addEmail',
-            personId: '$0.id', // Reference the person created in step 0
-            data: {
-                address: 'john@gmail.com',
-                primary: true,
-            },
-        },
-        {
-            type: 'people.addPhone',
-            personId: '$0.id',
-            data: {
-                number: '555-1234',
-                primary: true,
-            },
-        },
-    ]);
-
-    console.log(`Batch completed: ${results.successful.length} successful, ${results.failed.length} failed`);
-    console.log(`Success rate: ${(results.successRate * 100).toFixed(1)}%`);
-}
-
-// Example 7: Event monitoring
-async function eventMonitoring(client: PcoClient) {
-    // Set up event listeners
-    client.on('request:start', (event) => {
-        console.log(`Starting request: ${event.method} ${event.endpoint}`);
-    });
-
-    client.on('request:complete', (event) => {
-        console.log(`Request completed: ${event.status} in ${event.duration}ms`);
-    });
-
-    client.on('error', (event) => {
-        console.error(`Error in ${event.operation}:`, event.error);
-    });
-
-    client.on('rate:limit', (event) => {
-        console.warn(`Rate limited: ${event.remaining}/${event.limit} remaining`);
-    });
-
-    // Get performance metrics
-    const metrics = client.getPerformanceMetrics();
-    console.log('Performance metrics:', metrics);
-
-    // Get rate limit info
+// Example 6: Rate limit info
+async function rateLimitInfo(client: PcoClient) {
     const rateLimitInfo = client.getRateLimitInfo();
     console.log('Rate limit info:', rateLimitInfo);
 }
 
-// Example 8: Complete workflow
+// Example 7: Complete workflow
 async function completeWorkflow() {
     const client = new PcoClient({
         auth: {
             type: 'oauth',
             accessToken: process.env.PCO_ACCESS_TOKEN!,
+            refreshToken: process.env.PCO_REFRESH_TOKEN!,
+            onRefresh: async () => {},
+            onRefreshFailure: async () => {},
         },
     });
 
     try {
         // 1. Find or create a person
         const person = await client.people.findOrCreate({
-            firstName: 'John',
-            lastName: 'Doe',
+            first_name: 'John',
+            last_name: 'Doe',
             email: 'john@gmail.com',
             matchStrategy: 'fuzzy',
         });
@@ -291,19 +201,11 @@ async function completeWorkflow() {
     }
 }
 
-// Helper function for multi-tenant example
-async function getAccessTokenForChurch(churchId: string): Promise<string> {
-    // This would typically fetch from your database
-    return 'church-access-token';
-}
-
 export {
     basicSetup,
-    clientManagerExample,
     peopleOperations,
     fieldOperations,
     workflowOperations,
-    batchOperations,
-    eventMonitoring,
+    rateLimitInfo,
     completeWorkflow,
 };

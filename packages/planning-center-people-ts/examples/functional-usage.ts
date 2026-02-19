@@ -1,77 +1,53 @@
-import {
-    createPcoClient,
-    getPeople,
-    getPerson,
-    createPerson,
-    updatePerson,
-    deletePerson,
-    getPersonEmails,
-    createPersonEmail,
-    getRateLimitInfo,
-} from '../src';
+import { PcoClient } from '../src';
 
 async function example() {
-    // Create a client (no external dependencies needed!)
-    const client = createPcoClient({
-        personalAccessToken: 'your-token-here',
-        appId: 'your-app-id',
-        appSecret: 'your-app-secret',
-        // Or use OAuth 2.0:
-        // accessToken: 'your-oauth-token',
+  const client = new PcoClient({
+    auth: {
+      type: 'basic',
+      appId: 'your-app-id',
+      appSecret: 'your-app-secret',
+    },
+  });
+
+  try {
+    const people = await client.people.getPage({
+      per_page: 10,
+      include: ['emails', 'phone_numbers'],
+    });
+    console.log(`Found ${people.data.length} people`);
+
+    if (people.data.length > 0) {
+      const person = await client.people.getById(people.data[0].id!, { include: ['emails'] });
+      console.log(`Person: ${person.first_name} ${person.last_name}`);
+    }
+
+    const newPerson = await client.people.create({
+      first_name: 'John',
+      last_name: 'Doe',
+      status: 'active',
+    });
+    console.log(`Created person with ID: ${newPerson.id}`);
+
+    const updatedPerson = await client.people.update(newPerson.id!, { first_name: 'Jane' });
+    console.log(`Updated person: ${updatedPerson.first_name}`);
+
+    const emails = await client.people.getEmails(newPerson.id!);
+    console.log(`Person has ${emails.data.length} email(s)`);
+
+    await client.contacts.createEmail(newPerson.id!, {
+      address: 'jane.doe@gmail.com',
+      location: 'work',
+      primary: false,
     });
 
-    try {
-        // Get all people
-        const people = await getPeople(client, {
-            per_page: 10,
-            include: ['emails', 'phone_numbers'],
-        });
-        console.log(`Found ${people.data.length} people`);
+    const rateLimitInfo = client.getRateLimitInfo();
+    console.log('Rate limit info:', rateLimitInfo);
 
-        // Get a specific person
-        if (people.data.length > 0) {
-            const person = await getPerson(client, people.data[0].id, ['emails']);
-            console.log(`Person: ${person.data?.first_name} ${person.data?.last_name}`);
-        }
-
-        // Create a new person
-        const newPerson = await createPerson(client, {
-            first_name: 'John',
-            last_name: 'Doe',
-            email: 'john.doe@gmail.com',
-        });
-        console.log(`Created person with ID: ${newPerson.data?.id}`);
-
-        // Update the person
-        const updatedPerson = await updatePerson(client, newPerson.data!.id, {
-            first_name: 'Jane',
-        });
-        console.log(`Updated person: ${updatedPerson.data?.first_name}`);
-
-        // Get person's emails
-        const emails = await getPersonEmails(client, newPerson.data!.id);
-        console.log(`Person has ${emails.data.length} email(s)`);
-
-        // Add an email
-        const newEmail = await createPersonEmail(client, newPerson.data!.id, {
-            address: 'jane.doe@gmail.com',
-            location: 'work',
-            primary: false,
-        });
-        console.log(`Added email: ${newEmail.data?.address}`);
-
-        // Check rate limit info
-        const rateLimitInfo = getRateLimitInfo(client);
-        console.log('Rate limit info:', rateLimitInfo);
-
-        // Clean up - delete the person
-        await deletePerson(client, newPerson.data!.id);
-        console.log('Person deleted');
-
-    } catch (error) {
-        console.error('Error:', error);
-    }
+    await client.people.delete(newPerson.id!);
+    console.log('Person deleted');
+  } catch (error) {
+    console.error('Error:', error);
+  }
 }
 
-// Run the example
 example().catch(console.error);

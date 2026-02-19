@@ -1,64 +1,44 @@
 /**
  * Basic Usage Example for @planning-center-people-ts
- * 
- * This example demonstrates how to use the PCO API client with proper rate limiting.
+ *
+ * Uses PcoClient with auth from the core package. Rate limiting is handled by the client.
  */
 
-import {
-    createPcoClient,
-    getPeople,
-    getPerson,
-    createPerson,
-    updatePerson,
-    deletePerson,
-} from '../src';
+import { PcoClient } from '../src';
 
 async function basicExample() {
-    // Create a client
-    const client = createPcoClient({
-        personalAccessToken: 'your-token-here',
-        appId: 'your-app-id',
-        appSecret: 'your-app-secret',
-    });
+  const client = new PcoClient({
+    auth: {
+      type: 'basic',
+      appId: 'your-app-id',
+      appSecret: 'your-app-secret',
+    },
+  });
 
-    try {
-        // Get all people
-        const people = await getPeople(client, {
-            per_page: 5,
-            include: ['emails'],
-        });
+  try {
+    const people = await client.people.getPage({ per_page: 5, include: ['emails'] });
+    console.log(`Found ${people.data.length} people`);
 
-        console.log(`Found ${people.data.length} people`);
-
-        // Get a specific person
-        if (people.data.length > 0) {
-            const person = await getPerson(client, people.data[0].id);
-            console.log(`First person: ${person.data?.first_name} ${person.data?.last_name}`);
-        }
-
-        // Create a new person
-        const newPerson = await createPerson(client, {
-            first_name: 'John',
-            last_name: 'Doe',
-            email: 'john.doe@gmail.com',
-        });
-
-        console.log(`Created person with ID: ${newPerson.data?.id}`);
-
-        // Update the person
-        const updatedPerson = await updatePerson(client, newPerson.data!.id, {
-            first_name: 'Jane',
-        });
-
-        console.log(`Updated person: ${updatedPerson.data?.first_name}`);
-
-        // Delete the person
-        await deletePerson(client, newPerson.data!.id);
-        console.log('Person deleted');
-
-    } catch (error) {
-        console.error('Error:', error);
+    if (people.data.length > 0) {
+      const person = await client.people.getById(people.data[0].id!);
+      console.log(`First person: ${person.first_name} ${person.last_name}`);
     }
+
+    const newPerson = await client.people.create({
+      first_name: 'John',
+      last_name: 'Doe',
+      status: 'active',
+    });
+    console.log(`Created person with ID: ${newPerson.id}`);
+
+    const updatedPerson = await client.people.update(newPerson.id!, { first_name: 'Jane' });
+    console.log(`Updated person: ${updatedPerson.first_name}`);
+
+    await client.people.delete(newPerson.id!);
+    console.log('Person deleted');
+  } catch (error) {
+    console.error('Error:', error);
+  }
 }
 
 basicExample().catch(console.error);

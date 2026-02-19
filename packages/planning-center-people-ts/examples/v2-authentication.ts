@@ -89,13 +89,13 @@ export function createClientFromEnvironment(): PcoClient {
 
 // ===== Usage Examples =====
 
-async function demonstrateUsage() {
+export async function demonstrateUsage() {
     try {
         // Create client (will use Personal Access Token if available, otherwise OAuth)
         const client = createClientFromEnvironment();
 
         // Test the connection
-        const people = await client.people.getAll({ perPage: 1 });
+        const people = await client.people.getPage({ per_page: 1 });
         console.log('Successfully connected to PCO API!');
         console.log(`Found ${people.data.length} people`);
 
