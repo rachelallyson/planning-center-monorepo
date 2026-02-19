@@ -46,6 +46,7 @@ export default async function RootLayout({ children }) {
             pageMap={normalizedPageMap}
             docsRepositoryBase="https://github.com/rachelallyson/planning-center-monorepo/blob/main/docs/content"
             footer={footer}
+            sidebar={{ defaultMenuCollapseLevel: 1 }}
           >
             {children}
           </Layout>
