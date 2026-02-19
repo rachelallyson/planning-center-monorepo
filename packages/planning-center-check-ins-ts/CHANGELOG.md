@@ -5,6 +5,34 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [4.0.0] - 2026-02-18
+
+### Breaking
+
+- **`getById(id, include?)` → `getById(id, options?)`**: On all resource modules (events, labels, check-ins, stations, etc.), the second argument is now an options object instead of a bare `include` array. Use `getById(id, { include: ['event', 'location'] })` instead of `getById(id, ['event', 'location'])`. Omitting the second argument is unchanged.
+- **Client: event system and batch removed**: The client no longer has `on`, `off`, `emit`, `batch`, `eventTypes`, or `getPerformanceMetrics`. Aligns with base 2.x. Use the base package directly if you need events or batch.
+- **Exports**: Event and batch types are no longer re-exported from the package entry point. Resource and option types remain available via `export * from './types'`.
+
+### Changed
+
+- **API options**: All list/single methods now use typed option types from `types/api-options` (e.g. `EventGetByIdOptions`, `LabelsGetPageOptions`). Options use `per_page` and `page`; JSDoc documents "Can Include" and vertex links where applicable.
+- **Jest / CI**: Added `moduleNameMapper` for `ky` and `@badgateway/oauth2-client` (using base package mocks) so unit tests run without ESM issues. Integration tests are excluded from default `test:ci` (`testPathIgnorePatterns`: `/integration/`); run them with `npm run test:integration` and env credentials. Coverage thresholds set to current levels.
+- **Request-building tests**: Updated expectations to match current base behavior (`getAllPages` uses `per_page: 100`, filter params as booleans). HTTP mock returns a single-item `data` array so `getSingle`/`getById` tests do not throw.
+- **README**: Added "Imports" section (re-exports vs base); link to API params verification doc.
+- **CHANGELOG**: Corrected 3.0.0 `getPage()` description (`perPage` → `per_page`).
+- **Package**: Dependency and script updates (e.g. typia, vitest); many per-module unit tests removed in favor of integration and request-building coverage.
+
+### Added
+
+- **Check-ins**: Optional association methods (`getCheckInGroup`, `getCheckedInAt`, `getCheckedInBy`, `getCheckedOutBy`) now return `T | null` with proper types (e.g. `PersonStub`, `StationResource`) instead of `any`, using base’s `getSingleOrNull`.
+- **Types**: `PersonStub` for person associations on check-ins; `*RelOutputs` and plain `*Resource` interfaces aligned with base and ListResponse.
+
+### Dependency
+
+- **Requires** `@rachelallyson/planning-center-base-ts` **^2.0.0**. This release is tested with base 2.0.0. Upgrading from 3.x will upgrade base to 2.x; see base 2.0.0 changelog for breaking changes there.
+
 ## [3.1.2] - 2026-02-10
 
 ### Changed
@@ -48,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ⚠️ **Breaking Changes**
 
 - **`getAll()` now fetches all pages**: `getAll()` previously called `getList()` and returned a single page. It now calls `getAllPages()` and returns **all** pages. The return type is now `PaginationResult<T>` (from base), which includes `data`, `totalCount`, `pagesFetched`, `duration`, `meta?`, and `links?`. If you need a single page, use **`getPage(options)`** instead.
-- **`getPage()` for single-page fetching**: New method on all list-capable modules. Use `getPage({ perPage, page, where, include, ... })` when you want one page with full control. Use `getAll()` when you want every page automatically.
+- **`getPage()` for single-page fetching**: New method on all list-capable modules. Use `getPage({ per_page, page, where, include, ... })` when you want one page with full control. Use `getAll()` when you want every page automatically.
 - **Response shape (from base)**: All methods that return resources use the base package’s flattened shape: **attributes and relationships are at the top level** (e.g. `resource.name` instead of `resource.attributes.name`, and related data at `resource.relation_name` instead of `resource.relationships.relation_name.data`). The **`*Resource`** types (e.g. `EventResource`, `CheckInResource`) describe this shape. This matches the People and Base packages.
 - **Same item shape for `getAll()` and `getPage()`**: Both return flattened items. `getAll().data` and `getPage().data` contain the same shape per item; only the wrapper differs—`getAll()` returns `PaginationResult<T>` (adds `totalCount`, `pagesFetched`, `duration`), while `getPage()` returns `{ data, meta?, links? }`.
 - **Check-in groups require `stationId`**: `checkInGroups.getAll()` and `checkInGroups.getPage()` now require `stationId` in options. The API lists check-in groups per station: `GET /stations/:station_id/check_in_groups`. Pass `stationId` from a station you’ve fetched (e.g. `client.stations.getPage()`).

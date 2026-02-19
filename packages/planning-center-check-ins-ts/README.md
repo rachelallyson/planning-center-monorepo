@@ -1,6 +1,6 @@
 # @rachelallyson/planning-center-check-ins-ts
 
-A strictly typed TypeScript client for Planning Center Online Check-Ins API with batch operations and enhanced developer experience.
+A strictly typed TypeScript client for Planning Center Online Check-Ins API.
 
 ## Installation
 
@@ -29,18 +29,16 @@ const checkIns = await client.checkIns.getAll({
 });
 
 // Get a specific check-in
-const checkIn = await client.checkIns.getById('123', ['person', 'event']);
+const checkIn = await client.checkIns.getById('123', { include: ['person', 'event'] });
 ```
 
 ## Features
 
 - **Type-safe**: Full TypeScript support with complete type definitions for all 24 Check-Ins API resource types
 - **Modular architecture**: 16 specialized modules organized by resource domain
-- **Batch operations**: Execute multiple operations with dependency resolution
-- **Event system**: Monitor requests, errors, and rate limits
 - **Rate limiting**: Automatic rate limit handling (100 requests per 20 seconds)
-- **Error handling**: Comprehensive error handling with typed errors
-- **Pagination**: Built-in pagination helpers
+- **Error handling**: Typed errors (`PcoApiError`) with status and JSON:API error details
+- **Pagination**: Built-in pagination helpers (`getPage`, `getAll`)
 - **JSON:API compliant**: Full support for JSON:API 1.0 specification
 
 ## Modules
@@ -64,9 +62,15 @@ The client exposes 16 specialized modules:
 - **integrationLinks** - Integration links
 - **themes** - Themes for check-ins
 
+## Imports
+
+This package re-exports the client, resource types, `PcoApiError`, and the JSON:API types you need for responses (`PaginationResult`, `Relationship`, `ResourceIdentifier`, `ResourceObject`). For rate limiting or advanced error-handling utilities (e.g. `PcoRateLimiter`, `retryWithBackoff`, `withErrorBoundary`), use `@rachelallyson/planning-center-base-ts` directly.
+
 ## Documentation
 
 For complete documentation, see the [monorepo documentation site](../../docs/content/index.mdx).
+
+To verify or update where/include/order types against the Planning Center API docs, see [docs/API_PARAMS_VERIFICATION.md](docs/API_PARAMS_VERIFICATION.md).
 
 ## Testing
 
