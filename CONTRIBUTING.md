@@ -25,31 +25,29 @@ npm install
 ### 2. Build Packages
 
 ```bash
-# Build both packages
-npm run build
+# Build all three packages (from root)
+npm run docs:build:packages
 
 # Or build individually
-npm run build:base      # Base package
-npm run build:people    # People package
+cd packages/planning-center-base-ts && npm run build
+cd packages/planning-center-people-ts && npm run build
+cd packages/planning-center-check-ins-ts && npm run build
 ```
 
-The base package builds automatically on install (via `prepare` hook).
+Build order doesn't matter for compilation; people and check-ins depend on base via workspace link.
 
 ## Development Workflow
 
 ### Running Tests
 
 ```bash
-# Run all tests (from root)
-npm test
+# Run tests per package (from package directory)
+cd packages/planning-center-base-ts && npm test
+cd packages/planning-center-people-ts && npm run test:ci
+cd packages/planning-center-check-ins-ts && npm run test:ci
 
-# Run specific package tests
-npm run test:base
-npm run test:people
-
-# Or from package directory
-cd packages/planning-center-people-ts
-npm test
+# Or build + test all (from root)
+npm run publish:prep:full
 ```
 
 ### TypeScript Checking
@@ -86,14 +84,14 @@ npm run dev
 **Development Workflow**:
 
 ```bash
-# Start docs dev server (runs from root, cd's to docs/ automatically)
-npm run dev:docs
+# Start docs dev server (http://localhost:3333)
+npm run docs:dev
 
-# Build docs (runs from root, cd's to docs/ automatically)
-npm run build:docs
+# Build docs for production
+npm run docs:build
 
-# Start production server (runs from root, cd's to docs/ automatically)
-npm run start:docs
+# Start production server (after docs:build)
+npm run docs:start
 ```
 
 **Documentation Files**:
@@ -108,17 +106,17 @@ npm run start:docs
 **Generating API Documentation**:
 
 ```bash
-# Generate TypeDoc API docs for both packages
-npx typedoc
-
-# API docs are generated into docs/content/api/
+# From monorepo root: build packages and generate TypeDoc into docs/content/api/
+npm run docs:api
 ```
+
+**Search**: The documentation search (⌘K) is powered by Pagefind and is built during `npm run docs:build`. When running `npm run docs:dev`, search will not work until you run a production build at least once.
 
 **Previewing Changes**:
 
 1. Edit `.mdx` files in `docs/content/`
-2. Run `npm run dev:docs` to preview locally
-3. Changes appear immediately in browser (Next.js hot reload)
+2. Run `npm run docs:dev` to preview at http://localhost:3333
+3. Changes appear immediately (Next.js hot reload)
 
 ## Code Style
 
@@ -143,7 +141,7 @@ npx typedoc
 2. Export from `packages/planning-center-base-ts/src/index.ts`
 3. Add tests to `packages/planning-center-base-ts/tests/`
 4. Update base package README if adding major feature
-5. Run tests: `npm run test:base`
+5. Run tests: `cd packages/planning-center-base-ts && npm test`
 
 ### To People Package
 
@@ -152,7 +150,7 @@ npx typedoc
 3. Export from `packages/planning-center-people-ts/src/index.ts`
 4. Add tests to `packages/planning-center-people-ts/tests/`
 5. Update documentation in `docs/content/` (guides, concepts, API reference)
-6. Run tests: `npm run test:people`
+6. Run tests: `cd packages/planning-center-people-ts && npm run test:ci`
 
 ## Testing
 
@@ -165,20 +163,19 @@ npx typedoc
 ### Running Tests
 
 ```bash
-# All tests
-npm test
+# Per package (from package directory)
+cd packages/planning-center-base-ts && npm test
+cd packages/planning-center-people-ts && npm run test:ci
+cd packages/planning-center-check-ins-ts && npm run test:ci
 
-# Specific package
-npm run test:base
-npm run test:people
+# Build + test all from root
+npm run publish:prep:full
 
-# Watch mode
-cd packages/planning-center-people-ts
-npm run test:watch
+# Watch mode (People)
+cd packages/planning-center-people-ts && npm run test:watch
 
-# Coverage
-cd packages/planning-center-people-ts
-npm run test:coverage
+# Coverage (People)
+cd packages/planning-center-people-ts && npm run test:coverage
 ```
 
 ### Writing Tests
@@ -216,26 +213,23 @@ npm run lint
 
 ### Editing Documentation
 
-1. Edit `.mdx` files in `docs/` directory
-2. Run `npm run docs:dev` to preview
+1. Edit `.mdx` files in `docs/content/`
+2. Run `npm run docs:dev` from monorepo root to preview at http://localhost:3333
 3. Commit changes
 
 **File locations**:
 
 - All documentation: `docs/content/` (`.mdx` files for Nextra)
-- Documentation site infrastructure: `docs/app/`, `docs/next.config.mjs`, `docs/mdx-components.js`
+- Site infrastructure: `docs/app/`, `docs/next.config.mjs`, `docs/mdx-components.js`
 
 ### Generating API Docs
 
 ```bash
-# Generate TypeDoc API docs
-npx typedoc
-
-# Watch mode
-npx typedoc --watch
+# From monorepo root: build packages + generate TypeDoc into docs/content/api/
+npm run docs:api
 ```
 
-API docs are generated into `docs/api/` directory.
+Regenerate after changing JSDoc or exports in package `src/` so the published docs stay in sync.
 
 ## Release Process
 
@@ -284,8 +278,8 @@ Before submitting a PR:
 - [ ] Code follows TypeScript strict mode
 - [ ] Tests added/updated and passing
 - [ ] Documentation updated (if needed)
-- [ ] `npm run build` succeeds
-- [ ] `npm test` passes
+- [ ] All packages build (`npm run docs:build:packages`)
+- [ ] All tests pass (`npm run publish:prep:full` or run tests per package)
 - [ ] TypeScript compiles (`tsc --noEmit`)
 - [ ] Commits follow conventional commit format
 - [ ] PR description explains changes
@@ -293,8 +287,8 @@ Before submitting a PR:
 ## Getting Help
 
 - **Issues**: [GitHub Issues](https://github.com/rachelallyson/planning-center-monorepo/issues)
-- **Documentation**: [docs/index.mdx](./docs/index.mdx)
-- **Troubleshooting**: [docs/troubleshooting.mdx](./docs/troubleshooting.mdx)
+- **Documentation**: [Documentation site](https://rachelallyson.github.io/planning-center-monorepo/) or [docs/content/index.mdx](./docs/content/index.mdx)
+- **Troubleshooting**: [docs/content/troubleshooting.mdx](./docs/content/troubleshooting.mdx)
 
 ## Code of Conduct
 

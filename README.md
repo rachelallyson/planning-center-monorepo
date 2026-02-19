@@ -12,8 +12,7 @@ Monorepo for Planning Center Online TypeScript API client libraries.
 
 **For users of the packages**, see:
 
-- **[📚 Documentation Website](https://rachelallyson.github.io/planning-center-monorepo/)** - Full documentation site
-- **[Documentation Site](./docs/content/index.mdx)** - Complete usage guide (quickstart, guides, API reference)
+- **[📚 Documentation Website](https://rachelallyson.github.io/planning-center-monorepo/)** - Quick start, guides, API reference, and examples
 - **[Base Package README](./packages/planning-center-base-ts/README.md)** - Using the base package
 
 **For developers working on this monorepo:**
@@ -44,15 +43,18 @@ See [Publishing Guide](./docs/publishing.md) for detailed publishing instruction
 
 ## Documentation
 
-- **[Documentation Website](https://rachelallyson.github.io/planning-center-monorepo/)** - Full documentation site (GitHub Pages)
-- **[Documentation Content](./docs/content/)** - Source documentation files (`.mdx` files)
+- **[Documentation Website](https://rachelallyson.github.io/planning-center-monorepo/)** - Full docs (GitHub Pages)
+- **[Documentation source](./docs/content/)** - `.mdx` and API reference source
 
 ```bash
-# Start local dev server
+# Start local docs dev server (http://localhost:3333)
 npm run docs:dev
 
-# Build for production
+# Build docs for production
 npm run docs:build
+
+# Regenerate API reference (TypeDoc → docs/content/api)
+npm run docs:api
 ```
 
 ## Structure
@@ -60,13 +62,12 @@ npm run docs:build
 ```
 planning-center-monorepo/
 ├── packages/
-│   ├── planning-center-base-ts/        # Base library
-│   ├── planning-center-people-ts/      # People API client
-│   └── planning-center-check-ins-ts/    # Check-Ins API client
-├── pages/                         # Next.js/Nextra pages
-│   ├── docs/                      # Monorepo docs
-│   └── people/                    # People API docs (symlink to packages)
-├── docs/                          # Source docs for monorepo section
-├── package.json                   # Root workspace config
+│   ├── planning-center-base-ts/     # Base library
+│   ├── planning-center-people-ts/   # People API client
+│   └── planning-center-check-ins-ts/ # Check-Ins API client
+├── docs/
+│   ├── app/                         # Nextra (Next.js) app router
+│   └── content/                     # MDX pages + generated api/
+├── package.json                     # Root workspace config
 └── README.md
 ```
