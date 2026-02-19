@@ -1,0 +1,590 @@
+# Recipes & Examples
+
+Copy-paste code snippets for common tasks with this monorepo's packages.
+
+## Basic Operations
+
+### Create a Person
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_TOKEN!
+  }
+});
+
+const person = await client.people.create({
+  first_name: 'John',
+  last_name: 'Doe'
+});
+
+console.log(`Created person: ${person.id}`);
+```
+
+**Result**: `PersonResource` with new person data
+
+---
+
+### Find or Create Person
+
+```typescript
+const person = await client.people.findOrCreate({
+  first_name: 'Jane',
+  last_name: 'Smith',
+  email: 'jane@example.com',
+  phone: '555-1234',
+  matchStrategy: 'fuzzy' // or 'exact'
+});
+
+if (person.match?.found) {
+  console.log(`Found existing person: ${person.id}`);
+} else {
+  console.log(`Created new person: ${person.id}`);
+}
+```
+
+**Result**: `PersonResource` with optional `match` property indicating if person was found
+
+---
+
+### Find or Create with Multi-Step Search
+
+```typescript
+// Multi-step search tries multiple strategies in order until a match is found
+// This maximizes matching success and prevents duplicate creation
+const person = await client.people.findOrCreate({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step', // Tries: fuzzy+age → fuzzy → exact+age → exact
+  agePreference: 'adults',
+  createIfNotFound: true
+});
+
+console.log(`Person ID: ${person.id}`);
+```
+
+**Result**: `PersonResource` found using the first successful strategy
+
+---
+
+### Find or Create with Name Fallback
+
+```typescript
+// Falls back to name search when email/phone search fails
+// Validates contact info to prevent wrong-person matches
+const person = await client.people.findOrCreate({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com',
+  fallbackToNameSearch: true,
+  contactValidation: 'domain' // 'strict' | 'domain' | 'similarity'
+});
+```
+
+**Result**: `PersonResource` with contact validation preventing wrong matches
+
+---
+
+### Find or Create with Phase-Specific Retries
+
+```typescript
+// Different retry configs for different search phases
+// Prevents duplicates when PCO hasn't indexed contacts yet
+const person = await client.people.findOrCreate({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com',
+  searchStrategy: 'multi-step',
+  retryConfigs: {
+    initial: { maxRetries: 3, maxWaitTime: 30000 },    // Quick search
+    aggressive: { maxRetries: 6, maxWaitTime: 60000 }  // Final search before create
+  },
+  createIfNotFound: true
+});
+```
+
+**Result**: `PersonResource` with aggressive duplicate prevention
+
+---
+
+### Verify Person Exists
+
+```typescript
+// Check if a cached person ID is still valid (handles merges/deletions)
+const exists = await client.people.verifyPersonExists('person-123', {
+  timeout: 30000
+});
+
+if (!exists) {
+  console.log('Person was merged or deleted - need to search again');
+  const person = await client.people.findOrCreate({...});
+}
+```
+
+**Result**: `boolean` - true if person exists, false if not found (404)
+
+---
+
+### Get Person with Relationships
+
+```typescript
+const person = await client.people.getById('person-id', {
+  include: ['emails', 'phone_numbers', 'addresses', 'household']
+});
+
+console.log('Person:', person.first_name);
+console.log('Emails:', person.emails);
+```
+
+**Result**: `PersonResource` (flattened: attributes and relationships at top level)
+
+---
+
+## Contact Information
+
+### Add Email to Person
+
+```typescript
+const email = await client.contacts.createEmail('person-id', {
+  address: 'john@example.com',
+  location: 'Home',
+  primary: true
+});
+
+console.log(`Added email: ${email.id}`);
+```
+
+**Result**: `EmailResource`
+
+---
+
+### Add Phone to Person
+
+```typescript
+const phone = await client.contacts.createPhone('person-id', {
+  number: '555-1234',
+  location: 'Mobile',
+  primary: true
+});
+
+console.log(`Added phone: ${phone.id}`);
+```
+
+**Result**: `PhoneNumberResource`
+
+---
+
+### Add Address to Person
+
+```typescript
+const address = await client.contacts.createAddress('person-id', {
+  street: '123 Main St',
+  city: 'Springfield',
+  state: 'IL',
+  zip: '62701',
+  location: 'Home',
+  primary: true
+});
+
+console.log(`Added address: ${address.id}`);
+```
+
+**Result**: `AddressResource`
+
+---
+
+## Custom Fields
+
+### Set Field by Slug
+
+```typescript
+await client.fields.setPersonFieldBySlug(
+  'person-id',
+  'BIRTHDATE',
+  '1990-01-01'
+);
+```
+
+**Input**: Person ID, field slug (uppercase), value  
+**Output**: Success (no return value)
+
+---
+
+### Set Field by Name
+
+```typescript
+await client.fields.setPersonFieldByName(
+  'person-id',
+  'Membership Status',
+  'Member'
+);
+```
+
+**Input**: Person ID, field name, value  
+**Output**: Success (no return value)
+
+---
+
+### Set Field with File Upload
+
+```typescript
+await client.fields.setPersonField('person-id', {
+  fieldSlug: 'CUSTOM_FIELD',
+  value: 'https://example.com/file.pdf',
+  handleFileUploads: true  // Automatically uploads file to PCO
+});
+```
+
+**Result**: File uploaded and field value set to uploaded file URL
+
+---
+
+## Workflows
+
+### Add Person to Workflow
+
+```typescript
+const card = await client.workflows.addPersonToWorkflow(
+  'person-id',
+  'workflow-id',
+  {
+    note: 'Added via integration',
+    skipIfExists: true
+  }
+);
+
+console.log(`Workflow card: ${card.id}`);
+```
+
+**Result**: `WorkflowCardResource`
+
+---
+
+### Get Person's Workflow Cards
+
+```typescript
+const cards = await client.workflows.getPersonWorkflowCards('person-id', {
+  per_page: 25
+});
+
+cards.data.forEach(card => {
+  console.log(`Card: ${card.id} in workflow ${cardworkflow.data.id}`);
+});
+```
+
+**Result**: `Paginated<WorkflowCardResource>`
+
+---
+
+## Pagination
+
+### Get All People (Automatic)
+
+```typescript
+const result = await client.people.getAll({
+  include: ['emails', 'phone_numbers']
+});
+
+console.log(`Total people: ${result.data.length}`);
+```
+
+**Result**: `PaginationResult<PersonResource>` with `data`, `totalCount`, `pagesFetched`
+
+---
+
+### Get a single page
+
+```typescript
+const response = await client.people.getPage({
+  per_page: 50,
+  page: 1,
+  include: ['emails']
+});
+
+console.log(`Page 1: ${response.data.length} people`);
+```
+
+---
+
+## Error Handling
+
+### Try-Catch with PcoApiError
+
+```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.create({ first_name: 'John' });
+} catch (error) {
+  if (error instanceof PcoApiError) {
+    if (error.status === 401) console.error('Auth failed - check token');
+    else if (error.status === 429) {
+      const delay = error.rateLimitHeaders?.['Retry-After'];
+      await new Promise(r => setTimeout(r, delay ? parseInt(String(delay), 10) * 1000 : 20000));
+      // Retry...
+    } else if (error.status === 422) {
+      error.errors.forEach(err => console.error(`${err.source?.pointer}: ${err.detail}`));
+    }
+  }
+}
+```
+
+**Result**: Handled by status code
+
+---
+
+### Retry on rate limit (429)
+
+```typescript
+async function getWithRetry() {
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await client.people.getById('person-id');
+    } catch (error) {
+      if (error instanceof PcoApiError && error.status === 429 && i < 2) {
+        const delay = error.rateLimitHeaders?.['Retry-After'];
+        await new Promise(r => setTimeout(r, delay ? parseInt(String(delay), 10) * 1000 : 20000));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+```
+
+**Result**: Retries on 429 with optional Retry-After delay
+
+---
+
+## Debug & observability
+
+### Debug logging
+
+```typescript
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
+});
+// All requests are logged (start, complete, error) to console
+```
+
+**Result**: Request/response logs in console
+
+---
+
+### Get rate limit info
+
+```typescript
+const info = client.getRateLimitInfo();
+
+console.log(`Remaining: ${info.remaining}/${info.limit}`);
+console.log(`Resets in: ${info.windowResetsIn}ms`);
+```
+
+**Result**: `RateLimitInfo` object
+
+---
+
+## Complete Example: Import People from CSV
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+import { parse } from 'csv-parse/sync';
+import * as fs from 'fs';
+
+async function importPeopleFromCSV(filePath: string) {
+  const client = new PcoClient({
+    auth: {
+      type: 'personal_access_token',
+      personalAccessToken: process.env.PCO_TOKEN!
+    }
+  });
+
+  const csvData = parse(fs.readFileSync(filePath, 'utf-8'), {
+    columns: true,
+    skip_empty_lines: true
+  });
+
+  const results = {
+    created: 0,
+    found: 0,
+    errors: 0
+  };
+
+  for (const row of csvData) {
+    try {
+      const person = await client.people.findOrCreate({
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        matchStrategy: 'fuzzy'
+      });
+
+      if (person.match?.found) {
+        results.found++;
+      } else {
+        results.created++;
+      }
+
+      // Add email if not present
+      if (row.email && !person.match?.found) {
+        await client.contacts.createEmail(person.id, {
+          address: row.email,
+          primary: true
+        });
+      }
+
+      // Set custom field
+      if (row.birthdate) {
+        await client.fields.setPersonFieldBySlug(
+          person.id,
+          'BIRTHDATE',
+          row.birthdate
+        );
+      }
+    } catch (error) {
+      console.error(`Error importing ${row.first_name} ${row.last_name}:`, error);
+      results.errors++;
+    }
+  }
+
+  return results;
+}
+```
+
+**Result**: CSV imported with summary of created/found/errors
+
+---
+
+## Contact Validation Utilities
+
+### Check Email Domain Match
+
+```typescript
+import { emailDomainsMatch } from '@rachelallyson/planning-center-people-ts';
+
+// Handles aliases (gmail/googlemail) and similar prefixes
+emailDomainsMatch('user@gmail.com', 'other@googlemail.com'); // true
+emailDomainsMatch('user@gmail.com', 'other@gmaill.com'); // true (typo)
+emailDomainsMatch('user@gmail.com', 'other@yahoo.com'); // false
+```
+
+**Result**: `boolean` - true if domains match or are similar
+
+---
+
+### Check Phone Number Similarity
+
+```typescript
+import { phoneNumbersSimilar } from '@rachelallyson/planning-center-people-ts';
+
+// Handles format variations and country codes
+phoneNumbersSimilar('+15551234567', '555-123-4567'); // true
+phoneNumbersSimilar('15551234567', '5551234567'); // true
+phoneNumbersSimilar('+15551234567', '+15559876543'); // false
+```
+
+**Result**: `boolean` - true if phone numbers are similar
+
+---
+
+### Validate Contact Similarity
+
+```typescript
+import { validateContactSimilarity } from '@rachelallyson/planning-center-people-ts';
+
+// Validate contact info for name-based search matches
+const validation = validateContactSimilarity(
+  'jane@example.com',           // Search email
+  '+15551234567',               // Search phone
+  ['john@example.com'],         // Person's emails
+  ['+15551234567']              // Person's phones
+);
+
+console.log(validation);
+// { emailMatch: true, phoneMatch: true, isValid: true }
+```
+
+**Result**: Object with `emailMatch`, `phoneMatch`, and `isValid` booleans
+
+---
+
+## Trust-Based Caching
+
+### Calculate Trust for Cached Person ID
+
+```typescript
+import { calculateTrust, DEFAULT_TRUST_WINDOW } from '@rachelallyson/planning-center-people-ts';
+
+// Check if cached personId can be trusted without re-verification
+const trust = calculateTrust(personIdCreatedAt);
+
+if (trust.shouldTrust) {
+  // Use cached personId without API call
+  console.log(`Trusting fresh personId: ${trust.reason}`);
+  return cachedPersonId;
+} else {
+  // Verify personId still exists (handles merges/deletions)
+  console.log(`Verifying old personId: ${trust.reason}`);
+  const exists = await client.people.verifyPersonExists(cachedPersonId);
+  if (!exists) {
+    // Person was merged or deleted, search again
+    const person = await client.people.findOrCreate({...});
+  }
+}
+```
+
+**Result**: `TrustResult` with `shouldTrust`, `age`, and `reason`
+
+---
+
+### Custom Trust Window
+
+```typescript
+import { calculateTrust } from '@rachelallyson/planning-center-people-ts';
+
+// Use custom trust window (e.g., 30 minutes instead of default 1 hour)
+const shortWindow = 30 * 60 * 1000; // 30 minutes
+const trust = calculateTrust(personIdCreatedAt, shortWindow);
+
+if (trust.shouldTrust) {
+  return cachedPersonId;
+}
+```
+
+**Result**: Trust calculation with custom window
+
+---
+
+## Building Custom Clients with Base Package
+
+### Extend BaseModule
+
+```typescript
+import { BaseModule, PcoHttpClient, PaginationHelper } from '@rachelallyson/planning-center-base-ts';
+
+class MyApiModule extends BaseModule {
+  async getResource(id: string) {
+    return this.getSingle(`/resources/${id}`);
+  }
+
+  async getAllResources() {
+    return this.getList('/resources');
+  }
+}
+
+// Usage
+const httpClient = new PcoHttpClient(config);
+const paginationHelper = new PaginationHelper(httpClient);
+const myModule = new MyApiModule(httpClient, paginationHelper, () => config);
+```
+
+**Result**: Custom module following the same patterns as People API modules
+
+---
+
+**More Examples**: See [People Package Recipes](/people/recipes/examples) for additional examples.

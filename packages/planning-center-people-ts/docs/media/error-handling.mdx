@@ -1,0 +1,113 @@
+# Error Handling Guide
+
+Use `PcoApiError` for all non-2xx API responses. Check `error.status` for handling.
+
+## Error Type
+
+The library uses a single error class for API errors:
+
+### PcoApiError
+
+```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  await client.people.getById('invalid-id');
+} catch (error) {
+  if (error instanceof PcoApiError) {
+    console.log(error.status);     // HTTP status code (e.g., 404)
+    console.log(error.statusText); // Status text (e.g., 'Not Found')
+    console.log(error.errors);     // Array of JSON:API error objects
+    console.log(error.message);    // Human-readable message
+    console.log(error.rateLimitHeaders); // Optional: Retry-After, X-PCO-API-* when present
+  }
+}
+```
+
+## Handling by Status Code
+
+Use `error.status` to branch your handling:
+
+### Authentication (401)
+
+```typescript
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoApiError && error.status === 401) {
+    console.error('Authentication failed - check your token');
+    // Redirect to login or refresh token
+  }
+}
+```
+
+### Rate limit (429)
+
+```typescript
+try {
+  await client.people.getAll();
+} catch (error) {
+  if (error instanceof PcoApiError && error.status === 429) {
+    const retryAfter = error.rateLimitHeaders?.['Retry-After'];
+    const delayMs = retryAfter ? parseInt(String(retryAfter), 10) * 1000 : 20000;
+    console.warn(`Rate limited. Retry after ${delayMs}ms`);
+    await new Promise((r) => setTimeout(r, delayMs));
+    return await client.people.getAll();
+  }
+}
+```
+
+### Validation (422)
+
+```typescript
+try {
+  await client.people.create({ first_name: '' });
+} catch (error) {
+  if (error instanceof PcoApiError && error.status === 422) {
+    error.errors.forEach((err) => {
+      console.error(`Field: ${err.source?.pointer}`);
+      console.error(`Title: ${err.title}`);
+      console.error(`Detail: ${err.detail}`);
+    });
+  }
+}
+```
+
+### Not found (404)
+
+```typescript
+try {
+  const person = await client.people.getById('missing-id');
+} catch (error) {
+  if (error instanceof PcoApiError && error.status === 404) {
+    console.log('Person not found');
+  }
+}
+```
+
+## Centralized handling
+
+```typescript
+try {
+  const person = await client.people.getById('1');
+  // ...
+} catch (error) {
+  if (error instanceof PcoApiError) {
+    errorTracker.captureError(error, { errors: error.errors, status: error.status });
+  }
+  throw error;
+}
+```
+
+For request-level logging, set `config.debug: true` when creating the client. See [Event System & Debug](./event-system.mdx).
+
+## Best practices
+
+1. **Check error type** before handling: `if (error instanceof PcoApiError) { ... }`
+2. **Use status codes** for routing: `error.status === 401`, `error.status === 429`, etc.
+3. **Use `error.errors`** for JSON:API details (validation, field pointers).
+4. **Use `error.rateLimitHeaders`** when implementing retry-after for 429.
+
+---
+
+**Next**: See [Configuration Reference](../reference/config.mdx) for config options.

@@ -1,0 +1,117 @@
+# Planning Center API Clients
+
+TypeScript client libraries for Planning Center Online APIs.
+
+## Packages
+
+This monorepo contains three packages:
+
+### [People API Client](/people) (External Documentation)
+**Package**: `@rachelallyson/planning-center-people-ts`
+**Version**: v2.14.0
+
+Complete TypeScript client for Planning Center People API with 11 specialized modules (people, fields, workflows, contacts, households, notes, lists, campus, serviceTime, forms, reports).
+
+**Note**: See package-specific documentation at `/people` for People API guides and reference.
+
+### [Check-Ins API Client](./concepts#check-ins-package)
+**Package**: `@rachelallyson/planning-center-check-ins-ts`
+**Version**: v2.0.0
+
+Complete TypeScript client for Planning Center Check-Ins API with specialized modules for events, locations, check-ins, stations, labels, and more.
+
+### [Base Package](./concepts#base-package)
+**Package**: `@rachelallyson/planning-center-base-ts`
+**Version**: v1.0.2
+
+Shared infrastructure for building PCO API clients - HTTP client, authentication, rate limiting, pagination, error handling, JSON:API types.
+
+## Quick Start
+
+### Installation
+
+```bash
+# People API Client
+npm install @rachelallyson/planning-center-people-ts
+
+# Check-Ins API Client
+npm install @rachelallyson/planning-center-check-ins-ts
+
+# Base Package (for building custom clients)
+npm install @rachelallyson/planning-center-base-ts
+```
+
+### Basic Usage
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+// Option 1: Environment variables (recommended)
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  }
+});
+
+// Option 2: Direct configuration (convenient for development)
+// const client = new PcoClient({
+//   auth: {
+//     type: 'personal_access_token',
+//     personalAccessToken: 'your_client_id',
+//     personalAccessTokenSecret: 'your_client_secret'
+//   }
+// });
+
+// Find or create a person
+const person = await client.people.findOrCreate({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com'
+});
+
+console.log(`Person ID: ${person.id}`);
+```
+
+**See [Quick Start Guide](./guides/quickstart) for complete Personal Access Token setup instructions.**
+
+## Documentation
+
+### Guides
+
+- **[Quick Start](./guides/quickstart)** - Get up and running in 5 minutes
+- **[Pagination](./guides/pagination)** - Handling paginated responses
+- **[Error Handling](./guides/error-handling)** - Typed errors, retries, recovery
+- **[Debug & Observability](./guides/event-system)** - Debug logging and rate limit info
+
+### Reference
+
+- **[Configuration](./reference/config)** - All config options and environment variables
+- **[API Reference](./api/)** - Complete API documentation
+- **[PCO API vertices](/vertices/)** - People & Check-Ins vertex reference (static snapshot from PCO docs)
+
+### Concepts
+
+- **[Core Concepts](./concepts)** - Architecture, mental models, invariants
+
+### Examples
+
+- **[Recipes](./recipes/examples)** - Copy-paste code snippets
+
+### Troubleshooting
+
+- **[Monorepo Issues](./troubleshooting)** - Common setup and build issues
+
+## Requirements
+
+- **Node.js**: >= 16.0.0
+- **TypeScript**: >= 4.0 (recommended)
+
+## Links
+
+- **GitHub**: [planning-center-monorepo](https://github.com/rachelallyson/planning-center-monorepo)
+- **People Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-people-ts)
+- **Check-Ins Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-check-ins-ts)
+- **Base Package**: [npm](https://www.npmjs.com/package/@rachelallyson/planning-center-base-ts)
+- **Contributing**: [CONTRIBUTING.md](../../CONTRIBUTING.md)
+

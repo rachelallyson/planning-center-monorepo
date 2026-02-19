@@ -1,0 +1,275 @@
+# Quick Start Guide
+
+Get up and running with the Planning Center API clients in 5 minutes.
+
+## Installation
+
+```bash
+# People API Client
+npm install @rachelallyson/planning-center-people-ts
+
+# Base Package (for building custom clients)
+npm install @rachelallyson/planning-center-base-ts
+```
+
+**Requirements**:
+
+- Node.js >= 16.0.0
+- TypeScript >= 4.0 (recommended)
+
+## Step 1: Create a Client
+
+Choose your authentication method:
+
+### Personal Access Token (Recommended for scripts)
+
+#### Step 1: Create Personal Access Token
+
+1. Go to [Planning Center Developer Account](https://api.planningcenteronline.com/oauth/applications)
+2. Click "Personal Access Tokens" in the left sidebar
+3. Click "New Personal Access Token"
+4. Give it a name (e.g., "My Integration")
+5. Select appropriate scopes (People, Check-Ins, etc.)
+6. Click "Create Personal Access Token"
+7. **Copy both values immediately** (you won't see them again):
+   - **Client ID** (long hex string)
+   - **Client Secret** (even longer string)
+
+#### Step 2: Configure Authentication
+
+**Option A: Environment Variables (Recommended for production)**
+
+```bash
+# Set these environment variables
+export PCO_PERSONAL_ACCESS_TOKEN="your_client_id_here"
+export PCO_PERSONAL_ACCESS_SECRET="your_client_secret_here"
+```
+
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+  }
+});
+```
+
+**Option B: Direct Configuration (Convenient for development)**
+
+```typescript
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: 'your_client_id_here',
+    personalAccessTokenSecret: 'your_client_secret_here'
+  }
+});
+```
+
+**Note**: Both approaches use your **Client ID** and **Client Secret** from the Personal Access Token you created in Step 1.
+
+### OAuth 2.0 (Required for multi-user apps)
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+const client = new PcoClient({
+  auth: {
+    type: 'oauth',
+    accessToken: 'your-access-token',
+    refreshToken: 'your-refresh-token',
+    // REQUIRED: Handle token refresh
+    onRefresh: async (tokens) => {
+      // Save new tokens to your database
+      await saveTokens(tokens);
+    },
+    // REQUIRED: Handle refresh failures
+    onRefreshFailure: async (error) => {
+      // Handle auth failure (e.g., redirect to login)
+      console.error('Token refresh failed:', error);
+    }
+  }
+});
+```
+
+## Step 2: Basic Operations
+
+### Get People
+
+```typescript
+// Get first page of people
+const people = await client.people.getAll({ per_page: 25 });
+
+console.log(`Found ${people.data.length} people`);
+people.data.forEach(person => {
+  console.log(`${person.attributes.first_name} ${person.attributes.last_name}`);
+});
+
+// Get all pages automatically
+const allPeople = await client.people.getAll({ per_page: 25 });
+console.log(`Total: ${allPeople.data.length} people`);
+```
+
+### Find or Create a Person
+
+```typescript
+// Find existing person or create new one
+const person = await client.people.findOrCreate({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com',
+  phone: '555-1234',
+  matchStrategy: 'fuzzy' // or 'exact'
+});
+
+console.log(`Person ID: ${person.id}`);
+console.log(`Match found: ${person.match?.found}`);
+```
+
+### Create a Person
+
+```typescript
+const newPerson = await client.people.create({
+  first_name: 'Jane',
+  last_name: 'Smith'
+});
+
+// Add contact information
+await client.contacts.createEmail(newPerson.id, {
+  address: 'jane@example.com',
+  location: 'Home',
+  primary: true
+});
+
+await client.contacts.createPhone(newPerson.id, {
+  number: '555-5678',
+  location: 'Home',
+  primary: true
+});
+```
+
+### Set Custom Fields
+
+```typescript
+// Set field by slug (recommended)
+await client.fields.setPersonFieldBySlug(
+  person.id,
+  'BIRTHDATE',
+  '1990-01-01'
+);
+
+// Set field by name
+await client.fields.setPersonFieldByName(
+  person.id,
+  'Membership Status',
+  'Member'
+);
+```
+
+### Add to Workflow
+
+```typescript
+const workflowCard = await client.workflows.addPersonToWorkflow(
+  person.id,
+  'workflow-id',
+  {
+    note: 'Added via integration',
+    skipIfExists: true // Don't add if already exists
+  }
+);
+```
+
+## Step 3: Error Handling
+
+```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
+
+try {
+  const person = await client.people.create({ first_name: 'John' });
+} catch (error) {
+  if (error instanceof PcoApiError) {
+    if (error.status === 401) console.error('Authentication failed - check your token');
+    else if (error.status === 429) console.error('Rate limited - retry after delay');
+    else if (error.status === 422) console.error('Validation error:', error.message);
+    else console.error('Error:', error.message);
+  } else {
+    throw error;
+  }
+}
+```
+
+## Step 4: Pagination and debug
+
+Use `getPage()` for a single page or `getAll()` for all pages. Set `config.debug: true` for request logging.
+
+### Debug logging and rate limit info
+
+Enable request logging with `config.debug` and check rate limit state with `getRateLimitInfo()`:
+
+```typescript
+// Optional: enable debug logging when creating the client
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
+});
+
+// Check rate limit status (e.g. before a batch)
+const rateLimitInfo = client.getRateLimitInfo();
+console.log('Requests remaining:', rateLimitInfo.remaining);
+console.log('Window resets in:', rateLimitInfo.windowResetsIn, 'ms');
+```
+
+**See [Debug & Observability](./event-system.mdx) for more options (custom log sink, prefix, payloads).**
+
+## Complete Example
+
+```typescript
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
+
+async function main() {
+  // Create client
+  const client = new PcoClient({
+    auth: {
+      type: 'personal_access_token',
+      personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!
+    },
+    debug: true // optional: request logging
+  });
+
+  try {
+    // Find or create person
+    const person = await client.people.findOrCreate({
+      first_name: 'John',
+      last_name: 'Doe',
+      email: 'john@example.com',
+      matchStrategy: 'fuzzy'
+    });
+
+    console.log(`Person ID: ${person.id}`);
+
+    // Set custom fields
+    await client.fields.setPersonFieldBySlug(person.id, 'BIRTHDATE', '1990-01-01');
+
+    // Add to workflow
+    await client.workflows.addPersonToWorkflow(person.id, 'workflow-id', {
+      note: 'Added via integration'
+    });
+
+    console.log('Success!');
+  } catch (error) {
+    console.error('Error:', error);
+    process.exit(1);
+  }
+}
+
+main();
+```
+
+## Next Steps
+
+- **[Pagination Guide](./pagination.mdx)** - Learn about pagination patterns
+- **[Error Handling Guide](./error-handling.mdx)** - Comprehensive error handling
+- **[Debug & Observability](./event-system.mdx)** - Debug logging and rate limit info
+- **[Configuration Reference](../reference/config.mdx)** - All configuration options
+- **[Examples & Recipes](../recipes/examples.mdx)** - More code examples
+
