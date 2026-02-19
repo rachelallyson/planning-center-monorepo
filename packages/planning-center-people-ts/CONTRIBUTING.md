@@ -92,12 +92,12 @@ All modules follow this pattern:
 
 ```typescript
 class Module {
-  getAll(params?: QueryParams): Promise<Paginated<Resource>>
-  getById(id: string, include?: string[]): Promise<ResourceResponse<Resource>>
-  create(data: CreateData): Promise<ResourceResponse<Resource>>
-  update(id: string, data: UpdateData): Promise<ResourceResponse<Resource>>
+  getAll(options?: QueryParams): Promise<PaginationResult<Resource>>
+  getPage(options?: QueryParams): Promise<{ data: Resource[]; meta?; links? }>
+  getById(id: string, options?: { include?: string[] }): Promise<Resource>
+  create(data: CreateData): Promise<Resource>
+  update(id: string, data: UpdateData): Promise<Resource>
   delete(id: string): Promise<void>
-  getAllPages(params?: QueryParams): Promise<Paginated<Resource>>
 }
 ```
 
@@ -106,15 +106,12 @@ class Module {
 Always handle errors properly:
 
 ```typescript
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
 try {
-  await client.people.create({ first_name: 'John' });
+  await client.people.create({ first_name: 'John', last_name: 'Doe', status: 'active' });
 } catch (error) {
-  if (error instanceof PcoError) {
-    switch (error.category) {
-      case ErrorCategory.VALIDATION:
-        // Handle validation error
-        break;
-    }
+  if (error instanceof PcoApiError && error.status === 422) {
+    // Handle validation error
   }
   throw error;
 }
@@ -127,27 +124,13 @@ try {
 - Place tests in `tests/` directory
 - Use descriptive test names
 - Test both success and error cases
-- Use mock clients for unit tests
-
-```typescript
-import { createMockClient } from '@rachelallyson/planning-center-people-ts';
-
-describe('MyFeature', () => {
-  it('should work correctly', async () => {
-    const client = createMockClient({
-      // Mock responses
-    });
-    
-    const result = await client.people.getAll();
-    expect(result.data).toHaveLength(0);
-  });
-});
-```
+- For pure logic (e.g. matching, scoring), use plain objects and no API client
+- We prefer integration tests for any behavior that touches the API
 
 ### Integration Tests
 
 - Place in `tests/integration/` directory
-- Use `createTestClient()` helper
+- Use `createTestClient()` from `tests/integration/test-config.ts` (real client)
 - Clean up test data after tests
 - Use descriptive test names (e.g., "TEST_INTEGRATION_2025")
 
@@ -280,10 +263,8 @@ Generated HTML files are ignored in git (see `.gitignore`) - they're built in CI
 
 ## Error Handling
 
-- Use `PcoError` for enhanced errors
-- Use `PcoApiError` for HTTP errors
+- Use `PcoApiError` (from package, re-exported from core) for API/HTTP errors in catch blocks
 - Include error context for debugging
-- Use appropriate error categories
 
 ## Questions?
 

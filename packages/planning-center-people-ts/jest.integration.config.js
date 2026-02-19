@@ -1,32 +1,24 @@
+// Integration tests with Jest + Typia. Real API (no mocks). Load .env.test for credentials.
 module.exports = {
     preset: 'ts-jest',
     testEnvironment: 'node',
     roots: ['<rootDir>/src', '<rootDir>/tests'],
     testMatch: [
-        '**/integration/**/*.integration.test.ts'
+        '**/integration/**/*.integration.test.ts',
+        '**/.integration/**/*.integration.test.ts',
+        '**/.integration/**/*.test.ts',
     ],
-    transform: {
-        '^.+\\.ts$': 'ts-jest',
+    transform: { '^.+\\.ts$': 'ts-jest' },
+    globals: {
+        'ts-jest': {
+            tsconfig: 'tsconfig.test.json',
+        },
     },
-    collectCoverageFrom: [
-        'src/**/*.ts',
-        '!src/**/*.d.ts',
-        '!src/testing/**/*.ts',
-        '!src/**/index.ts',
-    ],
-    moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
     moduleNameMapper: {
-        '^@rachelallyson/planning-center-base-ts$': '<rootDir>/node_modules/@rachelallyson/planning-center-base-ts',
+        '^@rachelallyson/planning-center-base-ts$': '<rootDir>/../planning-center-base-ts',
     },
     setupFilesAfterEnv: ['<rootDir>/tests/integration-setup.ts'],
-    testPathIgnorePatterns: [
-        '/node_modules/',
-        '/dist/'
-    ],
-    transformIgnorePatterns: [
-        '/node_modules/(?!@rachelallyson/)'
-    ],
-    testTimeout: 60000
+    testTimeout: 60000,
 };
 
 

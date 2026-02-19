@@ -1,6 +1,6 @@
 # @rachelallyson/planning-center-people-ts
 
-A modern, type-safe TypeScript library for interacting with the Planning Center Online People API. Built with a class-based architecture, comprehensive error handling, and advanced features like person matching and batch operations.
+A modern, type-safe TypeScript library for interacting with the Planning Center Online People API. Built with a class-based architecture, comprehensive error handling, and advanced features like person matching.
 
 > **📖 For the latest documentation and examples, see the [Monorepo Documentation Site](../../docs/content/index.mdx)**
 
@@ -8,13 +8,12 @@ A modern, type-safe TypeScript library for interacting with the Planning Center 
 
 - ✅ **Strict TypeScript**: Full type safety with no `any` types
 - ✅ **JSON:API 1.0 Compliant**: Follows the JSON:API specification exactly
-- ✅ **Functional Approach**: Clean, composable functions instead of classes
+- ✅ **Class-based API**: `PcoClient` with modules (`people`, `contacts`, `workflows`, etc.)
 - ✅ **Rate Limiting**: Built-in rate limiting with PCO's 100 req/20s policy
 - ✅ **Modern HTTP**: Uses native fetch API (no external dependencies)
 - ✅ **Authentication**: Supports both Personal Access Tokens and OAuth 2.0
-- ✅ **Enhanced Error Handling**: Comprehensive error handling with categories, severity, and retry logic
-- ✅ **Automatic Retries**: Configurable exponential backoff with smart retry logic
-- ✅ **Request Timeouts**: Configurable request timeouts
+- ✅ **Error Handling**: `PcoApiError` with status and JSON:API error details; check `error.status` (401, 422, 429, etc.)
+- ✅ **Request Timeouts**: Optional `timeout` in config
 - ✅ **Pagination**: Automatic pagination support
 - ✅ **File Upload Handling**: Intelligent file upload detection and processing for custom fields
 - ✅ **No Index Signatures**: Clean type definitions without index signatures
@@ -30,59 +29,30 @@ npm install @planning-center-people-ts
 ## Quick Start
 
 ```typescript
-import {
-    createPcoClient,
-    getPeople,
-    getPerson,
-    createPerson,
-    updatePerson,
-    deletePerson,
-} from '@planning-center-people-ts';
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
-// Create a client
-const client = createPcoClient({
-    personalAccessToken: 'your-token-here',
-    appId: 'your-app-id',
-    appSecret: 'your-app-secret',
-    // Or use OAuth 2.0:
-    // accessToken: 'your-oauth-token',
+const client = new PcoClient({
+    auth: {
+        type: 'basic',
+        appId: 'your-app-id',
+        appSecret: 'your-app-secret',
+    },
+    // Or OAuth: auth: { type: 'oauth', accessToken, refreshToken, onRefresh, onRefreshFailure }
 });
 
-// Get all people
-const people = await getPeople(client, {
-    per_page: 10,
-    include: ['emails', 'phone_numbers'],
-});
+const people = await client.people.getPage({ per_page: 10, include: ['emails', 'phone_numbers'] });
+const person = await client.people.getById('person-id', { include: ['emails'] });
+const newPerson = await client.people.create({ first_name: 'John', last_name: 'Doe', status: 'active' });
+const updatedPerson = await client.people.update('person-id', { first_name: 'Jane' });
+await client.people.delete('person-id');
 
-// Get a specific person
-const person = await getPerson(client, 'person-id', ['emails']);
-
-// Create a new person
-const newPerson = await createPerson(client, {
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john.doe@gmail.com',
-});
-
-// Update a person
-const updatedPerson = await updatePerson(client, 'person-id', {
-    first_name: 'Jane',
-});
-
-// Delete a person
-await deletePerson(client, 'person-id');
-
-// Smart file upload handling for custom fields
-import { createPersonFieldData } from '@planning-center-people-ts';
-
-// Automatically determines field type and handles file uploads appropriately
-await createPersonFieldData(
-    client,
-    'person-id',
-    'field-definition-id',
-    '<a href="https://example.com/document.pdf" download>View File</a>'
-);
+// Smart file upload for custom fields
+await client.fields.createPersonFieldData('person-id', 'field-definition-id', '<a href="https://example.com/document.pdf" download>View File</a>');
 ```
+
+## Imports
+
+This package exports the client, resource types, `PcoApiError`, and the JSON:API types used in responses (`Relationship`, `ResourceIdentifier`, `ResourceObject`), plus the package’s own error-handling and helper APIs. For lower-level utilities (e.g. `createDebugLogger`, `PcoRateLimiter`, rate-limit headers), use `@rachelallyson/planning-center-base-ts` directly.
 
 ## Configuration
 
@@ -126,319 +96,94 @@ With `debug: true`, every event is logged with a clear prefix (default `[PCO Peo
 
 ### Authentication
 
-The client supports two authentication methods:
+Use `PcoClient` with one of three auth types:
 
-#### Personal Access Token (Recommended for single-user apps)
+**Personal Access Token:**
 
 ```typescript
-const client = createPcoClient({
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
     personalAccessToken: 'your-token-here',
-    appId: 'your-app-id',
-    appSecret: 'your-app-secret',
+    personalAccessTokenSecret: 'optional-secret', // or use env
+  },
 });
 ```
 
-#### OAuth 2.0 (For multi-user apps)
+**OAuth 2.0** (requires `onRefresh` and `onRefreshFailure`):
 
 ```typescript
-const client = createPcoClient({
-    accessToken: 'your-oauth-token',
+const client = new PcoClient({
+  auth: {
+    type: 'oauth',
+    accessToken: '...',
+    refreshToken: '...',
+    onRefresh: async (tokens) => { /* save tokens */ },
+    onRefreshFailure: async (err) => { /* handle */ },
+  },
 });
 ```
 
-### Rate Limiting
+**Basic** (app id/secret): `auth: { type: 'basic', appId, appSecret }`.
 
-Rate limiting is automatically handled, but you can customize it:
+Optional config: `baseURL`, `timeout`, `headers`, `debug`. See the [config reference](../../docs/content/reference/config.mdx) in the monorepo docs.
 
-```typescript
-const client = createPcoClient({
-    accessToken: 'your-token',
-    rateLimit: {
-        maxRequests: 100,        // Default: 100
-        perMilliseconds: 60000,  // Default: 60000 (1 minute)
-    },
-});
-```
+## API overview
 
-### Request Timeouts
+Use `PcoClient` and its modules. Each list-capable module (e.g. `people`, `households`, `workflows`) provides:
 
-Configure request timeouts to prevent hanging requests:
+- **`getAll(options?)`** – Fetch all pages; returns `PaginationResult<T>` with `data`, `totalCount`, `pagesFetched`.
+- **`getPage(options?)`** – Fetch a single page; returns `{ data, meta?, links? }`.
+- **`getById(id, options?)`** – Fetch one resource; use `options.include` for related data (e.g. `{ include: ['emails'] }`).
+- **`create(data)`**, **`update(id, data)`**, **`delete(id)`** – Mutations.
 
-```typescript
-const client = createPcoClient({
-    accessToken: 'your-token',
-    timeout: 30000, // 30 seconds
-});
-```
+Example: `client.people.getAll({ where: { status: 'active' } })`, `client.people.getPage({ per_page: 25, page: 1 })`, `client.people.getById('id', { include: ['emails'] })`. Contacts are person-scoped: `client.contacts.createEmail(personId, data)`.
 
-### Retry Configuration
+## Error Handling
 
-Configure automatic retry behavior:
+Use `PcoApiError` from the package (re-exported from `@rachelallyson/planning-center-base-ts`) for catch blocks. The client uses the core package for HTTP, retries, and rate limiting.
 
 ```typescript
-const client = createPcoClient({
-    accessToken: 'your-token',
-    retry: {
-        maxRetries: 3,           // Default: 3
-        baseDelay: 1000,         // Default: 1000ms
-        maxDelay: 30000,         // Default: 30000ms
-        onRetry: (error, attempt) => {
-            console.log(`Retry attempt ${attempt} for ${error.context.endpoint}`);
-        },
-    },
-});
-```
-
-### Custom Headers
-
-```typescript
-const client = createPcoClient({
-    accessToken: 'your-token',
-    headers: {
-        'X-Custom-Header': 'value',
-    },
-});
-```
-
-### Custom Base URL
-
-```typescript
-const client = createPcoClient({
-    accessToken: 'your-token',
-    baseURL: 'https://api.planningcenteronline.com/people/v2',
-});
-```
-
-## API Reference
-
-### Core Functions
-
-#### `createPcoClient(config: PcoClientConfig): PcoClientState`
-
-Creates a new PCO client instance.
-
-#### `getSingle<T>(client, endpoint, params?, context?): Promise<JsonApiResponse<T>>`
-
-Makes a GET request for a single resource.
-
-#### `getList<T>(client, endpoint, params?, context?): Promise<Paginated<T>>`
-
-Makes a GET request for a list of resources.
-
-#### `post<T>(client, endpoint, data, params?, context?): Promise<JsonApiResponse<T>>`
-
-Makes a POST request to create a resource.
-
-#### `patch<T>(client, endpoint, data, params?, context?): Promise<JsonApiResponse<T>>`
-
-Makes a PATCH request to update a resource.
-
-#### `del(client, endpoint, params?, context?): Promise<void>`
-
-Makes a DELETE request to remove a resource.
-
-#### `getAllPages<T>(client, endpoint, params?, context?): Promise<T[]>`
-
-Automatically fetches all pages of a paginated resource.
-
-### People API Functions
-
-#### People
-
-- `getPeople(client, params?, context?)` - Get all people
-- `getPerson(client, id, include?, context?)` - Get a single person
-- `createPerson(client, data, context?)` - Create a new person
-- `updatePerson(client, id, data, context?)` - Update a person
-- `deletePerson(client, id, context?)` - Delete a person
-
-#### Emails
-
-- `getPersonEmails(client, personId, context?)` - Get all emails for a person
-- `createPersonEmail(client, personId, data, context?)` - Create an email for a person
-
-#### Phone Numbers
-
-- `getPersonPhoneNumbers(client, personId, context?)` - Get all phone numbers for a person
-- `createPersonPhoneNumber(client, personId, data, context?)` - Create a phone number for a person
-
-#### Addresses
-
-- `getPersonAddresses(client, personId, context?)` - Get all addresses for a person
-- `createPersonAddress(client, personId, data, context?)` - Create an address for a person
-
-#### Households
-
-- `getHouseholds(client, params?, context?)` - Get all households
-- `getHousehold(client, id, include?, context?)` - Get a single household
-
-#### Field Definitions
-
-- `getFieldDefinitions(client, params?, context?)` - Get all field definitions
-- `getFieldOptions(client, fieldDefinitionId, context?)` - Get options for a field definition
-- `createFieldOption(client, fieldDefinitionId, data, context?)` - Create a field option
-
-#### Social Profiles
-
-- `getPersonSocialProfiles(client, personId, context?)` - Get social profiles for a person
-- `createPersonSocialProfile(client, personId, data, context?)` - Create a social profile for a person
-
-## Enhanced Error Handling
-
-The library provides comprehensive error handling with categorized errors, severity levels, and smart retry logic.
-
-### Error Categories
-
-```typescript
-import { ErrorCategory, ErrorSeverity } from '@planning-center-people-ts';
-
-// Error categories for monitoring and handling
-ErrorCategory.AUTHENTICATION    // 401 errors
-ErrorCategory.AUTHORIZATION     // 403 errors
-ErrorCategory.RATE_LIMIT        // 429 errors
-ErrorCategory.VALIDATION        // 400/422 errors
-ErrorCategory.NETWORK           // Connection/timeout errors
-ErrorCategory.EXTERNAL_API      // 5xx server errors
-ErrorCategory.TIMEOUT           // Request timeout errors
-ErrorCategory.UNKNOWN           // Unknown errors
-
-// Severity levels for prioritization
-ErrorSeverity.LOW       // Validation errors, etc.
-ErrorSeverity.MEDIUM    // Rate limits, network issues
-ErrorSeverity.HIGH      // Auth errors, server errors
-ErrorSeverity.CRITICAL  // Critical system failures
-```
-
-### Basic Error Handling
-
-```typescript
-import { PcoError, ErrorCategory } from '@planning-center-people-ts';
+import { PcoClient, PcoApiError } from '@rachelallyson/planning-center-people-ts';
 
 try {
-    const people = await getPeople(client);
+    const people = await client.people.getPage({ per_page: 10 });
 } catch (error) {
-    if (error instanceof PcoError) {
-        console.error('PCO Error:', {
-            message: error.message,
-            status: error.status,
-            category: error.category,
-            severity: error.severity,
-            retryable: error.retryable,
-            context: error.context,
-        });
-
-        // Handle different error categories
-        switch (error.category) {
-            case ErrorCategory.AUTHENTICATION:
-                console.error('Authentication failed - check your token');
-                break;
-            case ErrorCategory.RATE_LIMIT:
-                console.error('Rate limited - retry after:', error.getRetryDelay(), 'ms');
-                break;
-            case ErrorCategory.VALIDATION:
-                console.error('Validation error - check your request data');
-                break;
-            case ErrorCategory.NETWORK:
-                console.error('Network error - check your connection');
-                break;
-        }
+    if (error instanceof PcoApiError) {
+        console.error('PCO Error:', { message: error.message, status: error.status, errors: error.errors });
+        if (error.status === 401) { /* auth */ }
+        if (error.status === 429) { /* rate limit */ }
+        if (error.status === 422) { /* validation */ }
     }
+    throw error;
 }
-```
-
-### Custom Retry Logic
-
-```typescript
-import { retryWithBackoff } from '@planning-center-people-ts';
-
-const result = await retryWithBackoff(
-    () => getPerson(client, 'person-id'),
-    {
-        maxRetries: 3,
-        baseDelay: 1000,
-        maxDelay: 10000,
-        context: {
-            endpoint: '/people/person-id',
-            method: 'GET',
-            metadata: { custom_retry: true },
-        },
-        onRetry: (error, attempt) => {
-            console.log(`Retry attempt ${attempt} for ${error.context.endpoint}`);
-        },
-    }
-);
-```
-
-### Error Boundary Wrapper
-
-```typescript
-import { withErrorBoundary } from '@planning-center-people-ts';
-
-const result = await withErrorBoundary(
-    () => createPerson(client, personData),
-    {
-        endpoint: '/people',
-        method: 'POST',
-        metadata: { operation: 'create_person' },
-    }
-);
-```
-
-### Error Context
-
-All API functions accept an optional `context` parameter for better error tracking:
-
-```typescript
-const people = await getPeople(client, { per_page: 10 }, {
-    metadata: { 
-        operation: 'fetch_people_list',
-        user_id: 'user123',
-        batch_id: 'batch456',
-    },
-});
 ```
 
 ## Type Safety
 
-All functions are fully typed with TypeScript:
+All methods are fully typed; resources are flattened (attributes at top level):
 
 ```typescript
-// TypeScript knows exactly what properties are available (flattened: attributes at top level)
-const person = await getPerson(client, 'person-id');
-console.log(person.data?.first_name); // ✅ TypeScript knows this exists
-console.log(person.data?.invalid_prop); // ❌ TypeScript error
-
-// Creating resources is type-safe
-const newPerson = await createPerson(client, {
-    first_name: 'John', // ✅ Valid property
-    invalid_prop: 'value', // ❌ TypeScript error
-});
+const person = await client.people.getById('person-id');
+console.log(person.first_name); // ✅ TypeScript knows this exists
+const newPerson = await client.people.create({ first_name: 'John', last_name: 'Doe', status: 'active' });
 ```
 
 ## Rate Limiting
 
-Rate limiting is handled automatically:
+Rate limiting is handled automatically by the core client. Check status with:
 
 ```typescript
-// Check current rate limit status
-const rateLimitInfo = getRateLimitInfo(client);
+const rateLimitInfo = client.getRateLimitInfo();
 console.log('Requests used:', rateLimitInfo.requestsUsed);
 console.log('Requests remaining:', rateLimitInfo.requestsRemaining);
-console.log('Window resets in:', rateLimitInfo.windowResetsIn);
 ```
 
 ## Pagination
 
-Handle pagination manually or automatically:
-
 ```typescript
-// Manual pagination
-const people = await getPeople(client, { per_page: 10 });
-if (people.links?.next) {
-    const nextPage = await getPeople(client, { page: 2 });
-}
-
-// Automatic pagination (gets all pages)
-const allPeople = await getAllPages(client, '/people');
+const page = await client.people.getPage({ per_page: 10, page: 1 });
+const allPeople = await client.people.getAll({ per_page: 100 });
 ```
 
 ## Environment Support
@@ -460,18 +205,14 @@ import fetch from 'node-fetch';
 global.fetch = fetch;
 ```
 
-## Migration from Class-based Approach
+## API Style
 
-If you were using the previous class-based approach:
+Use the class-based client and modules (v2.0+):
 
 ```typescript
-// Old way (class-based)
-const client = new PcoClient(config);
-const people = await client.getPeople();
-
-// New way (functional)
-const client = createPcoClient(config);
-const people = await getPeople(client);
+const client = new PcoClient({ auth: { type: 'basic', appId, appSecret } });
+const people = await client.people.getPage({ per_page: 10 });
+const all = await client.people.getAll({ where: { status: 'active' } });
 ```
 
 ## Testing

@@ -8,7 +8,6 @@ A complete redesign of the Planning Center Online People API client with enhance
 
 - **Class-based fluent API** instead of functional exports
 - **Module-based architecture** with namespaced operations
-- **Event-driven system** with comprehensive monitoring
 - **Type-safe operations** throughout the entire API
 
 ### 🔧 **Core Features**
@@ -17,42 +16,27 @@ A complete redesign of the Planning Center Online People API client with enhance
 
 ```typescript
 // Get all people across all pages automatically
-const allPeople = await client.people.getAllPages({ perPage: 100 });
+const result = await client.people.getAll({ include: ['emails', 'phone_numbers'] });
+console.log(`Fetched ${result.data.length} people (${result.pagesFetched} pages)`);
 
-// With progress tracking
-const result = await client.people.getAllPages(
-  { perPage: 50 },
-  { 
-    onProgress: (fetched, total) => 
-      console.log(`Fetched ${fetched} of ${total} people`)
-  }
-);
+// Single page
+const page = await client.people.getPage({ per_page: 50, page: 1 });
 ```
 
-#### **2. Automatic Client Caching**
-
-```typescript
-// Client manager handles caching and lifecycle automatically
-const client = await PcoClientManager.getClient('church-id', config);
-
-// Subsequent calls return the same cached instance
-const sameClient = await PcoClientManager.getClient('church-id', config);
-```
-
-#### **3. Smart Person Matching**
+#### **2. Smart Person Matching**
 
 ```typescript
 // Find existing person or create new one with fuzzy matching
 const person = await client.people.findOrCreate(
   {
-    firstName: 'John',
-    lastName: 'Doe',
+    first_name: 'John',
+    last_name: 'Doe',
     email: 'john@gmail.com
     matchStrategy: 'fuzzy'
   },
   {
-    firstName: 'John',
-    lastName: 'Doe',
+    first_name: 'John',
+    last_name: 'Doe',
     email: 'john@gmail.com
     status: 'active'
   }
@@ -60,8 +44,8 @@ const person = await client.people.findOrCreate(
 
 // Age preference matching - prefer adults (18+)
 const adultPerson = await client.people.findOrCreate({
-  firstName: 'Jane',
-  lastName: 'Smith',
+  first_name: 'Jane',
+  last_name: 'Smith',
   email: 'jane@gmail.com
   agePreference: 'adults',
   agePreferenceLenient: true, // Include profiles without birthdates
@@ -70,16 +54,16 @@ const adultPerson = await client.people.findOrCreate({
 
 // Age preference matching - prefer children (under 18)
 const childPerson = await client.people.findOrCreate({
-  firstName: 'Bobby',
-  lastName: 'Johnson',
+  first_name: 'Bobby',
+  last_name: 'Johnson',
   agePreference: 'children',
   matchStrategy: 'fuzzy'
 });
 
 // Match by age range
 const youngAdult = await client.people.findOrCreate({
-  firstName: 'Alice',
-  lastName: 'Brown',
+  first_name: 'Alice',
+  last_name: 'Brown',
   minAge: 20,
   maxAge: 30,
   matchStrategy: 'fuzzy'
@@ -87,16 +71,16 @@ const youngAdult = await client.people.findOrCreate({
 
 // Match by birth year
 const millennial = await client.people.findOrCreate({
-  firstName: 'David',
-  lastName: 'Wilson',
+  first_name: 'David',
+  last_name: 'Wilson',
   birthYear: 1990,
   matchStrategy: 'fuzzy'
 });
 
 // Automatically add missing contact information when a match is found
 const person = await client.people.findOrCreate({
-  firstName: 'Jane',
-  lastName: 'Smith',
+  first_name: 'Jane',
+  last_name: 'Smith',
   email: 'jane@gmail.com
   phone: '+1987654321',
   addMissingContactInfo: true  // Adds phone if person only has email, or email if person only has phone
@@ -105,8 +89,8 @@ const person = await client.people.findOrCreate({
 // Multi-step search strategy - tries multiple matching approaches
 // This maximizes matching success by trying different strategies in order
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@gmail.com
   searchStrategy: 'multi-step', // Tries: fuzzy+age, fuzzy, exact+age, exact
   agePreference: 'adults',
@@ -116,8 +100,8 @@ const person = await client.people.findOrCreate({
 // Name-based search fallback with contact validation
 // When email/phone search fails, falls back to name search but validates contact info
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@gmail.com
   fallbackToNameSearch: true,
   contactValidation: 'domain'  // 'strict' | 'domain' | 'similarity'
@@ -125,8 +109,8 @@ const person = await client.people.findOrCreate({
 
 // Phase-specific retry configurations for advanced control
 const person = await client.people.findOrCreate({
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   email: 'john@gmail.com
   searchStrategy: 'multi-step',
   retryConfigs: {
@@ -181,30 +165,7 @@ if (trust.shouldTrust) {
 }
 ```
 
-#### **4. Batch Operations**
-
-```typescript
-// Execute multiple operations with dependency resolution
-const results = await client.batch.execute([
-  { 
-    id: 'create-person',
-    type: 'create', 
-    resourceType: 'Person', 
-    endpoint: '/people', 
-    data: { first_name: 'John', last_name: 'Doe' } 
-  },
-  { 
-    id: 'add-email',
-    type: 'create', 
-    resourceType: 'Email', 
-    endpoint: '/emails', 
-    data: { address: 'john@gmail.com
-    dependencies: ['create-person']
-  }
-]);
-```
-
-#### **5. Type-Safe Field Operations**
+#### **4. Type-Safe Field Operations**
 
 ```typescript
 // Automatic field definition lookup and type validation
@@ -222,7 +183,7 @@ await client.fields.setPersonFieldByName(
 );
 ```
 
-#### **6. Enhanced Workflow Management**
+#### **5. Enhanced Workflow Management**
 
 ```typescript
 // Smart workflow operations with duplicate detection
@@ -237,25 +198,18 @@ const workflowCard = await client.workflows.addPersonToWorkflow(
 );
 ```
 
-#### **7. Comprehensive Event System**
+#### **6. Debug logging and rate limit info**
 
 ```typescript
-// Monitor all client activity
-client.on('request:start', (event) => {
-  console.log(`Starting ${event.method} ${event.endpoint}`);
+// Enable request logging when creating the client
+const client = new PcoClient({
+  auth: { /* ... */ },
+  debug: true
 });
 
-client.on('request:complete', (event) => {
-  console.log(`Completed in ${event.duration}ms with status ${event.status}`);
-});
-
-client.on('error', (event) => {
-  console.error(`Error in ${event.operation}:`, event.error.message);
-});
-
-client.on('rate:limit', (event) => {
-  console.warn(`Rate limit: ${event.remaining}/${event.limit} remaining`);
-});
+// Check rate limit status (e.g. before a batch)
+const info = client.getRateLimitInfo();
+console.log(`Remaining: ${info.remaining}/${info.limit}, resets in ${info.windowResetsIn}ms`);
 ```
 
 ## 📖 **Quick Start**
@@ -269,7 +223,7 @@ npm install @rachelallyson/planning-center-people-ts@latest
 ### Basic Usage
 
 ```typescript
-import { PcoClient, PcoClientManager } from '@rachelallyson/planning-center-people-ts';
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
 // Create a client
 const client = new PcoClient({
@@ -287,21 +241,16 @@ const client = new PcoClient({
     onAuthFailure: (event) => console.error('Auth failed:', event.error),
   }
 });
-
-// Or use the client manager for automatic caching
-const client = await PcoClientManager.getClient('your-church-id', {
-  auth: { type: 'oauth', accessToken: 'your-token' }
-});
 ```
 
 ### Working with People
 
 ```typescript
-// Get all people with pagination
-const allPeople = await client.people.getAllPages({
-  perPage: 100,
+// Get all people (all pages)
+const result = await client.people.getAll({
   include: ['emails', 'phone_numbers']
 });
+const allPeople = result.data;
 
 // Create a person
 const person = await client.people.create({
@@ -318,8 +267,8 @@ const email = await client.people.addEmail(person.id, {
 
 // Smart person matching
 const foundOrCreated = await client.people.findOrCreate(
-  { firstName: 'John', lastName: 'Doe', email: 'john@gmail.com
-  { firstName: 'John', lastName: 'Doe', email: 'john@gmail.com
+  { first_name: 'John', last_name: 'Doe', email: 'john@gmail.com
+  { first_name: 'John', last_name: 'Doe', email: 'john@gmail.com
 );
 ```
 
@@ -348,7 +297,8 @@ await client.fields.setPersonFieldByName(
 
 ```typescript
 // Get all workflows
-const workflows = await client.workflows.getAllPages();
+const workflowsResult = await client.workflows.getAll();
+const workflows = workflowsResult.data;
 
 // Add person to workflow with smart duplicate detection
 const workflowCard = await client.workflows.addPersonToWorkflow(
@@ -369,57 +319,28 @@ const note = await client.workflows.createWorkflowCardNote(
 );
 ```
 
-### Batch Operations
-
-```typescript
-// Execute multiple operations with dependencies
-const results = await client.batch.execute([
-  {
-    id: 'create-person',
-    type: 'create',
-    resourceType: 'Person',
-    endpoint: '/people',
-    data: { first_name: 'John', last_name: 'Doe' }
-  },
-  {
-    id: 'add-email',
-    type: 'create',
-    resourceType: 'Email',
-    endpoint: '/emails',
-    data: { address: 'john@gmail.com
-    dependencies: ['create-person']
-  }
-], {
-  continueOnError: true,
-  maxConcurrency: 5
-});
-
-console.log(`Successfully executed ${results.successful} operations`);
-```
-
 ## 🔄 **Migration from v1.x**
 
 See the comprehensive [Migration Guide](docs/MIGRATION_V2.md) for detailed instructions on upgrading from v1.x to v2.0.0.
 
 ### Quick Migration Example
 
-**v1.x (Old):**
+**v1.x (Old – functional API, removed):**
 
 ```typescript
 import { createPcoClient, getPeople, createPerson } from '@rachelallyson/planning-center-people-ts';
-
 const client = createPcoClient({ accessToken: token });
 const people = await getPeople(client, { per_page: 100 });
 const person = await createPerson(client, data);
 ```
 
-**v2.0 (New):**
+**v2.0 (Current – class API, core package does HTTP):**
 
 ```typescript
 import { PcoClient } from '@rachelallyson/planning-center-people-ts';
-
-const client = new PcoClient({ auth: { type: 'oauth', accessToken: token } });
-const people = await client.people.getAll({ perPage: 100 });
+const client = new PcoClient({ auth: { type: 'oauth', accessToken: token, refreshToken: refresh, onRefresh: async () => {}, onRefreshFailure: async () => {} } });
+const result = await client.people.getAll({ include: ['emails'] });
+const people = result.data;
 const person = await client.people.create(data);
 ```
 
@@ -428,35 +349,32 @@ const person = await client.people.create(data);
 ### Module Structure
 
 - **`client.people`** - Person management and operations
-- **`client.fields`** - Custom field operations with caching
+- **`client.fields`** - Custom field operations
 - **`client.workflows`** - Workflow and workflow card management
 - **`client.contacts`** - Email, phone, address, and social profile operations
 - **`client.households`** - Household management
 - **`client.notes`** - Note and note category operations
 - **`client.lists`** - List and list category operations
-- **`client.batch`** - Batch operation execution
 
-### Event System
+### Debug logging
 
-- **`request:start`** - HTTP request initiated
-- **`request:complete`** - HTTP request completed
-- **`error`** - Error occurred during operation
-- **`auth:failure`** - Authentication failure
-- **`rate:limit`** - Rate limit encountered
+Set `config.debug: true` when creating the client to log each request (start, complete, error). Use `client.getRateLimitInfo()` to check rate limit state.
 
 ## 🧪 **Testing**
 
-The library includes comprehensive testing utilities:
+We use **integration tests** with the real API. In the repo, tests use a real client from `tests/integration/test-config.ts` (see [tests/README_TESTING.md](tests/README_TESTING.md)). For your own tests or examples, create a real client with your credentials:
 
 ```typescript
-import { createTestClient } from '@rachelallyson/planning-center-people-ts/testing';
+import { PcoClient } from '@rachelallyson/planning-center-people-ts';
 
-const mockClient = createTestClient({
-  people: {
-    getAll: () => Promise.resolve({ data: [], meta: { total_count: 0 } }),
-    create: (data) => Promise.resolve({ id: '123', ...data })
-  }
+const client = new PcoClient({
+  auth: {
+    type: 'personal_access_token',
+    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
+  },
 });
+
+const people = await client.people.getPage({ per_page: 10 });
 ```
 
 ## 📚 **Documentation**

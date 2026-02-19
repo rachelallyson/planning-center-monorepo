@@ -20,7 +20,7 @@ When generating code or making changes, always read:
 
 ```typescript
 // ✅ CORRECT: Use public exports
-import { PcoClient, PcoError, ErrorCategory } from '@rachelallyson/planning-center-people-ts';
+import { PcoClient, PcoApiError } from '@rachelallyson/planning-center-people-ts';
 
 // ❌ WRONG: Deep imports
 import { PcoClient } from '@rachelallyson/planning-center-people-ts/src/client';
@@ -38,18 +38,18 @@ import { PcoClient } from '@rachelallyson/planning-center-people-ts/src/client';
 **Examples**:
 
 ```typescript
-// ✅ CORRECT: Use documented keys
+// ✅ CORRECT: Use documented keys (see docs/reference/config.md)
 const client = new PcoClient({
   auth: { type: 'personal_access_token', personalAccessToken: 'token' },
-  caching: { fieldDefinitions: true, ttl: 300000 },
-  retry: { maxRetries: 3 }
+  baseURL: 'https://api.planningcenteronline.com/people/v2',
+  timeout: 30000,
+  debug: false,
 });
 
 // ❌ WRONG: Invented keys
 const client = new PcoClient({
   auth: { type: 'personal_access_token', personalAccessToken: 'token' },
-  cache: { enabled: true }, // ❌ Wrong key name
-  retries: 3 // ❌ Wrong key name
+  cache: { enabled: true }, // ❌ Not in PcoClientConfig
 });
 ```
 
@@ -72,7 +72,7 @@ const client = new PcoClient({
 const client = new PcoClient({ auth: { type: 'personal_access_token', personalAccessToken: 'token' } });
 const people = await client.people.getAll();
 
-// ❌ WRONG: v1.x functional API (deprecated)
+// ❌ WRONG: v1.x functional API (no longer supported)
 import { createPcoClient, getPeople } from '@rachelallyson/planning-center-people-ts';
 const client = createPcoClient({ personalAccessToken: 'token' });
 const people = await getPeople(client);
@@ -137,19 +137,14 @@ describe('new feature', () => {
 **Always handle errors properly:**
 
 ```typescript
-// ✅ CORRECT: Proper error handling
+// ✅ CORRECT: Proper error handling (PcoApiError from core)
+import { PcoApiError } from '@rachelallyson/planning-center-people-ts';
 try {
-  await client.people.create({ first_name: 'John' });
+  await client.people.create({ first_name: 'John', last_name: 'Doe', status: 'active' });
 } catch (error) {
-  if (error instanceof PcoError) {
-    switch (error.category) {
-      case ErrorCategory.VALIDATION:
-        // Handle validation error
-        break;
-      case ErrorCategory.RATE_LIMIT:
-        // Handle rate limit
-        break;
-    }
+  if (error instanceof PcoApiError) {
+    if (error.status === 422) { /* validation */ }
+    if (error.status === 429) { /* rate limit */ }
   }
   throw error;
 }
@@ -180,12 +175,12 @@ try {
 ```typescript
 // Module structure:
 class Module {
-  getAll(params?: QueryParams): Promise<Paginated<Resource>>
-  getById(id: string, include?: string[]): Promise<ResourceResponse<Resource>>
-  create(data: CreateData): Promise<ResourceResponse<Resource>>
-  update(id: string, data: UpdateData): Promise<ResourceResponse<Resource>>
+  getAll(options?: QueryParams): Promise<PaginationResult<Resource>>
+  getPage(options?: QueryParams): Promise<{ data: Resource[]; meta?; links? }>
+  getById(id: string, options?: { include?: string[] }): Promise<Resource>
+  create(data: CreateData): Promise<Resource>
+  update(id: string, data: UpdateData): Promise<Resource>
   delete(id: string): Promise<void>
-  getAllPages(params?: QueryParams): Promise<Paginated<Resource>>
 }
 ```
 
@@ -196,7 +191,6 @@ class Module {
 - `src/types/index.ts` - Core types
 - `src/types/client.ts` - Client config types
 - `src/types/events.ts` - Event types
-- `src/types/batch.ts` - Batch operation types
 
 **Never create duplicate types** - Reuse existing types.
 

@@ -29,8 +29,8 @@ try {
     campusId: guest.integrationInfo?.PCO?.primary_campus_id,
     createIfNotFound: false, // Don't create, just search
     email: cleanEmail,
-    firstName: guest.firstName.trim(),
-    lastName: guest.lastName?.trim() ?? undefined,
+    first_name: guest.first_name.trim(),
+    last_name: guest.last_name?.trim() ?? undefined,
     matchStrategy: 'exact',
     phone: cleanPhone,
   });
@@ -45,8 +45,8 @@ try {
       campusId: guest.integrationInfo?.PCO?.primary_campus_id,
       createIfNotFound: false, // Don't create, just search
       email: cleanEmail,
-      firstName: guest.firstName.trim(),
-      lastName: guest.lastName?.trim() ?? undefined,
+      first_name: guest.first_name.trim(),
+      last_name: guest.last_name?.trim() ?? undefined,
       matchStrategy: 'fuzzy',
       phone: cleanPhone,
     });
@@ -60,8 +60,8 @@ try {
       campusId: guest.integrationInfo?.PCO?.primary_campus_id,
       createIfNotFound: true, // Now it's safe to create
       email: cleanEmail,
-      firstName: guest.firstName.trim(),
-      lastName: guest.lastName?.trim() ?? undefined,
+      first_name: guest.first_name.trim(),
+      last_name: guest.last_name?.trim() ?? undefined,
       matchStrategy: 'exact', // Use exact for creation
       phone: cleanPhone,
     });
@@ -75,8 +75,8 @@ try {
 ```typescript
 // Single call handles everything automatically
 const person = await client.people.findOrCreate({
-  firstName: guest.firstName.trim(),
-  lastName: guest.lastName?.trim() ?? undefined,
+  first_name: guest.first_name.trim(),
+  last_name: guest.last_name?.trim() ?? undefined,
   email: cleanEmail,
   phone: cleanPhone,
   campusId: guest.integrationInfo?.PCO?.primary_campus_id,
@@ -117,9 +117,9 @@ const person = await client.people.findOrCreate({
 // Enhanced error handling using PCO library's error categorization
 const errorContext = {
   email: cleanEmail,
-  firstName: guest.firstName,
+  first_name: guest.first_name,
   guestId: guest.id,
-  lastName: guest.lastName,
+  last_name: guest.last_name,
   operation: 'person_find_or_create',
   phone: cleanPhone,
 };
@@ -246,14 +246,14 @@ export default async function getPCOPerson(
   // Step 3: Use built-in findOrCreate to search for existing person OR create new one
   log.info('[PERSON_SEARCH] Searching for existing person before creating new one', {
     email: cleanEmail,
-    firstName: guest.firstName,
+    first_name: guest.first_name,
     guestId: guest.id,
-    lastName: guest.lastName,
+    last_name: guest.last_name,
     phone: cleanPhone,
   });
 
   // Ensure we have at least a first name for person creation
-  if (!guest.firstName?.trim()) {
+  if (!guest.first_name?.trim()) {
     throw new Error('First name is required to create PCO person');
   }
 
@@ -269,8 +269,8 @@ export default async function getPCOPerson(
         campusId: guest.integrationInfo?.PCO?.primary_campus_id,
         createIfNotFound: false, // Don't create, just search
         email: cleanEmail,
-        firstName: guest.firstName.trim(),
-        lastName: guest.lastName?.trim() ?? undefined,
+        first_name: guest.first_name.trim(),
+        last_name: guest.last_name?.trim() ?? undefined,
         matchStrategy: 'exact',
         phone: cleanPhone,
       });
@@ -285,8 +285,8 @@ export default async function getPCOPerson(
           campusId: guest.integrationInfo?.PCO?.primary_campus_id,
           createIfNotFound: false, // Don't create, just search
           email: cleanEmail,
-          firstName: guest.firstName.trim(),
-          lastName: guest.lastName?.trim() ?? undefined,
+          first_name: guest.first_name.trim(),
+          last_name: guest.last_name?.trim() ?? undefined,
           matchStrategy: 'fuzzy',
           phone: cleanPhone,
         });
@@ -300,8 +300,8 @@ export default async function getPCOPerson(
           campusId: guest.integrationInfo?.PCO?.primary_campus_id,
           createIfNotFound: true, // Now it's safe to create
           email: cleanEmail,
-          firstName: guest.firstName.trim(),
-          lastName: guest.lastName?.trim() ?? undefined,
+          first_name: guest.first_name.trim(),
+          last_name: guest.last_name?.trim() ?? undefined,
           matchStrategy: 'exact', // Use exact for creation
           phone: cleanPhone,
         });
@@ -342,23 +342,23 @@ export default async function getPCOPerson(
   const cleanEmail = validateEmail(guest.email);
   const cleanPhone = validatePhone(guest.phone);
 
-  if (!guest.firstName?.trim()) {
+  if (!guest.first_name?.trim()) {
     throw new Error('First name is required to create PCO person');
   }
 
   // Step 3: Use the fixed findOrCreate - it handles everything!
   log.info('[PERSON_FIND_OR_CREATE] Using findOrCreate with fixed matching', {
     email: cleanEmail,
-    firstName: guest.firstName,
+    first_name: guest.first_name,
     guestId: guest.id,
-    lastName: guest.lastName,
+    last_name: guest.last_name,
     phone: cleanPhone,
   });
 
   try {
     const person = await client.people.findOrCreate({
-      firstName: guest.firstName.trim(),
-      lastName: guest.lastName?.trim() ?? undefined,
+      first_name: guest.first_name.trim(),
+      last_name: guest.last_name?.trim() ?? undefined,
       email: cleanEmail,
       phone: cleanPhone,
       campusId: guest.integrationInfo?.PCO?.primary_campus_id,
@@ -374,9 +374,9 @@ export default async function getPCOPerson(
   } catch (error) {
     log.error('[PERSON_ERROR] findOrCreate failed', error, {
       email: cleanEmail,
-      firstName: guest.firstName,
+      first_name: guest.first_name,
       guestId: guest.id,
-      lastName: guest.lastName,
+      last_name: guest.last_name,
       phone: cleanPhone,
     });
 

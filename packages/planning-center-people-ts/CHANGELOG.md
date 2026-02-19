@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [4.0.0] - 2026-02-18
+
+### ⚠️ Breaking changes
+
+- **Requires base 2.x**: This release depends on `@rachelallyson/planning-center-base-ts` **^2.0.0**. Base 2.0.0 removed the event system and batch operations and changed the HTTP client constructor; upgrading to this release will upgrade base and is therefore a breaking change.
+- **`getById(id, include?)` → `getById(id, options?)`**: On all resource modules (people, households, lists, workflows, notes, campus, forms, reports), the last argument is now an options object instead of a bare `include` array. Use `getById(id, { include: ['primary_campus', 'household'] })` instead of `getById(id, ['primary_campus', 'household'])`. For **service-time** (campus-scoped), use `getById(campusId, id, { include: ['campus'] })` instead of `getById(campusId, id, ['campus'])`. Omitting the last argument is unchanged.
+- **Client: no event system or batch**: The client no longer exposes `on`, `off`, `emit`, or `batch`; aligns with base 2.x. Use the base package directly if you need events or batch.
+- **Error handling**: **`PcoError`** and **`ErrorCategory`** have been removed. Use **`PcoApiError`** from this package (re-exported from base). Check `error.status` (e.g. 422, 429) instead of `error.category`.
+- **Removed exports**: Removed `auth.ts`, `client-manager.ts`, `core.ts`, `error-handling.ts`, `error-scenarios.ts`, `performance.ts`, the entire `src/testing/` directory, and `types/json-api.ts`. Use base package types where applicable.
+- **Included-data helpers**: `findIncluded`, `resolveIncluded`, and `createIncludedLookup` removed. Use `resolveIncluded`, `flattenResource`, or `mapIncludedToRelationships` from `@rachelallyson/planning-center-base-ts`. This package still re-exports `mapIncludedToRelationships`.
+
+### Changed
+
+- **Alignment with base**: Client config and examples updated to match base: `baseURL`, `timeout`, `debug`; see docs/reference/config for the full shape.
+- **API options**: All list/single methods use typed option types from `types/api-options` (e.g. `PersonGetByIdOptions`, `HouseholdGetPageOptions`). Options use `per_page` and `page`; include is passed via the options object.
+- **Helpers**: Fields module uses shared file helpers from `helpers.ts`; `getMimeType` exported. Age and contact helpers accept `string | null | undefined` where API types allow null.
+- **Modules and types**: Refactored for consistency with check-ins (namespace imports, inferred return types). CONTRIBUTING, MIGRATION_GUIDE, README, and examples updated.
+
 ## [3.1.1] - 2026-02-10
 
 ### Changed
@@ -22,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependency
 
-- **Base package**: `@rachelallyson/planning-center-base-ts` dependency updated to `^1.1.3` (from `^1.1.0`) for consistency with the latest base release. No API or behavior changes in this release.
+- **Core package**: `@rachelallyson/planning-center-base-ts` dependency updated to `^1.1.3` (from `^1.1.0`) for consistency with the latest core release. No API or behavior changes in this release.
 
 ## [3.1.0] - 2026-02-05
 
@@ -39,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Stricter list options**: List and page options (e.g. `PersonListOptions`, `WorkflowPageOptions`) are fully typed per endpoint. Types such as `PersonInclude`, `PersonOrderField`, `PersonWhereClause` (and equivalents for other resources) are exported for better autocomplete and type safety.
 - **Included-data helpers**: `findIncluded`, `resolveIncluded`, and `createIncludedLookup` are exported for working with JSON:API `included` data.
 - **Event types**: When you use `client.on('request:start', ...)` (and other events), TypeScript narrows the handler argument to the correct event type via overloads.
-- **`getPage()`** on all list-capable modules for single-page fetching (e.g. `client.people.getPage({ perPage: 25, page: 1, where: { status: 'active' } })`).
+- **`getPage()`** on all list-capable modules for single-page fetching (e.g. `client.people.getPage({ per_page: 25, page: 1, where: { status: 'active' } })`).
 
 ### Changed
 
@@ -49,11 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Low-level HTTP helpers** are no longer exported: `del`, `getAllPages`, `getList`, `getSingle`, `patch`, `post`. Use module methods or `createPcoClient` / `getRateLimitInfo` from core.
 - **Function-style API** has been removed: standalone functions such as `createPerson`, `getPerson`, `getHouseholds`, `getLists` are no longer exported. Use the client and its modules (e.g. `client.people.create`, `client.contacts.createEmail(personId, data)`, `client.households.getAll()`).
 - **`buildQueryParams`** is no longer exported from this package; use module methods and the exported option types. It remains available from `@rachelallyson/planning-center-base-ts` if needed.
-- **Modules**: All 11 modules now receive a config getter for debug and pass option objects into base for query building. See `MODULE_CHANGES.md` for a per-module summary.
+- **Modules**: All 11 modules now receive a config getter for debug and pass option objects into core for query building. See `MODULE_CHANGES.md` for a per-module summary.
 
 ### Breaking changes
 
-- **Response shape (flattened data)**: All methods now return **flattened** resources (from base `mapIncludedToRelationships`). Use `resource.first_name` instead of `resource.attributes.first_name`, and `resource.emails` instead of `resource.relationships.emails.data` and `response.included`. Applies to getById, getPage, getAll, create, and update responses.
+- **Response shape (flattened data)**: All methods now return **flattened** resources (from core `mapIncludedToRelationships`). Use `resource.first_name` instead of `resource.attributes.first_name`, and `resource.emails` instead of `resource.relationships.emails.data` and `response.included`. Applies to getById, getPage, getAll, create, and update responses.
 - **Contacts**: If you use `client.contacts.createEmail(data)` (or the same for phone/address/social profile), you must switch to `createEmail(personId, data)` (and similarly for `createPhoneNumber`, `createAddress`, `createSocialProfile`).
 - **Function API**: If you import the old function API (`createPerson`, `getPerson`, `getHouseholds`, `getLists`, etc.), replace those calls with the module API on a `PcoClient` instance.
 
@@ -83,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed `getAll()` Methods to Actually Get All Pages**: All `getAll()` methods now fetch all pages instead of just one
   - Fixed: `people.getAll()`, `workflows.getAll()`, `notes.getAll()`, `lists.getAll()`, `households.getAll()`, `campus.getAll()`, `forms.getAll()`, `reports.getAll()`, `service-time.getAll()`
   - Previously used `getList()` (one page), now uses `getAllPages()` (all pages)
-  - Note: `perPage` and `page` options are ignored when using `getAll()` - it automatically fetches all pages
+  - Note: `per_page` and `page` options are ignored when using `getAll()` - it automatically fetches all pages
 
 - **Removed `getAllPagesPaginated()` Methods**: Removed redundant `getAllPagesPaginated()` methods from all modules
   - `getAll()` now handles fetching all pages automatically
@@ -93,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Use `getAll()` when you need all pages automatically
   - Use `getPage()` when you need a specific page, custom per_page, or want to limit results
   - Available on: `people.getPage()`, `workflows.getPage()`, `notes.getPage()`, `lists.getPage()`, `households.getPage()`, `campus.getPage()`, `forms.getPage()`, `reports.getPage()`, `service-time.getPage()`
-  - Example: `client.people.getPage({ perPage: 25, page: 1, where: { status: 'active' } })`
+  - Example: `client.people.getPage({ per_page: 25, page: 1, where: { status: 'active' } })`
 
 - **Fixed `getAllFieldDefinitions()` Pagination**: Changed `include: ['tab']` to `include: 'tab'` to properly fetch all pages
   - `getAllPages()` expects query params where `include` is a comma-separated string, not an array
@@ -262,8 +282,8 @@ New exports from the package:
 - **📱 Phone Normalization**: Added phone normalization to improve search accuracy
   - New `normalizePhone()` helper function (normalizes to `+1XXXXXXXXXX` format)
   - Phone numbers are now normalized before search to improve PCO API search results
-- **✅ First Name Validation**: Added firstName validation in person creation
-  - Validates firstName is required before attempting person creation
+- **✅ First Name Validation**: Added first_name validation in person creation
+  - Validates first_name is required before attempting person creation
   - Provides clearer error messages: "First name is required to create a person"
   - Fails fast instead of waiting for API error response
 
@@ -650,8 +670,8 @@ No breaking changes - this is a bug fix release:
 ```typescript
 // This now works correctly (was broken in 2.6.0)
 const person = await client.people.findOrCreate({
-    firstName: 'John',
-    lastName: 'Doe',
+    first_name: 'John',
+    last_name: 'Doe',
     email: 'john@gmail.com
     phone: '555-1234',
     campusId: 'campus-123'  // NEW: Campus assignment support
@@ -865,16 +885,16 @@ This release introduces intelligent age-based person matching and precise name m
 ```typescript
 // Age preference matching
 const adultPerson = await client.people.findOrCreate({
-  firstName: 'Jane',
-  lastName: 'Smith',
+  first_name: 'Jane',
+  last_name: 'Smith',
   agePreference: 'adults', // Prefer 18+ years old
   matchStrategy: 'fuzzy'
 });
 
 // Age range matching
 const youngAdult = await client.people.findOrCreate({
-  firstName: 'Alice',
-  lastName: 'Brown',
+  first_name: 'Alice',
+  last_name: 'Brown',
   minAge: 20,
   maxAge: 30,
   matchStrategy: 'fuzzy'
@@ -882,8 +902,8 @@ const youngAdult = await client.people.findOrCreate({
 
 // Birth year matching
 const millennial = await client.people.findOrCreate({
-  firstName: 'David',
-  lastName: 'Wilson',
+  first_name: 'David',
+  last_name: 'Wilson',
   birthYear: 1990,
   matchStrategy: 'fuzzy'
 });
@@ -1325,7 +1345,7 @@ const client = new PcoClient({
     }
 });
 
-const people = await client.people.getAll({ perPage: 10 });
+const people = await client.people.getAll({ per_page: 10 });
 const person = await client.people.create({ first_name: 'John', last_name: 'Doe' });
 ```
 

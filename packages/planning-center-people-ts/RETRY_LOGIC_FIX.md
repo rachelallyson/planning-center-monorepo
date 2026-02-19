@@ -40,8 +40,8 @@ Retry delays: 10s → 15s → 22.5s → 33.75s → 50.6s (total ~131s, capped at
 const person = await client.people.findOrCreate({
   email: 'test@gmail.com',
   phone: '+1234567890',
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   createIfNotFound: false, // Will retry automatically
   matchStrategy: 'exact'
 });
@@ -53,8 +53,8 @@ const person = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   email: 'test@gmail.com',
   phone: '+1234567890',
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   createIfNotFound: false,
   matchStrategy: 'exact',
   retryConfig: {
@@ -72,8 +72,8 @@ const person = await client.people.findOrCreate({
 const person = await client.people.findOrCreate({
   email: 'test@gmail.com',
   phone: '+1234567890',
-  firstName: 'John',
-  lastName: 'Doe',
+  first_name: 'John',
+  last_name: 'Doe',
   createIfNotFound: false,
   retryConfig: {
     enabled: false // Disable automatic retries
@@ -96,7 +96,7 @@ while (attempts < maxAttempts) {
     person = await client.people.findOrCreate({
       email: guest.email,
       phone: guest.phone,
-      firstName: guest.firstName,
+      first_name: guest.first_name,
       createIfNotFound: false,
       matchStrategy: 'exact'
     });
@@ -108,7 +108,7 @@ while (attempts < maxAttempts) {
       person = await client.people.findOrCreate({
         email: guest.email,
         phone: guest.phone,
-        firstName: guest.firstName,
+        first_name: guest.first_name,
         createIfNotFound: true, // Creates duplicate!
         matchStrategy: 'exact'
       });
@@ -128,7 +128,7 @@ try {
   const person = await client.people.findOrCreate({
     email: guest.email,
     phone: guest.phone,
-    firstName: guest.firstName,
+    first_name: guest.first_name,
     createIfNotFound: false, // Retry logic activates automatically
     matchStrategy: 'exact',
     retryConfig: {
@@ -142,7 +142,7 @@ try {
   const person = await client.people.findOrCreate({
     email: guest.email,
     phone: guest.phone,
-    firstName: guest.firstName,
+    first_name: guest.first_name,
     createIfNotFound: true, // Safe to create now
     matchStrategy: 'exact'
   });
