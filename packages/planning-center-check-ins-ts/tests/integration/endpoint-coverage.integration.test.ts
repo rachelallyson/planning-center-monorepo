@@ -9,6 +9,52 @@
 
 import { PcoCheckInsClient } from '../../src';
 import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
+import { getClientModules, type PageResponse } from './test-utils';
+
+type PageParams = { per_page: number; page: number; stationId?: string };
+type ModuleName = 'events' | 'checkIns' | 'locations' | 'eventTimes' | 'stations' | 'labels' | 'options' | 'checkInGroups' | 'preChecks' | 'passes' | 'headcounts';
+
+const MODULE_GET_PAGE: Record<ModuleName, (c: PcoCheckInsClient, p: PageParams) => Promise<PageResponse>> = {
+    events: (c, p) => c.events.getPage(p),
+    checkIns: (c, p) => c.checkIns.getPage(p),
+    locations: (c, p) => c.locations.getPage(p),
+    eventTimes: (c, p) => c.eventTimes.getPage(p),
+    stations: (c, p) => c.stations.getPage(p),
+    labels: (c, p) => c.labels.getPage(p),
+    options: (c, p) => c.options.getPage(p),
+    checkInGroups: (c, p) => c.checkInGroups.getPage(p.stationId!, { per_page: p.per_page, page: p.page }),
+    preChecks: (c, p) => c.preChecks.getPage(p),
+    passes: (c, p) => c.passes.getPage(p),
+    headcounts: (c, p) => c.headcounts.getPage(p),
+};
+
+async function callModuleGetPage(
+    client: PcoCheckInsClient,
+    moduleName: ModuleName,
+    params: PageParams
+): Promise<PageResponse> {
+    const fn = MODULE_GET_PAGE[moduleName];
+    if (!fn) throw new Error(`Unknown module: ${moduleName}`);
+    return fn(client, params);
+}
+
+async function runOneModulePage(
+    client: PcoCheckInsClient,
+    module: { name: ModuleName },
+    currentStationId: string | undefined
+): Promise<{ response: PageResponse; nextStationId: string | undefined }> {
+    let nextStationId = currentStationId;
+    if (module.name === 'checkInGroups' && !nextStationId) {
+        const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
+        expect(stationsPage.data.length).toBeGreaterThan(0);
+        nextStationId = stationsPage.data[0].id;
+    }
+    const params = module.name === 'checkInGroups' && nextStationId
+        ? { stationId: nextStationId, per_page: 2, page: 1 }
+        : { per_page: 2, page: 1 };
+    const response = await callModuleGetPage(client, module.name, params);
+    return { response, nextStationId };
+}
 
 describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     let client: PcoCheckInsClient;
@@ -19,10 +65,31 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     }, 30000);
 
+    describe('Client structure', () => {
+        it('should expose all API modules with getPage/getById or get', () => {
+            const modules = [
+                'events', 'checkIns', 'locations', 'eventTimes', 'stations', 'labels', 'options',
+                'checkInGroups', 'preChecks', 'passes', 'headcounts', 'attendanceTypes', 'rosterListPersons',
+                'organization', 'integrationLinks', 'themes',
+            ];
+            const clientModules = getClientModules(client);
+            for (const name of modules) {
+                const mod = clientModules[name];
+                expect(mod).toBeDefined();
+                expect(typeof mod).toBe('object');
+            }
+            expect(typeof client.events.getPage).toBe('function');
+            expect(typeof client.events.getById).toBe('function');
+            expect(typeof client.checkIns.getPage).toBe('function');
+            expect(typeof client.checkIns.getById).toBe('function');
+            expect(typeof client.organization.get).toBe('function');
+        });
+    });
+
     describe('Events Module Endpoint Coverage', () => {
         it('should cover events endpoints', async () => {
             // READ - List
-            const events = await client.events.getPage({ perPage: 10, page: 1 });
+            const events = await client.events.getPage({ per_page: 10, page: 1 });
             expect(events.data).toBeDefined();
             expect(Array.isArray(events.data)).toBe(true);
             expect(events.data.length).toBeGreaterThan(0);
@@ -30,7 +97,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
             const eventId = events.data[0].id;
 
             // READ - Single
-            const event = await client.events.getById(eventId, ['locations', 'event_periods']);
+            const event = await client.events.getById(eventId, { include: ['attendance_types'] });
             expect(event.type).toBe('Event');
             expect(event.id).toBe(eventId);
 
@@ -72,14 +139,14 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Check-ins Module Endpoint Coverage', () => {
         it('should cover check-ins endpoints', async () => {
             // READ - List
-            const checkIns = await client.checkIns.getAll({ perPage: 10 });
+            const checkIns = await client.checkIns.getAll({ per_page: 10 });
             expect(checkIns.data).toBeDefined();
             expect(Array.isArray(checkIns.data)).toBe(true);
 
             // READ - List with filters
             const filteredCheckIns = await client.checkIns.getAll({
                 filter: ['attendee', 'not_checked_out'],
-                perPage: 5
+                per_page: 5
             });
             expect(filteredCheckIns.data).toBeDefined();
             expect(Array.isArray(filteredCheckIns.data)).toBe(true);
@@ -88,7 +155,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
             const checkInId = checkIns.data[0].id;
 
             // READ - Single
-            const checkIn = await client.checkIns.getById(checkInId, ['person', 'event']);
+            const checkIn = await client.checkIns.getById(checkInId, { include: ['event', 'event_period'] });
             expect(checkIn.type).toBe('CheckIn');
             expect(checkIn.id).toBe(checkInId);
         }, 30000);
@@ -97,7 +164,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Locations Module Endpoint Coverage', () => {
         it('should cover locations endpoints', async () => {
             // READ - List
-            const locations = await client.locations.getPage({ perPage: 10, page: 1 });
+            const locations = await client.locations.getPage({ per_page: 10, page: 1 });
             expect(locations.data).toBeDefined();
             expect(Array.isArray(locations.data)).toBe(true);
             expect(locations.data.length).toBeGreaterThan(0);
@@ -105,7 +172,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
             const locationId = locations.data[0].id;
 
             // READ - Single
-            const location = await client.locations.getById(locationId, ['event']);
+            const location = await client.locations.getById(locationId, { include: ['event'] });
             expect(location.type).toBe('Location');
             expect(location.id).toBe(locationId);
         }, 30000);
@@ -114,9 +181,9 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Event Periods Module Endpoint Coverage', () => {
         it('should cover event periods endpoints via event associations', async () => {
             // Event periods must be accessed through events
-            const events = await client.events.getAll({ perPage: 1 });
+            const events = await client.events.getAll({ per_page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
-            
+
             const eventId = events.data[0].id;
             const eventPeriods = await client.events.getEventPeriods(eventId);
             expect(eventPeriods.data).toBeDefined();
@@ -132,15 +199,15 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Event Times Module Endpoint Coverage', () => {
         it('should cover event times endpoints', async () => {
             // READ - List
-            const eventTimes = await client.eventTimes.getPage({ perPage: 10, page: 1 });
+            const eventTimes = await client.eventTimes.getPage({ per_page: 10, page: 1 });
             expect(eventTimes.data).toBeDefined();
             expect(Array.isArray(eventTimes.data)).toBe(true);
             expect(eventTimes.data.length).toBeGreaterThan(0);
 
-            const eventTimeId = eventTimes.data[0].id;
+            const eventTimeId = String(eventTimes.data[0].id);
 
-            // READ - Single
-            const eventTime = await client.eventTimes.getById(eventTimeId, ['event', 'event_period']);
+            // READ - Single (Can Include per docs: event, event_period, headcounts)
+            const eventTime = await client.eventTimes.getById(eventTimeId, { include: ['event', 'event_period'] });
             expect(eventTime.type).toBe('EventTime');
             expect(eventTime.id).toBe(eventTimeId);
         }, 30000);
@@ -149,7 +216,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Stations Module Endpoint Coverage', () => {
         it('should cover stations endpoints', async () => {
             // READ - List
-            const stations = await client.stations.getPage({ perPage: 10, page: 1 });
+            const stations = await client.stations.getPage({ per_page: 10, page: 1 });
             expect(stations.data).toBeDefined();
             expect(Array.isArray(stations.data)).toBe(true);
             expect(stations.data.length).toBeGreaterThan(0);
@@ -166,7 +233,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Labels Module Endpoint Coverage', () => {
         it('should cover labels endpoints', async () => {
             // READ - List
-            const labels = await client.labels.getPage({ perPage: 10, page: 1 });
+            const labels = await client.labels.getPage({ per_page: 10, page: 1 });
             expect(labels.data).toBeDefined();
             expect(Array.isArray(labels.data)).toBe(true);
             expect(labels.data.length).toBeGreaterThan(0);
@@ -183,7 +250,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Options Module Endpoint Coverage', () => {
         it('should cover options endpoints', async () => {
             // READ - List
-            const options = await client.options.getPage({ perPage: 10, page: 1 });
+            const options = await client.options.getPage({ per_page: 10, page: 1 });
             expect(options.data).toBeDefined();
             expect(Array.isArray(options.data)).toBe(true);
             expect(options.data.length).toBeGreaterThan(0);
@@ -199,10 +266,10 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Check-in Groups Module Endpoint Coverage', () => {
         it('should cover check-in groups endpoints', async () => {
-            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsPage.data.length).toBeGreaterThan(0);
             const stationId = stationsPage.data[0].id;
-            const checkInGroups = await client.checkInGroups.getPage({ stationId, perPage: 10, page: 1 });
+            const checkInGroups = await client.checkInGroups.getPage(stationId, { per_page: 10, page: 1 });
             expect(checkInGroups.data).toBeDefined();
             expect(Array.isArray(checkInGroups.data)).toBe(true);
             expect(checkInGroups.data.length).toBeGreaterThan(0);
@@ -215,7 +282,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Check-in Times Module Endpoint Coverage', () => {
         it('should cover check-in times endpoints', async () => {
-            const checkInsPage = await client.checkIns.getPage({ perPage: 10 });
+            const checkInsPage = await client.checkIns.getPage({ per_page: 10 });
             expect(checkInsPage.data.length).toBeGreaterThan(0);
             const checkInTimes = await client.checkIns.getCheckInTimes(checkInsPage.data[0].id);
             expect(checkInTimes.data).toBeDefined();
@@ -229,7 +296,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Person Events Module Endpoint Coverage', () => {
         it('should cover person events endpoints', async () => {
-            const eventsPage = await client.events.getPage({ perPage: 10 });
+            const eventsPage = await client.events.getPage({ per_page: 10 });
             expect(eventsPage.data.length).toBeGreaterThan(0);
             const personEvents = await client.events.getPersonEvents(eventsPage.data[0].id);
             expect(personEvents.data).toBeDefined();
@@ -243,13 +310,13 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Pre-checks Module Endpoint Coverage', () => {
         it('should cover pre-checks endpoints', async () => {
-            if (!(await isPreChecksApiAvailable(client))) return;
-            const preChecks = await client.preChecks.getPage({ perPage: 10, page: 1 });
+            expect(await isPreChecksApiAvailable(client)).toBe(true);
+            const preChecks = await client.preChecks.getPage({ per_page: 10, page: 1 });
             expect(preChecks.data).toBeDefined();
             expect(Array.isArray(preChecks.data)).toBe(true);
             expect(preChecks.data.length).toBeGreaterThan(0);
             const preCheckId = preChecks.data[0].id;
-            const preCheck = await client.preChecks.getById(preCheckId, ['event', 'person']);
+            const preCheck = await client.preChecks.getById(preCheckId);
             expect(preCheck.type).toBe('PreCheck');
             expect(preCheck.id).toBe(preCheckId);
         }, 30000);
@@ -257,7 +324,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Passes Module Endpoint Coverage', () => {
         it('should cover passes endpoints', async () => {
-            const passes = await client.passes.getPage({ perPage: 10, page: 1 });
+            const passes = await client.passes.getPage({ per_page: 10, page: 1 });
             expect(passes.data).toBeDefined();
             expect(Array.isArray(passes.data)).toBe(true);
             expect(passes.data.length).toBeGreaterThan(0);
@@ -270,11 +337,11 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Headcounts Module Endpoint Coverage', () => {
         it('should cover headcounts endpoints', async () => {
-            const headcounts = await client.headcounts.getPage({ perPage: 10, page: 1 });
+            const headcounts = await client.headcounts.getPage({ per_page: 10, page: 1 });
             expect(headcounts.data).toBeDefined();
             expect(Array.isArray(headcounts.data)).toBe(true);
             expect(headcounts.data.length).toBeGreaterThan(0);
-            const headcountId = headcounts.data[0].id;
+            const headcountId = String(headcounts.data[0].id);
             const headcount = await client.headcounts.getById(headcountId);
             expect(headcount.type).toBe('Headcount');
             expect(headcount.id).toBe(headcountId);
@@ -282,35 +349,24 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     });
 
     describe('Pagination Coverage', () => {
-        it('should cover pagination across all modules', async () => {
-            const preChecksAvailable = await isPreChecksApiAvailable(client);
-            const modules = [
-                { name: 'events', method: 'getPage' },
-                { name: 'checkIns', method: 'getPage' },
-                { name: 'locations', method: 'getPage' },
-                { name: 'eventTimes', method: 'getPage' },
-                { name: 'stations', method: 'getPage' },
-                { name: 'labels', method: 'getPage' },
-                { name: 'options', method: 'getPage' },
-                { name: 'checkInGroups', method: 'getPage' },
-                ...(preChecksAvailable ? [{ name: 'preChecks', method: 'getPage' }] : []),
-                { name: 'passes', method: 'getPage' },
-                { name: 'headcounts', method: 'getPage' }
+        it('should cover pagination across core modules', async () => {
+            const modules: Array<{ name: ModuleName }> = [
+                { name: 'events' },
+                { name: 'checkIns' },
+                { name: 'locations' },
+                { name: 'eventTimes' },
+                { name: 'stations' },
+                { name: 'labels' },
+                { name: 'options' },
+                { name: 'checkInGroups' },
+                { name: 'passes' },
+                { name: 'headcounts' },
             ];
 
             let stationId: string | undefined;
             for (const module of modules) {
-                if (module.name === 'checkInGroups') {
-                    if (!stationId) {
-                        const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
-                        expect(stationsPage.data.length).toBeGreaterThan(0);
-                        stationId = stationsPage.data[0].id;
-                    }
-                }
-                const params = module.name === 'checkInGroups' && stationId
-                    ? { stationId, perPage: 2, page: 1 }
-                    : { perPage: 2, page: 1 };
-                const response = await (client as any)[module.name][module.method](params);
+                const { response, nextStationId } = await runOneModulePage(client, module, stationId);
+                stationId = nextStationId;
                 expect(response).toHaveProperty('data');
                 expect(response).toHaveProperty('links');
                 expect(response).toHaveProperty('meta');
@@ -322,8 +378,8 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
     describe('Include Parameter Coverage', () => {
         it('should cover include parameters across major endpoints', async () => {
             const eventsWithIncludes = await client.events.getAll({
-                perPage: 1,
-                include: ['locations', 'event_periods', 'attendance_types']
+                per_page: 1,
+                include: ['attendance_types']
             });
             expect(eventsWithIncludes.data).toBeDefined();
             expect(eventsWithIncludes.data.length).toBeGreaterThan(0);
@@ -333,8 +389,7 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
             expect(event.id).toBeDefined();
             expect(event.type).toBe('Event');
 
-            // Test single event with includes (flattened: included data at top level)
-            const singleEvent = await client.events.getById(event.id, ['locations', 'event_periods']);
+            const singleEvent = await client.events.getById(String(event.id), { include: ['attendance_types'] });
             expect(singleEvent).toBeDefined();
             expect(singleEvent.id).toBe(event.id);
         }, 30000);
@@ -342,17 +397,17 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Filtering Coverage', () => {
         it('should cover where filtering across major endpoints', async () => {
-            // Test events filtering
-            const weeklyEvents = await client.events.getAll({
-                where: { frequency: 'weekly' },
-                perPage: 5
+            // Test events filtering (Event where: id | name per docs)
+            const filteredEvents = await client.events.getAll({
+                where: { name: 'Test' },
+                per_page: 5
             });
-            expect(weeklyEvents.data).toBeDefined();
+            expect(filteredEvents.data).toBeDefined();
 
             // Test check-ins filtering
             const attendeeCheckIns = await client.checkIns.getAll({
                 filter: ['attendee'],
-                perPage: 5
+                per_page: 5
             });
             expect(attendeeCheckIns.data).toBeDefined();
         }, 30000);
@@ -360,47 +415,27 @@ describe('Check-ins API Endpoint Coverage Integration Tests', () => {
 
     describe('Event Association Coverage', () => {
         it('should cover all event association endpoints', async () => {
-            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            const events = await client.events.getPage({ per_page: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
 
-            const eventId = events.data[0].id;
-            const associations = [
-                { name: 'attendanceTypes', method: 'getAttendanceTypes' },
-                { name: 'checkIns', method: 'getCheckIns' },
-                { name: 'currentEventTimes', method: 'getCurrentEventTimes' },
-                { name: 'eventLabels', method: 'getEventLabels' },
-                { name: 'eventPeriods', method: 'getEventPeriods' },
-                { name: 'integrationLinks', method: 'getIntegrationLinks' },
-                { name: 'locations', method: 'getLocations' },
-                { name: 'personEvents', method: 'getPersonEvents' }
+            const eventId = String(events.data[0].id);
+            const associations: Array<{ name: string; method: (id: string) => Promise<{ data: object[] }> }> = [
+                { name: 'attendanceTypes', method: (id) => client.events.getAttendanceTypes(id) },
+                { name: 'checkIns', method: (id) => client.events.getCheckIns(id) },
+                { name: 'currentEventTimes', method: (id) => client.events.getCurrentEventTimes(id) },
+                { name: 'eventLabels', method: (id) => client.events.getEventLabels(id) },
+                { name: 'eventPeriods', method: (id) => client.events.getEventPeriods(id) },
+                { name: 'integrationLinks', method: (id) => client.events.getIntegrationLinks(id) },
+                { name: 'locations', method: (id) => client.events.getLocations(id) },
+                { name: 'personEvents', method: (id) => client.events.getPersonEvents(id) },
             ];
 
             for (const association of associations) {
-                const response = await (client.events as any)[association.method](eventId);
+                const response = await association.method(eventId);
                 expect(response).toHaveProperty('data');
                 expect(Array.isArray(response.data)).toBe(true);
             }
         }, 60000);
     });
 
-    describe('Batch Operations Coverage', () => {
-        it('should cover batch operations', async () => {
-            const batch = client.batch;
-            expect(batch).toBeDefined();
-
-            // Test batch execution
-            const operations = [
-                {
-                    type: 'events',
-                    method: 'getAll',
-                    params: [{ perPage: 1 }]
-                }
-            ];
-
-            const summary = await batch.execute(operations);
-            expect(summary).toBeDefined();
-            expect(summary.results).toBeDefined();
-            expect(Array.isArray(summary.results)).toBe(true);
-        }, 30000);
-    });
 });

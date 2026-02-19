@@ -1,10 +1,10 @@
 /**
- * v1.0.0 Check-Ins Client Tests
+ * Check-Ins Client Tests
  */
 
 import { PcoCheckInsClient } from '../src';
 
-describe('PcoCheckInsClient v1.0.0', () => {
+describe('PcoCheckInsClient', () => {
     let client: PcoCheckInsClient;
 
     beforeEach(() => {
@@ -19,8 +19,9 @@ describe('PcoCheckInsClient v1.0.0', () => {
     describe('Client Creation', () => {
         it('should create a client with personal access token configuration', () => {
             expect(client).toBeDefined();
-            expect(client.getConfig().auth.type).toBe('personal_access_token');
-            expect(client.getConfig().auth.personalAccessToken).toBe('test-token');
+            const auth = client.getConfig().auth;
+            expect(auth.type).toBe('personal_access_token');
+            expect(auth.type === 'personal_access_token' && auth.personalAccessToken).toBe('test-token');
         });
 
         it('should create a client with OAuth configuration', () => {
@@ -34,8 +35,9 @@ describe('PcoCheckInsClient v1.0.0', () => {
                 },
             });
 
-            expect(oauthClient.getConfig().auth.type).toBe('oauth');
-            expect(oauthClient.getConfig().auth.accessToken).toBe('test-token');
+            const oauthAuth = oauthClient.getConfig().auth;
+            expect(oauthAuth.type).toBe('oauth');
+            expect(oauthAuth.type === 'oauth' && oauthAuth.accessToken).toBe('test-token');
         });
 
         it('should create a client with basic auth configuration', () => {
@@ -47,8 +49,9 @@ describe('PcoCheckInsClient v1.0.0', () => {
                 },
             });
 
-            expect(basicClient.getConfig().auth.type).toBe('basic');
-            expect(basicClient.getConfig().auth.appId).toBe('test-app-id');
+            const basicAuth = basicClient.getConfig().auth;
+            expect(basicAuth.type).toBe('basic');
+            expect(basicAuth.type === 'basic' && basicAuth.appId).toBe('test-app-id');
         });
     });
 
@@ -73,76 +76,31 @@ describe('PcoCheckInsClient v1.0.0', () => {
             expect(client.organization).toBeDefined();
             expect(client.integrationLinks).toBeDefined();
             expect(client.themes).toBeDefined();
-            expect(client.batch).toBeDefined();
         });
 
         it('should have 16 modules', () => {
-            const modules = [
-                'events',
-                'checkIns',
-                'locations',
-                'eventTimes',
-                'stations',
-                'labels',
-                'options',
-                'checkInGroups',
-                'preChecks',
-                'passes',
-                'headcounts',
-                'attendanceTypes',
-                'rosterListPersons',
-                'organization',
-                'integrationLinks',
-                'themes',
-            ];
-
-            modules.forEach(moduleName => {
-                expect((client as any)[moduleName]).toBeDefined();
+            const clientModules: Record<string, object> = {
+                events: client.events,
+                checkIns: client.checkIns,
+                locations: client.locations,
+                eventTimes: client.eventTimes,
+                stations: client.stations,
+                labels: client.labels,
+                options: client.options,
+                checkInGroups: client.checkInGroups,
+                preChecks: client.preChecks,
+                passes: client.passes,
+                headcounts: client.headcounts,
+                attendanceTypes: client.attendanceTypes,
+                rosterListPersons: client.rosterListPersons,
+                organization: client.organization,
+                integrationLinks: client.integrationLinks,
+                themes: client.themes,
+            };
+            Object.values(clientModules).forEach(mod => {
+                expect(mod).toBeDefined();
             });
-        });
-    });
-
-    describe('Event System', () => {
-        it('should emit events for requests', () => {
-            // Test that event listeners can be set up
-            const startHandler = jest.fn();
-            const completeHandler = jest.fn();
-
-            client.on('request:start', startHandler);
-            client.on('request:complete', completeHandler);
-
-            expect(client.listenerCount('request:start')).toBe(1);
-            expect(client.listenerCount('request:complete')).toBe(1);
-
-            // Test that listeners can be removed
-            client.off('request:start', startHandler);
-            client.off('request:complete', completeHandler);
-
-            expect(client.listenerCount('request:start')).toBe(0);
-            expect(client.listenerCount('request:complete')).toBe(0);
-        });
-
-        it('should remove event listeners', () => {
-            const handler = jest.fn();
-
-            client.on('error', handler);
-            expect(client.listenerCount('error')).toBe(1);
-
-            client.off('error', handler);
-            expect(client.listenerCount('error')).toBe(0);
-        });
-
-        it('should remove all listeners', () => {
-            client.on('error', jest.fn());
-            client.on('auth:failure', jest.fn());
-
-            expect(client.listenerCount('error')).toBe(1);
-            expect(client.listenerCount('auth:failure')).toBe(1);
-
-            client.removeAllListeners();
-
-            expect(client.listenerCount('error')).toBe(0);
-            expect(client.listenerCount('auth:failure')).toBe(0);
+            expect(Object.keys(clientModules)).toHaveLength(16);
         });
     });
 
@@ -163,13 +121,7 @@ describe('PcoCheckInsClient v1.0.0', () => {
         });
     });
 
-    describe('Performance Metrics', () => {
-        it('should return performance metrics', () => {
-            const metrics = client.getPerformanceMetrics();
-            expect(metrics).toBeDefined();
-            expect(typeof metrics).toBe('object');
-        });
-
+    describe('Rate limit', () => {
         it('should return rate limit info', () => {
             const rateLimitInfo = client.getRateLimitInfo();
             expect(rateLimitInfo).toBeDefined();

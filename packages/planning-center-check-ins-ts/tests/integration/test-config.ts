@@ -2,52 +2,10 @@
  * Shared test configuration for Check-ins API integration tests
  */
 import { PcoCheckInsClient, type PcoCheckInsClientConfig } from '../../src';
-import { updateEnvTestFile, getCurrentTokens } from './env-updater';
+import { updateEnvTestFile } from './env-updater';
 
-/**
- * Create a PcoCheckInsClient with proper token refresh support for integration tests
- */
-export function createTestClient(): PcoCheckInsClient {
-    // Determine auth type based on available environment variables
-    // Prioritize Personal Access Token for Check-ins API due to OAuth scope issues
-    const hasOAuthToken = !!process.env.PCO_ACCESS_TOKEN;
-    const hasPersonalAccessToken = !!process.env.PCO_PERSONAL_ACCESS_TOKEN;
-
-    if (!hasPersonalAccessToken && !hasOAuthToken) {
-        throw new Error('Either PCO_PERSONAL_ACCESS_TOKEN or PCO_ACCESS_TOKEN must be set');
-    }
-
-    const config: PcoCheckInsClientConfig = hasPersonalAccessToken ? {
-        auth: {
-            type: 'personal_access_token',
-            personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
-            ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
-                personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
-            }),
-        },
-    } : hasOAuthToken ? {
-        auth: {
-            type: 'oauth',
-            accessToken: process.env.PCO_ACCESS_TOKEN!,
-            refreshToken: process.env.PCO_REFRESH_TOKEN,
-            onRefresh: async (newTokens) => {
-                console.log('🔄 Token refreshed successfully');
-                console.log('📝 Updating .env.test with new tokens...');
-
-                // Update the .env.test file with new tokens
-                await updateEnvTestFile({
-                    accessToken: newTokens.accessToken,
-                    refreshToken: newTokens.refreshToken,
-                });
-
-                console.log('✅ .env.test updated with new tokens');
-            },
-            onRefreshFailure: async (error) => {
-                console.error('❌ Token refresh failed:', error.message);
-                console.error('💡 You may need to re-authenticate or check your refresh token');
-            },
-        },
-    } : {
+function buildPatConfig(): PcoCheckInsClientConfig {
+    return {
         auth: {
             type: 'personal_access_token',
             personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
@@ -56,7 +14,39 @@ export function createTestClient(): PcoCheckInsClient {
             }),
         },
     };
+}
 
+function buildOAuthConfig(): PcoCheckInsClientConfig {
+    return {
+        auth: {
+            type: 'oauth',
+            accessToken: process.env.PCO_ACCESS_TOKEN!,
+            refreshToken: process.env.PCO_REFRESH_TOKEN ?? '',
+            onRefresh: async (newTokens) => {
+                await updateEnvTestFile({
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken,
+                });
+            },
+            onRefreshFailure: async () => {
+                // Token refresh failed; tests will fail on next authenticated request.
+            },
+        },
+    };
+}
+
+/**
+ * Create a PcoCheckInsClient with proper token refresh support for integration tests
+ */
+export function createTestClient(): PcoCheckInsClient {
+    const hasOAuthToken = !!process.env.PCO_ACCESS_TOKEN;
+    const hasPersonalAccessToken = !!process.env.PCO_PERSONAL_ACCESS_TOKEN;
+
+    if (!hasPersonalAccessToken && !hasOAuthToken) {
+        throw new Error('Either PCO_PERSONAL_ACCESS_TOKEN or PCO_ACCESS_TOKEN must be set');
+    }
+
+    const config = hasPersonalAccessToken ? buildPatConfig() : hasOAuthToken ? buildOAuthConfig() : buildPatConfig();
     return new PcoCheckInsClient(config);
 }
 
@@ -86,37 +76,34 @@ export function getTokenStatus(): {
     };
 }
 
+function isErrorWithStatus(o: object): o is { status: number } {
+    const desc = Object.getOwnPropertyDescriptor(o, 'status');
+    const status = desc?.value;
+    return typeof status === 'number';
+}
+
+/** Check if error object has status 404. */
+function is404Error(err: object): boolean {
+    return isErrorWithStatus(err) && err.status === 404;
+}
+
 /**
  * Check if the Pre-checks API is available (not 404).
  * Pre-checks can return 404 when the Church Center PreCheck feature is not enabled for the org.
  */
 export async function isPreChecksApiAvailable(client: PcoCheckInsClient): Promise<boolean> {
     try {
-        await client.preChecks.getPage({ perPage: 1, page: 1 });
+        await client.preChecks.getPage({ per_page: 1, page: 1 });
         return true;
-    } catch (err: unknown) {
-        const status = (err as { status?: number })?.status;
-        if (status === 404) return false;
+    } catch (err) {
+        if (err !== null && typeof err === 'object' && is404Error(err)) return false;
         throw err;
     }
 }
 
 /**
- * Log current authentication status
+ * Log current authentication status (no-op; logs are for debugging only per test standards).
  */
 export function logAuthStatus(): void {
-    const status = getTokenStatus();
-    console.log('🔐 Authentication Status:');
-    console.log(`   Available tokens: ${status.tokenTypes.join(', ')}`);
-    console.log(`   Using: ${status.hasPersonalAccessToken ? 'Personal Access Token' : 'OAuth'}`);
-
-    if (status.hasAccessToken && !status.hasRefreshToken) {
-        console.warn('⚠️  OAuth access token found but no refresh token - tokens will expire after 2 hours');
-    }
-
-    if (status.hasPersonalAccessToken) {
-        console.log('✅ Personal Access Token authentication enabled');
-    } else if (status.hasAccessToken && status.hasRefreshToken) {
-        console.log('✅ OAuth with refresh token support enabled');
-    }
+    // getTokenStatus() available for debugging if needed
 }

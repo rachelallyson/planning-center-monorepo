@@ -14,10 +14,16 @@ global.console = {
   error: jest.fn(),
 };
 
+function hasMockClear(fn: typeof globalThis.fetch): fn is typeof globalThis.fetch & { mockClear: () => void } {
+  if (typeof fn !== 'function' || fn === null) return false;
+  const desc = Object.getOwnPropertyDescriptor(fn, 'mockClear');
+  return typeof desc?.value === 'function';
+}
+
 // Reset all mocks before each test
 beforeEach(() => {
   jest.clearAllMocks();
-  (global.fetch as jest.Mock).mockClear();
+  if (hasMockClear(global.fetch)) global.fetch.mockClear();
 });
 
 // Clean up after all tests

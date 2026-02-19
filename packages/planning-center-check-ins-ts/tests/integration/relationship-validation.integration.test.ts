@@ -10,9 +10,21 @@
 import { PcoCheckInsClient } from '../../src';
 import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
 import {
-    validateRelationship,
     validateResourceStructure,
 } from '../type-validators';
+
+function expectMetaPaginationTypes(meta: {
+    count?: number;
+    total_count?: number;
+    total_pages?: number;
+    per_page?: number;
+    current_page?: number;
+}): void {
+    const keys: (keyof typeof meta)[] = ['count', 'total_count', 'total_pages', 'per_page', 'current_page'];
+    keys.forEach((k) => {
+        if (meta[k] !== undefined) expect(typeof meta[k]).toBe('number');
+    });
+}
 
 describe('Check-ins API Relationship Validation Integration Tests', () => {
     let client: PcoCheckInsClient;
@@ -26,31 +38,31 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('Event Relationships Structure Validation', () => {
         it('should validate event relationships structure', async () => {
             const response = await client.events.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['attendance_types', 'check_ins', 'locations', 'event_periods']
+                include: ['attendance_types']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const event = response.data[0];
             expect(event).toBeDefined();
             expect(event.id).toBeDefined();
             expect(event.type).toBe('Event');
-            // Flattened response: included data at top level (attendance_types, locations, etc.)
-            const hasIncluded = event.attendance_types !== undefined || event.locations !== undefined ||
-                event.event_periods !== undefined || event.check_ins !== undefined;
-            expect(hasIncluded || true).toBe(true);
+            if (event.attendance_types !== undefined) {
+                expect(Array.isArray(event.attendance_types) || typeof event.attendance_types === 'object').toBe(true);
+            }
         }, 30000);
 
         it('should validate relationship data structure', async () => {
             const response = await client.events.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
                 include: ['attendance_types']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const event = response.data[0];
-            if (event.attendance_types && Array.isArray(event.attendance_types)) {
-                event.attendance_types.forEach((at: any) => {
+            const attendanceTypes = event.attendance_types;
+            if (attendanceTypes && Array.isArray(attendanceTypes)) {
+                attendanceTypes.forEach((at: { type?: string; id?: string }) => {
                     expect(at).toHaveProperty('type');
                     expect(at).toHaveProperty('id');
                 });
@@ -61,9 +73,9 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('CheckIn Relationships Structure Validation', () => {
         it('should validate check-in relationships structure', async () => {
             const response = await client.checkIns.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['person', 'event', 'check_in_group', 'event_period']
+                include: ['event', 'event_period']
             });
             expect(response.data).toBeDefined();
             expect(Array.isArray(response.data)).toBe(true);
@@ -78,54 +90,39 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('Included Resources Validation', () => {
         it('should validate included resources structure', async () => {
             const response = await client.events.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['attendance_types', 'locations', 'event_periods']
+                include: ['attendance_types']
             });
             expect(response.data.length).toBeGreaterThan(0);
-            if (response.included) {
-                expect(Array.isArray(response.included)).toBe(true);
-                response.included.forEach((included) => {
-                    expect(included).toHaveProperty('type');
-                    expect(included).toHaveProperty('id');
-                    expect(typeof included.type).toBe('string');
-                    expect(typeof included.id).toBe('string');
-                    expect([
-                        'AttendanceType', 'CheckIn', 'Location', 'EventPeriod', 'EventTime',
-                        'Station', 'Label', 'Option', 'CheckInGroup', 'CheckInTime',
-                        'PersonEvent', 'PreCheck', 'Pass', 'Headcount', 'Event'
-                    ]).toContain(included.type);
-                });
-            }
+            // Client returns flattened data only (included is merged into data, not returned)
         }, 30000);
 
         it('should validate attendance type included resources', async () => {
-            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            const events = await client.events.getPage({ per_page: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
             const eventId = events.data[0].id;
             const response = await client.events.getAttendanceTypes(eventId);
-            if (response.included) {
-                const attendanceTypes = response.included.filter((included: any) => included.type === 'AttendanceType');
-                attendanceTypes.forEach((attendanceType: any) => {
-                    validateResourceStructure(attendanceType, 'AttendanceType');
-                    if (attendanceType.name !== undefined) {
-                        expect(typeof attendanceType.name).toBe('string');
-                    }
-                });
-            }
+            // Flattened: attendance types are in response.data
+            response.data.forEach((attendanceType) => {
+                validateResourceStructure(attendanceType, 'AttendanceType');
+                if (attendanceType.name !== undefined) {
+                    expect(typeof attendanceType.name).toBe('string');
+                }
+            });
         }, 30000);
 
         it('should validate location included resources', async () => {
             const response = await client.locations.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
                 include: ['event']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const location = response.data[0];
             validateResourceStructure(location, 'Location');
-            if ((location as any).name !== undefined) {
-                expect(typeof (location as any).name).toBe('string');
+            if (location.name !== undefined) {
+                expect(typeof location.name).toBe('string');
             }
         }, 30000);
     });
@@ -133,23 +130,22 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('Event Period Relationships Validation', () => {
         it('should validate event period relationships', async () => {
             // Event periods must be accessed through events
-            const events = await client.events.getAll({ perPage: 1 });
+            const events = await client.events.getAll({ per_page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
-            
+
             const eventId = events.data[0].id;
             const response = await client.events.getEventPeriods(eventId);
             expect(response.data.length).toBeGreaterThan(0);
             const eventPeriod = response.data[0];
 
-            if (eventPeriod.relationships?.event) {
-                expect(eventPeriod.relationships.event).toHaveProperty('data');
-                expect(eventPeriod.relationships.event).toHaveProperty('links');
-                validateRelationship(eventPeriod.relationships.event);
+            // Flattened: relationships at top level (event, event_times)
+            if (eventPeriod.event != null && typeof eventPeriod.event === 'object') {
+                validateResourceStructure(eventPeriod.event, 'Event');
             }
-            if (eventPeriod.relationships?.event_times) {
-                expect(eventPeriod.relationships.event_times).toHaveProperty('data');
-                expect(eventPeriod.relationships.event_times).toHaveProperty('links');
-                validateRelationship(eventPeriod.relationships.event_times);
+            if (eventPeriod.event_times != null && Array.isArray(eventPeriod.event_times)) {
+                eventPeriod.event_times.forEach((et) =>
+                    validateResourceStructure(et, 'EventTime')
+                );
             }
         }, 30000);
     });
@@ -157,22 +153,19 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('Event Time Relationships Validation', () => {
         it('should validate event time relationships', async () => {
             const response = await client.eventTimes.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['event', 'event_period', 'check_ins']
+                include: ['event', 'event_period']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const eventTime = response.data[0];
 
-            if (eventTime.relationships?.event) {
-                expect(eventTime.relationships.event).toHaveProperty('data');
-                expect(eventTime.relationships.event).toHaveProperty('links');
-                validateRelationship(eventTime.relationships.event);
+            // Flattened: relationships at top level (event, event_period); docs Can Include: event, event_period, headcounts
+            if (eventTime.event != null && typeof eventTime.event === 'object') {
+                validateResourceStructure(eventTime.event, 'Event');
             }
-            if (eventTime.relationships?.event_period) {
-                expect(eventTime.relationships.event_period).toHaveProperty('data');
-                expect(eventTime.relationships.event_period).toHaveProperty('links');
-                validateRelationship(eventTime.relationships.event_period);
+            if (eventTime.event_period != null && typeof eventTime.event_period === 'object') {
+                validateResourceStructure(eventTime.event_period, 'EventPeriod');
             }
         }, 30000);
     });
@@ -180,29 +173,30 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
     describe('Station Relationships Validation', () => {
         it('should validate station relationships', async () => {
             const response = await client.stations.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['check_ins']
+                include: ['event', 'location']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const station = response.data[0];
 
-            if (station.relationships?.check_ins) {
-                expect(station.relationships.check_ins).toHaveProperty('data');
-                expect(station.relationships.check_ins).toHaveProperty('links');
-                validateRelationship(station.relationships.check_ins);
+            // Flattened: relationships at top level; docs Can Include: event, location, print_station, theme
+            if (station.event != null && typeof station.event === 'object') {
+                validateResourceStructure(station.event, 'Event');
+            }
+            if (station.location != null && typeof station.location === 'object') {
+                validateResourceStructure(station.location, 'Location');
             }
         }, 30000);
     });
 
     describe('CheckIn Group Relationships Validation', () => {
         it('should validate check-in group relationships', async () => {
-            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsPage.data.length).toBeGreaterThan(0);
             const stationId = stationsPage.data[0].id;
-            const response = await client.checkInGroups.getPage({
-                stationId,
-                perPage: 1,
+            const response = await client.checkInGroups.getPage(stationId, {
+                per_page: 1,
                 page: 1,
                 include: ['check_ins']
             });
@@ -216,7 +210,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
     describe('CheckIn Time Relationships Validation', () => {
         it('should validate check-in time relationships', async () => {
-            const checkInsPage = await client.checkIns.getPage({ perPage: 1 });
+            const checkInsPage = await client.checkIns.getPage({ per_page: 1 });
             expect(checkInsPage.data.length).toBeGreaterThan(0);
             const response = await client.checkIns.getCheckInTimes(checkInsPage.data[0].id);
             expect(response.data.length).toBeGreaterThan(0);
@@ -229,7 +223,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
     describe('Person Event Relationships Validation', () => {
         it('should validate person event relationships', async () => {
-            const eventsPage = await client.events.getPage({ perPage: 1 });
+            const eventsPage = await client.events.getPage({ per_page: 1 });
             expect(eventsPage.data.length).toBeGreaterThan(0);
             const response = await client.events.getPersonEvents(eventsPage.data[0].id);
             expect(response.data.length).toBeGreaterThan(0);
@@ -242,12 +236,8 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
     describe('PreCheck Relationships Validation', () => {
         it('should validate pre-check relationships', async () => {
-            if (!(await isPreChecksApiAvailable(client))) return;
-            const response = await client.preChecks.getPage({
-                perPage: 1,
-                page: 1,
-                include: ['event', 'person']
-            });
+            expect(await isPreChecksApiAvailable(client)).toBe(true);
+            const response = await client.preChecks.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const preCheck = response.data[0];
             expect(preCheck).toBeDefined();
@@ -258,7 +248,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
 
     describe('JSON:API Compliance Validation', () => {
         it('should validate JSON:API document structure', async () => {
-            const response = await client.events.getAll({ perPage: 1 });
+            const response = await client.events.getAll({ per_page: 1 });
 
             // Validate top-level structure
             expect(response).toHaveProperty('data');
@@ -275,7 +265,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
         }, 30000);
 
         it('should validate JSON:API links structure', async () => {
-            const response = await client.events.getAll({ perPage: 1 });
+            const response = await client.events.getAll({ per_page: 1 });
 
             if (response.links) {
                 // Validate links are strings or objects
@@ -290,33 +280,15 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
         }, 30000);
 
         it('should validate JSON:API meta structure', async () => {
-            const response = await client.events.getAll({ perPage: 1 });
-
-            if (response.meta) {
-                // Validate meta contains expected pagination fields
-                if (response.meta.count !== undefined) {
-                    expect(typeof response.meta.count).toBe('number');
-                }
-                if (response.meta.total_count !== undefined) {
-                    expect(typeof response.meta.total_count).toBe('number');
-                }
-                if (response.meta.total_pages !== undefined) {
-                    expect(typeof response.meta.total_pages).toBe('number');
-                }
-                if (response.meta.per_page !== undefined) {
-                    expect(typeof response.meta.per_page).toBe('number');
-                }
-                if (response.meta.current_page !== undefined) {
-                    expect(typeof response.meta.current_page).toBe('number');
-                }
-            }
+            const response = await client.events.getAll({ per_page: 1 });
+            if (response.meta) expectMetaPaginationTypes(response.meta);
         }, 30000);
     });
 
     describe('Relationship Link Validation', () => {
         it('should validate relationship links are accessible', async () => {
             const response = await client.events.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
                 include: ['attendance_types']
             });
@@ -326,7 +298,7 @@ describe('Check-ins API Relationship Validation Integration Tests', () => {
             expect(event.id).toBeDefined();
             if (event.links?.self) {
                 expect(typeof event.links.self).toBe('string');
-                expect((event.links as any).self).toContain('/check-ins/v2/events/');
+                expect(event.links.self).toContain('/check-ins/v2/events/');
             }
         }, 30000);
     });

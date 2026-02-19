@@ -16,30 +16,23 @@ export async function updateEnvTestFile(tokenUpdate: TokenUpdate): Promise<void>
     // Look for .env.test in the root directory (three levels up from this file)
     const envPath = path.join(__dirname, '../../../../.env.test');
 
-    try {
-        // Read the current .env.test file
-        let envContent = '';
-        if (fs.existsSync(envPath)) {
-            envContent = fs.readFileSync(envPath, 'utf8');
-        }
-
-        // Update or add the token values
-        if (tokenUpdate.accessToken) {
-            envContent = updateEnvVariable(envContent, 'PCO_ACCESS_TOKEN', tokenUpdate.accessToken);
-        }
-
-        if (tokenUpdate.refreshToken) {
-            envContent = updateEnvVariable(envContent, 'PCO_REFRESH_TOKEN', tokenUpdate.refreshToken);
-        }
-
-        // Write the updated content back to the file
-        fs.writeFileSync(envPath, envContent, 'utf8');
-
-        console.log('✅ Updated .env.test file with new tokens');
-    } catch (error) {
-        console.error('❌ Failed to update .env.test file:', error);
-        // Don't throw - this is not critical for test execution
+    // Read the current .env.test file
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, 'utf8');
     }
+
+    // Update or add the token values
+    if (tokenUpdate.accessToken) {
+        envContent = updateEnvVariable(envContent, 'PCO_ACCESS_TOKEN', tokenUpdate.accessToken);
+    }
+
+    if (tokenUpdate.refreshToken) {
+        envContent = updateEnvVariable(envContent, 'PCO_REFRESH_TOKEN', tokenUpdate.refreshToken);
+    }
+
+    // Write the updated content back to the file
+    fs.writeFileSync(envPath, envContent, 'utf8');
 }
 
 /**

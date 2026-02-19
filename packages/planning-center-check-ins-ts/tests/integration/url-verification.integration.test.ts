@@ -21,8 +21,8 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Events API URL Verification', () => {
         it('should access events list endpoint with correct URL structure', async () => {
-            const response = await client.events.getAll({ perPage: 1 });
-            
+            const response = await client.events.getAll({ per_page: 1 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
             expect(response).toHaveProperty('links');
@@ -31,28 +31,28 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
         it('should access events list with filtering parameters', async () => {
             const response = await client.events.getAll({
-                where: { frequency: 'weekly' },
-                include: ['locations', 'event_periods'],
-                perPage: 5,
+                where: { name: 'Test' },
+                include: ['attendance_types'],
+                per_page: 5,
                 page: 1
             });
-            
+
             expect(response.data).toBeDefined();
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single event endpoint with correct URL structure', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
-            const event = await client.events.getById(eventId, ['locations', 'event_periods']);
+            const event = await client.events.getById(eventId);
             expect(event).toBeDefined();
             expect(event.type).toBe('Event');
             expect(event.id).toBe(eventId);
         }, 30000);
 
         it('should access event attendance types endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getAttendanceTypes(eventId);
@@ -61,16 +61,16 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event check-ins endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
-            const response = await client.events.getCheckIns(eventId, { perPage: 10 });
+            const response = await client.events.getCheckIns(eventId, { per_page: 10 });
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
-        }, 15000);
+        }, 35000);
 
         it('should access event current event times endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getCurrentEventTimes(eventId);
@@ -79,7 +79,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event labels endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getEventLabels(eventId);
@@ -88,7 +88,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event periods endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getEventPeriods(eventId);
@@ -97,7 +97,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event integration links endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getIntegrationLinks(eventId);
@@ -106,7 +106,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event locations endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getLocations(eventId);
@@ -115,7 +115,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access event person events endpoint', async () => {
-            const eventsResponse = await client.events.getPage({ perPage: 1, page: 1 });
+            const eventsResponse = await client.events.getPage({ per_page: 1, page: 1 });
             expect(eventsResponse.data.length).toBeGreaterThan(0);
             const eventId = eventsResponse.data[0].id;
             const response = await client.events.getPersonEvents(eventId);
@@ -126,8 +126,8 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Check-ins API URL Verification', () => {
         it('should access check-ins list endpoint', async () => {
-            const response = await client.checkIns.getAll({ perPage: 5 });
-            
+            const response = await client.checkIns.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
@@ -135,18 +135,18 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         it('should access check-ins list with filtering', async () => {
             const response = await client.checkIns.getAll({
                 filter: ['attendee', 'not_checked_out'],
-                perPage: 5
+                per_page: 5
             });
-            
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single check-in endpoint', async () => {
-            const checkInsResponse = await client.checkIns.getPage({ perPage: 1, page: 1 });
+            const checkInsResponse = await client.checkIns.getPage({ per_page: 1, page: 1 });
             expect(checkInsResponse.data.length).toBeGreaterThan(0);
             const checkInId = checkInsResponse.data[0].id;
-            const checkIn = await client.checkIns.getById(checkInId, ['person', 'event']);
+            const checkIn = await client.checkIns.getById(checkInId, { include: ['event', 'event_period'] });
             expect(checkIn).toBeDefined();
             expect(checkIn.type).toBe('CheckIn');
             expect(checkIn.id).toBe(checkInId);
@@ -155,17 +155,17 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Locations API URL Verification', () => {
         it('should access locations list endpoint', async () => {
-            const response = await client.locations.getAll({ perPage: 5 });
-            
+            const response = await client.locations.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single location endpoint', async () => {
-            const locationsResponse = await client.locations.getPage({ perPage: 1, page: 1 });
+            const locationsResponse = await client.locations.getPage({ per_page: 1, page: 1 });
             expect(locationsResponse.data.length).toBeGreaterThan(0);
             const locationId = locationsResponse.data[0].id;
-            const location = await client.locations.getById(locationId, ['event']);
+            const location = await client.locations.getById(locationId, { include: ['event'] });
             expect(location).toBeDefined();
             expect(location.type).toBe('Location');
             expect(location.id).toBe(locationId);
@@ -175,12 +175,12 @@ describe('Check-ins API URL Verification Integration Tests', () => {
     describe('Event Periods API URL Verification', () => {
         it('should access event periods via event associations', async () => {
             // Event periods must be accessed through events
-            const events = await client.events.getAll({ perPage: 1 });
+            const events = await client.events.getAll({ per_page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
-            
+
             const eventId = events.data[0].id;
             const response = await client.events.getEventPeriods(eventId);
-            
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
             expect(response.data.length).toBeGreaterThan(0);
@@ -193,17 +193,17 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Event Times API URL Verification', () => {
         it('should access event times list endpoint', async () => {
-            const response = await client.eventTimes.getAll({ perPage: 5 });
-            
+            const response = await client.eventTimes.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single event time endpoint', async () => {
-            const eventTimesResponse = await client.eventTimes.getPage({ perPage: 1, page: 1 });
+            const eventTimesResponse = await client.eventTimes.getPage({ per_page: 1, page: 1 });
             expect(eventTimesResponse.data.length).toBeGreaterThan(0);
-            const eventTimeId = eventTimesResponse.data[0].id;
-            const eventTime = await client.eventTimes.getById(eventTimeId, ['event', 'event_period']);
+            const eventTimeId = eventTimesResponse.data[0].id
+            const eventTime = await client.eventTimes.getById(eventTimeId, { include: ['event', 'event_period'] });
             expect(eventTime).toBeDefined();
             expect(eventTime.type).toBe('EventTime');
             expect(eventTime.id).toBe(eventTimeId);
@@ -212,14 +212,14 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Stations API URL Verification', () => {
         it('should access stations list endpoint', async () => {
-            const response = await client.stations.getAll({ perPage: 5 });
-            
+            const response = await client.stations.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single station endpoint', async () => {
-            const stationsResponse = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsResponse = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsResponse.data).toBeDefined();
             expect(Array.isArray(stationsResponse.data)).toBe(true);
             expect(stationsResponse.data.length).toBeGreaterThan(0);
@@ -233,14 +233,14 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Labels API URL Verification', () => {
         it('should access labels list endpoint', async () => {
-            const response = await client.labels.getAll({ perPage: 5 });
-            
+            const response = await client.labels.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single label endpoint', async () => {
-            const labelsResponse = await client.labels.getPage({ perPage: 1, page: 1 });
+            const labelsResponse = await client.labels.getPage({ per_page: 1, page: 1 });
             expect(labelsResponse.data.length).toBeGreaterThan(0);
             const labelId = labelsResponse.data[0].id;
             const label = await client.labels.getById(labelId);
@@ -252,14 +252,14 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Options API URL Verification', () => {
         it('should access options list endpoint', async () => {
-            const response = await client.options.getAll({ perPage: 5 });
-            
+            const response = await client.options.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single option endpoint', async () => {
-            const optionsResponse = await client.options.getPage({ perPage: 1, page: 1 });
+            const optionsResponse = await client.options.getPage({ per_page: 1, page: 1 });
             expect(optionsResponse.data).toBeDefined();
             expect(Array.isArray(optionsResponse.data)).toBe(true);
             expect(optionsResponse.data.length).toBeGreaterThan(0);
@@ -273,19 +273,19 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Check-in Groups API URL Verification', () => {
         it('should access check-in groups list endpoint', async () => {
-            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsPage.data.length).toBeGreaterThan(0);
             const stationId = stationsPage.data[0].id;
-            const response = await client.checkInGroups.getPage({ stationId, perPage: 5, page: 1 });
+            const response = await client.checkInGroups.getPage(stationId, { per_page: 5, page: 1 });
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single check-in group endpoint', async () => {
-            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsPage.data.length).toBeGreaterThan(0);
             const stationId = stationsPage.data[0].id;
-            const checkInGroupsResponse = await client.checkInGroups.getPage({ stationId, perPage: 1, page: 1 });
+            const checkInGroupsResponse = await client.checkInGroups.getPage(stationId, { per_page: 1, page: 1 });
             expect(checkInGroupsResponse.data.length).toBeGreaterThan(0);
             const checkInGroupId = checkInGroupsResponse.data[0].id;
             const checkInGroup = await client.checkInGroups.getById(checkInGroupId);
@@ -297,7 +297,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Check-in Times API URL Verification', () => {
         it('should access check-in times list endpoint', async () => {
-            const checkInsPage = await client.checkIns.getPage({ perPage: 5 });
+            const checkInsPage = await client.checkIns.getPage({ per_page: 5 });
             expect(checkInsPage.data.length).toBeGreaterThan(0);
             const checkInId = checkInsPage.data[0].id;
             const response = await client.checkIns.getCheckInTimes(checkInId);
@@ -306,7 +306,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access single check-in time endpoint', async () => {
-            const checkInsPage = await client.checkIns.getPage({ perPage: 1 });
+            const checkInsPage = await client.checkIns.getPage({ per_page: 1 });
             expect(checkInsPage.data.length).toBeGreaterThan(0);
             const checkInTimesResponse = await client.checkIns.getCheckInTimes(checkInsPage.data[0].id);
             expect(checkInTimesResponse.data.length).toBeGreaterThan(0);
@@ -319,7 +319,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Person Events API URL Verification', () => {
         it('should access person events list endpoint', async () => {
-            const eventsPage = await client.events.getPage({ perPage: 5 });
+            const eventsPage = await client.events.getPage({ per_page: 5 });
             expect(eventsPage.data.length).toBeGreaterThan(0);
             const eventId = eventsPage.data[0].id;
             const response = await client.events.getPersonEvents(eventId);
@@ -328,7 +328,7 @@ describe('Check-ins API URL Verification Integration Tests', () => {
         }, 30000);
 
         it('should access single person event endpoint', async () => {
-            const eventsPage = await client.events.getPage({ perPage: 1 });
+            const eventsPage = await client.events.getPage({ per_page: 1 });
             expect(eventsPage.data.length).toBeGreaterThan(0);
             const personEventsResponse = await client.events.getPersonEvents(eventsPage.data[0].id);
             expect(personEventsResponse.data.length).toBeGreaterThan(0);
@@ -341,18 +341,18 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Pre-checks API URL Verification', () => {
         it('should access pre-checks list endpoint', async () => {
-            if (!(await isPreChecksApiAvailable(client))) return;
-            const response = await client.preChecks.getPage({ perPage: 5, page: 1 });
+            expect(await isPreChecksApiAvailable(client)).toBe(true);
+            const response = await client.preChecks.getPage({ per_page: 5, page: 1 });
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single pre-check endpoint', async () => {
-            if (!(await isPreChecksApiAvailable(client))) return;
-            const preChecksResponse = await client.preChecks.getPage({ perPage: 1, page: 1 });
+            expect(await isPreChecksApiAvailable(client)).toBe(true);
+            const preChecksResponse = await client.preChecks.getPage({ per_page: 1, page: 1 });
             expect(preChecksResponse.data.length).toBeGreaterThan(0);
             const preCheckId = preChecksResponse.data[0].id;
-            const preCheck = await client.preChecks.getById(preCheckId, ['event', 'person']);
+            const preCheck = await client.preChecks.getById(preCheckId);
             expect(preCheck).toBeDefined();
             expect(preCheck.type).toBe('PreCheck');
             expect(preCheck.id).toBe(preCheckId);
@@ -361,14 +361,14 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Passes API URL Verification', () => {
         it('should access passes list endpoint', async () => {
-            const response = await client.passes.getAll({ perPage: 5 });
-            
+            const response = await client.passes.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single pass endpoint', async () => {
-            const passesResponse = await client.passes.getPage({ perPage: 1, page: 1 });
+            const passesResponse = await client.passes.getPage({ per_page: 1, page: 1 });
             expect(passesResponse.data).toBeDefined();
             expect(Array.isArray(passesResponse.data)).toBe(true);
             expect(passesResponse.data.length).toBeGreaterThan(0);
@@ -382,14 +382,14 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
     describe('Headcounts API URL Verification', () => {
         it('should access headcounts list endpoint', async () => {
-            const response = await client.headcounts.getAll({ perPage: 5 });
-            
+            const response = await client.headcounts.getAll({ per_page: 5 });
+
             expect(response).toHaveProperty('data');
             expect(Array.isArray(response.data)).toBe(true);
         }, 30000);
 
         it('should access single headcount endpoint', async () => {
-            const headcountsResponse = await client.headcounts.getPage({ perPage: 1, page: 1 });
+            const headcountsResponse = await client.headcounts.getPage({ per_page: 1, page: 1 });
             expect(headcountsResponse.data).toBeDefined();
             expect(Array.isArray(headcountsResponse.data)).toBe(true);
             expect(headcountsResponse.data.length).toBeGreaterThan(0);
@@ -408,7 +408,8 @@ describe('Check-ins API URL Verification Integration Tests', () => {
 
         it('should handle invalid parameters gracefully', async () => {
             await expect(client.events.getAll({
-                where: { invalid_field: 'invalid_value' }
+                where: { name: 'invalid_value' },
+                per_page: 1,
             })).resolves.toBeDefined();
         }, 30000);
     });

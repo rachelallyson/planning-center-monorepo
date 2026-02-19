@@ -7,15 +7,236 @@
  * To run: npm run test:integration -- --testNamePattern="Attribute Type Validation"
  */
 
-import { PcoCheckInsClient } from '../../src';
-import type {
-    EventPeriodResource,
-    EventTimeResource,
-    HeadcountResource,
-} from '../../src/types';
-import type { ResourceIdentifier } from '@rachelallyson/planning-center-base-ts';
+import { PcoCheckInsClient, type EventResource, type CheckInResource, type HeadcountResource } from '../../src';
 import { createTestClient, logAuthStatus, isPreChecksApiAvailable } from './test-config';
-import { validateResourceStructure } from '../type-validators';
+import { validateResourceStructure, validateRelationshipKeys } from '../type-validators';
+import { getResourceId } from './test-utils';
+
+function assertEventRequiredAndStrings(event: EventResource): void {
+    expect(event.id).toBeDefined();
+    expect(typeof event.id).toBe('string');
+    expect(event.type).toBe('Event');
+    if (event.name !== undefined) expect(typeof event.name).toBe('string');
+    if (event.frequency !== undefined) expect(typeof event.frequency).toBe('string');
+    if (event.integration_key !== undefined && event.integration_key != null) expect(['string', 'object'].includes(typeof event.integration_key)).toBe(true);
+}
+
+function assertEventOptionalStringsAndArchived(event: EventResource): void {
+    if (event.app_source !== undefined) expect(typeof event.app_source).toBe('string');
+    if (event.archived_at !== undefined && event.archived_at !== null) expect(typeof event.archived_at).toBe('string');
+}
+
+function assertEventBooleans(event: EventResource): void {
+    if (event.enable_services_integration !== undefined) expect(typeof event.enable_services_integration).toBe('boolean');
+    if (event.location_times_enabled !== undefined) expect(typeof event.location_times_enabled).toBe('boolean');
+    if (event.pre_select_enabled !== undefined) expect(typeof event.pre_select_enabled).toBe('boolean');
+}
+
+function assertEventDates(event: EventResource): void {
+    if (event.created_at !== undefined) {
+        expect(typeof event.created_at).toBe('string');
+        expect(new Date(event.created_at).getTime()).not.toBeNaN();
+    }
+    if (event.updated_at !== undefined) {
+        expect(typeof event.updated_at).toBe('string');
+        expect(new Date(event.updated_at).getTime()).not.toBeNaN();
+    }
+}
+
+function assertEventAttributeTypes(event: EventResource): void {
+    assertEventRequiredAndStrings(event);
+    assertEventOptionalStringsAndArchived(event);
+    assertEventBooleans(event);
+    assertEventDates(event);
+}
+
+function assertCheckInStringsPart1a(checkIn: CheckInResource): void {
+    if (checkIn.first_name !== undefined) expect(typeof checkIn.first_name).toBe('string');
+    if (checkIn.last_name !== undefined) expect(typeof checkIn.last_name).toBe('string');
+    if (checkIn.medical_notes !== undefined && checkIn.medical_notes != null) expect(['string', 'object'].includes(typeof checkIn.medical_notes)).toBe(true);
+}
+
+function assertCheckInStringsPart1b(checkIn: CheckInResource): void {
+    if (checkIn.security_code !== undefined) expect(typeof checkIn.security_code).toBe('string');
+    if (checkIn.checked_out_at !== undefined && checkIn.checked_out_at !== null) expect(typeof checkIn.checked_out_at).toBe('string');
+}
+
+function assertCheckInStringsPart1(checkIn: CheckInResource): void {
+    assertCheckInStringsPart1a(checkIn);
+    assertCheckInStringsPart1b(checkIn);
+}
+
+function assertCheckInStringsPart2a(checkIn: CheckInResource): void {
+    if (checkIn.confirmed_at !== undefined && checkIn.confirmed_at !== null) expect(typeof checkIn.confirmed_at).toBe('string');
+    if (checkIn.emergency_contact_name !== undefined && checkIn.emergency_contact_name !== null) expect(typeof checkIn.emergency_contact_name).toBe('string');
+}
+
+function assertCheckInStringsPart2b(checkIn: CheckInResource): void {
+    if (checkIn.emergency_contact_phone_number !== undefined && checkIn.emergency_contact_phone_number !== null) expect(typeof checkIn.emergency_contact_phone_number).toBe('string');
+    if (checkIn.kind !== undefined) expect(typeof checkIn.kind).toBe('string');
+}
+
+function assertCheckInStringsPart2(checkIn: CheckInResource): void {
+    assertCheckInStringsPart2a(checkIn);
+    assertCheckInStringsPart2b(checkIn);
+}
+
+function assertCheckInStrings(checkIn: CheckInResource): void {
+    assertCheckInStringsPart1(checkIn);
+    assertCheckInStringsPart2(checkIn);
+}
+
+function assertCheckInNumbersDates(checkIn: CheckInResource): void {
+    if (checkIn.number !== undefined) expect(typeof checkIn.number).toBe('number');
+    if (checkIn.one_time_guest !== undefined) expect(typeof checkIn.one_time_guest).toBe('boolean');
+    if (checkIn.created_at !== undefined) {
+        expect(typeof checkIn.created_at).toBe('string');
+        expect(new Date(checkIn.created_at).getTime()).not.toBeNaN();
+    }
+    if (checkIn.updated_at !== undefined) {
+        expect(typeof checkIn.updated_at).toBe('string');
+        expect(new Date(checkIn.updated_at).getTime()).not.toBeNaN();
+    }
+}
+
+function assertCheckInAttributeTypes(checkIn: CheckInResource): void {
+    expect(checkIn.id).toBeDefined();
+    expect(typeof checkIn.id).toBe('string');
+    expect(checkIn.type).toBe('CheckIn');
+    assertCheckInStrings(checkIn);
+    assertCheckInNumbersDates(checkIn);
+}
+
+function assertHeadcountBase(h: HeadcountResource): void {
+    expect(h).toBeDefined();
+    expect(typeof h === 'object').toBe(true);
+    expect(h).toHaveProperty('type');
+    expect(h).toHaveProperty('id');
+    expect(typeof h.type).toBe('string');
+    expect(typeof h.id).toBe('string');
+}
+
+function assertHeadcountCount(h: HeadcountResource): void {
+    expect(h.type).toBe('Headcount');
+    if ('count' in h && h.count !== undefined) expect(typeof h.count).toBe('number');
+}
+
+function assertHeadcountCreatedAt(h: HeadcountResource): void {
+    expect(h.type).toBe('Headcount');
+    if (h.created_at !== undefined && h.created_at !== null) {
+        expect(typeof h.created_at).toBe('string');
+        expect(new Date(h.created_at).getTime()).not.toBeNaN();
+    }
+}
+
+function assertHeadcountCountAndCreatedAt(h: HeadcountResource): void {
+    assertHeadcountCount(h);
+    assertHeadcountCreatedAt(h);
+}
+
+function assertHeadcountUpdatedAt(h: HeadcountResource): void {
+    expect(h.type).toBe('Headcount');
+    if (h.updated_at !== undefined && h.updated_at !== null) {
+        expect(typeof h.updated_at).toBe('string');
+        expect(new Date(h.updated_at).getTime()).not.toBeNaN();
+    }
+}
+
+function assertHeadcountCountAndDates(h: HeadcountResource): void {
+    assertHeadcountCountAndCreatedAt(h);
+    assertHeadcountUpdatedAt(h);
+}
+
+function assertHeadcountAttendanceType(h: HeadcountResource): void {
+    expect(h.type).toBe('Headcount');
+    expect(h.attendance_type).toBeDefined();
+    expect(h.attendance_type).not.toBeNull();
+    const at = h.attendance_type!;
+    expect(typeof at === 'object').toBe(true);
+    if (at.type !== undefined) expect(typeof at.type).toBe('string');
+    if (at.id !== undefined) expect(typeof at.id).toBe('string');
+}
+
+function assertHeadcountWhenTypeHeadcount(h: HeadcountResource): void {
+    assertHeadcountCountAndDates(h);
+    assertHeadcountAttendanceType(h);
+}
+
+function assertHeadcountItemShape(h: HeadcountResource): void {
+    assertHeadcountBase(h);
+    assertHeadcountWhenTypeHeadcount(h);
+}
+
+function hasResolvedAttendanceType(hc: HeadcountResource): boolean {
+    return (
+        hc?.attendance_type != null &&
+        typeof hc.attendance_type === 'object' &&
+        Object.keys(hc.attendance_type).length > 2
+    );
+}
+
+async function findPeriodWithHeadcountsForEvent(
+    client: PcoCheckInsClient,
+    eventId: string,
+    options: { include: ('headcounts' | 'headcounts.attendance_type')[]; per_page: number }
+): Promise<{ result: Awaited<ReturnType<PcoCheckInsClient['events']['getEventTimesForPeriod']>>; periodId: string } | null> {
+    const periodsRes = await client.events.getEventPeriods(eventId, { per_page: 5, page: 1 });
+    for (const period of periodsRes.data) {
+        const pid = getResourceId(period);
+        if (!pid) continue;
+        const page = await client.events.getEventTimesForPeriod(eventId, pid, options);
+        const allHeadcounts = page.data.flatMap((et) => et.headcounts ?? []);
+        if (allHeadcounts.some(hasResolvedAttendanceType)) {
+            return { result: page, periodId: pid };
+        }
+    }
+    return null;
+}
+
+async function findEventPeriodWithHeadcounts(
+    client: PcoCheckInsClient,
+    options: { include: ('headcounts' | 'headcounts.attendance_type')[]; per_page: number }
+): Promise<{ result: Awaited<ReturnType<PcoCheckInsClient['events']['getEventTimesForPeriod']>>; eventId: string; periodId: string } | null> {
+    const eventsRes = await client.events.getPage({ per_page: 10, page: 1 });
+    for (const event of eventsRes.data) {
+        const eid = getResourceId(event);
+        if (!eid) continue;
+        const found = await findPeriodWithHeadcountsForEvent(client, eid, options);
+        if (found) return { result: found.result, eventId: eid, periodId: found.periodId };
+    }
+    return null;
+}
+
+/** Accepts API TopLevelLinks (Link = string | { href: string }) */
+type PaginationLinksLike = {
+    self?: string | { href?: string } | null;
+    first?: string | { href?: string } | null;
+    last?: string | { href?: string } | null;
+    prev?: string | { href?: string } | null;
+    next?: string | { href?: string } | null;
+};
+type PaginationMeta = { count?: number; total_count?: number; total_pages?: number; per_page?: number; current_page?: number };
+
+const PAGINATION_LINK_KEYS: (keyof PaginationLinksLike)[] = ['self', 'first', 'last', 'prev', 'next'];
+const PAGINATION_META_KEYS: (keyof PaginationMeta)[] = ['count', 'total_count', 'total_pages', 'per_page', 'current_page'];
+
+function assertPaginationLinks(links: PaginationLinksLike | undefined): void {
+    expect(links).toBeDefined();
+    PAGINATION_LINK_KEYS.forEach((k) => {
+        const v = links![k];
+        if (v != null) {
+            if (typeof v === 'string') expect(typeof v).toBe('string');
+            else expect(typeof v === 'object' && v !== null).toBe(true);
+        }
+    });
+}
+
+function assertPaginationMeta(meta: PaginationMeta | undefined): void {
+    expect(meta).toBeDefined();
+    PAGINATION_META_KEYS.forEach((k) => {
+        if (meta![k] !== undefined) expect(typeof meta![k]).toBe('number');
+    });
+}
 
 describe('Check-ins API Attribute Type Validation Integration Tests', () => {
     let client: PcoCheckInsClient;
@@ -28,138 +249,41 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
     describe('Event Attributes Type Validation', () => {
         it('should validate EventAttributes types match API response', async () => {
-            const response = await client.events.getPage({ perPage: 1, page: 1 });
+            const response = await client.events.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
-            const event = response.data[0];
-
-            // Validate required fields
-            expect(event.id).toBeDefined();
-            expect(typeof event.id).toBe('string');
-            expect(event.type).toBe('Event');
-
-            // Validate optional string attributes
-            if ((event as any).name !== undefined) {
-                expect(typeof event.name).toBe('string');
-            }
-            if ((event as any).frequency !== undefined) {
-                expect(typeof event.frequency).toBe('string');
-            }
-            if ((event as any).integration_key !== undefined && (event as any).integration_key != null) {
-                expect(['string', 'object'].includes(typeof event.integration_key)).toBe(true);
-            }
-            if ((event as any).app_source !== undefined) {
-                expect(typeof event.app_source).toBe('string');
-            }
-            if ((event as any).archived_at !== undefined && (event as any).archived_at !== null) {
-                expect(typeof event.archived_at).toBe('string');
-            }
-
-            // Validate boolean attributes
-            if ((event as any).enable_services_integration !== undefined) {
-                expect(typeof event.enable_services_integration).toBe('boolean');
-            }
-            if ((event as any).location_times_enabled !== undefined) {
-                expect(typeof event.location_times_enabled).toBe('boolean');
-            }
-            if ((event as any).pre_select_enabled !== undefined) {
-                expect(typeof event.pre_select_enabled).toBe('boolean');
-            }
-
-            // Validate date attributes
-            if ((event as any).created_at !== undefined) {
-                expect(typeof event.created_at).toBe('string');
-                expect(new Date(event.created_at).getTime()).not.toBeNaN();
-            }
-            if ((event as any).updated_at !== undefined) {
-                expect(typeof event.updated_at).toBe('string');
-                expect(new Date(event.updated_at).getTime()).not.toBeNaN();
-            }
+            assertEventAttributeTypes(response.data[0]);
         }, 30000);
 
         it('should validate EventRelationships structure', async () => {
             const response = await client.events.getPage({
-                perPage: 1,
+                per_page: 1,
                 page: 1,
-                include: ['attendance_types', 'check_ins', 'locations', 'event_periods']
+                include: ['attendance_types']
             });
             expect(response.data.length).toBeGreaterThan(0);
             const event = response.data[0];
 
             // Flattened: relationships at top level (event.attendance_types, etc.)
-            if ((event as any).attendance_types !== undefined) {
-                expect(Array.isArray((event as any).attendance_types) || typeof (event as any).attendance_types === 'object').toBe(true);
+            if (event.attendance_types !== undefined) {
+                expect(Array.isArray(event.attendance_types) || typeof event.attendance_types === 'object').toBe(true);
             }
-            if ((event as any).locations !== undefined) {
-                expect(Array.isArray((event as any).locations) || typeof (event as any).locations === 'object').toBe(true);
+            if (event.locations !== undefined) {
+                expect(Array.isArray(event.locations) || typeof event.locations === 'object').toBe(true);
             }
         }, 30000);
     });
 
     describe('CheckIn Attributes Type Validation', () => {
         it('should validate CheckInAttributes types match API response', async () => {
-            const response = await client.checkIns.getPage({ perPage: 1, page: 1 });
+            const response = await client.checkIns.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
-            const checkIn = response.data[0];
-
-            // Validate required fields
-            expect(checkIn.id).toBeDefined();
-            expect(typeof checkIn.id).toBe('string');
-            expect(checkIn.type).toBe('CheckIn');
-
-            // Validate optional string attributes
-            if ((checkIn as any).first_name !== undefined) {
-                expect(typeof checkIn.first_name).toBe('string');
-            }
-            if ((checkIn as any).last_name !== undefined) {
-                expect(typeof checkIn.last_name).toBe('string');
-            }
-            if ((checkIn as any).medical_notes !== undefined && (checkIn as any).medical_notes != null) {
-                expect(['string', 'object'].includes(typeof checkIn.medical_notes)).toBe(true);
-            }
-            if ((checkIn as any).security_code !== undefined) {
-                expect(typeof checkIn.security_code).toBe('string');
-            }
-            if ((checkIn as any).checked_out_at !== undefined && (checkIn as any).checked_out_at !== null) {
-                expect(typeof checkIn.checked_out_at).toBe('string');
-            }
-            if ((checkIn as any).confirmed_at !== undefined && (checkIn as any).confirmed_at !== null) {
-                expect(typeof checkIn.confirmed_at).toBe('string');
-            }
-            if ((checkIn as any).emergency_contact_name !== undefined && (checkIn as any).emergency_contact_name !== null) {
-                expect(typeof checkIn.emergency_contact_name).toBe('string');
-            }
-            if ((checkIn as any).emergency_contact_phone_number !== undefined && (checkIn as any).emergency_contact_phone_number !== null) {
-                expect(typeof checkIn.emergency_contact_phone_number).toBe('string');
-            }
-            if ((checkIn as any).kind !== undefined) {
-                expect(typeof checkIn.kind).toBe('string');
-            }
-
-            // Validate number attributes
-            if ((checkIn as any).number !== undefined) {
-                expect(typeof checkIn.number).toBe('number');
-            }
-
-            // Validate boolean attributes
-            if ((checkIn as any).one_time_guest !== undefined) {
-                expect(typeof checkIn.one_time_guest).toBe('boolean');
-            }
-
-            // Validate date attributes
-            if ((checkIn as any).created_at !== undefined) {
-                expect(typeof checkIn.created_at).toBe('string');
-                expect(new Date(checkIn.created_at).getTime()).not.toBeNaN();
-            }
-            if ((checkIn as any).updated_at !== undefined) {
-                expect(typeof checkIn.updated_at).toBe('string');
-                expect(new Date(checkIn.updated_at).getTime()).not.toBeNaN();
-            }
+            assertCheckInAttributeTypes(response.data[0]);
         }, 30000);
     });
 
     describe('Location Attributes Type Validation', () => {
         it('should validate LocationAttributes types match API response', async () => {
-            const response = await client.locations.getPage({ perPage: 1, page: 1 });
+            const response = await client.locations.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const location = response.data[0];
 
@@ -169,18 +293,18 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(location.type).toBe('Location');
 
             // Validate optional string attributes
-            if ((location as any).name !== undefined) {
+            if (location.name !== undefined) {
                 expect(typeof location.name).toBe('string');
             }
 
             // Validate date attributes
-            if ((location as any).created_at !== undefined) {
+            if (location.created_at !== undefined) {
                 expect(typeof location.created_at).toBe('string');
-                expect(new Date(location.created_at).getTime()).not.toBeNaN();
+                expect(new Date(location.created_at!).getTime()).not.toBeNaN();
             }
-            if ((location as any).updated_at !== undefined) {
+            if (location.updated_at !== undefined) {
                 expect(typeof location.updated_at).toBe('string');
-                expect(new Date(location.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(location.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
@@ -188,9 +312,9 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
     describe('EventPeriod Attributes Type Validation', () => {
         it('should validate EventPeriodAttributes types match API response', async () => {
             // Event periods must be accessed through events
-            const events = await client.events.getAll({ perPage: 1 });
+            const events = await client.events.getAll({ per_page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
-            
+
             const eventId = events.data[0].id;
             const response = await client.events.getEventPeriods(eventId);
             expect(response.data.length).toBeGreaterThan(0);
@@ -202,80 +326,63 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(eventPeriod.type).toBe('EventPeriod');
 
             // Validate optional string attributes
-            if ((eventPeriod as any).starts_at !== undefined) {
+            if (eventPeriod.starts_at !== undefined) {
                 expect(typeof eventPeriod.starts_at).toBe('string');
-                expect(new Date(eventPeriod.starts_at).getTime()).not.toBeNaN();
+                expect(new Date(eventPeriod.starts_at!).getTime()).not.toBeNaN();
             }
-            if ((eventPeriod as any).ends_at !== undefined) {
+            if (eventPeriod.ends_at !== undefined) {
                 expect(typeof eventPeriod.ends_at).toBe('string');
-                expect(new Date(eventPeriod.ends_at).getTime()).not.toBeNaN();
+                expect(new Date(eventPeriod.ends_at!).getTime()).not.toBeNaN();
             }
 
             // Validate date attributes
-            if ((eventPeriod as any).created_at !== undefined) {
+            if (eventPeriod.created_at !== undefined) {
                 expect(typeof eventPeriod.created_at).toBe('string');
-                expect(new Date(eventPeriod.created_at).getTime()).not.toBeNaN();
+                expect(new Date(eventPeriod.created_at!).getTime()).not.toBeNaN();
             }
-            if ((eventPeriod as any).updated_at !== undefined) {
+            if (eventPeriod.updated_at !== undefined) {
                 expect(typeof eventPeriod.updated_at).toBe('string');
-                expect(new Date(eventPeriod.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(eventPeriod.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
 
         it('should return JSON from getAllEventPeriods that matches EventPeriodResource type', async () => {
-            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            const events = await client.events.getPage({ per_page: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
             const eventId = events.data[0].id;
 
             const result = await client.events.getAllEventPeriods(eventId);
 
-            expect(Array.isArray(result)).toBe(true);
             expect(result).toBeDefined();
-            expect(result.length).toBeGreaterThan(0);
+            expect(Array.isArray(result.data)).toBe(true);
+            expect(result.data.length).toBeGreaterThan(0);
 
-            result.forEach((item: EventPeriodResource, index: number) => {
+            result.data.forEach((item, index: number) => {
                 validateResourceStructure(item, 'EventPeriod', `getAllEventPeriods[${index}]`);
 
-                if ((item as any).starts_at !== undefined) {
-                    expect(typeof (item as any).starts_at).toBe('string');
-                    expect(new Date((item as any).starts_at).getTime()).not.toBeNaN();
+                if (item.starts_at !== undefined) {
+                    expect(typeof item.starts_at).toBe('string');
+                    expect(new Date(item.starts_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).ends_at !== undefined) {
-                    expect(typeof (item as any).ends_at).toBe('string');
-                    expect(new Date((item as any).ends_at).getTime()).not.toBeNaN();
+                if (item.ends_at !== undefined) {
+                    expect(typeof item.ends_at).toBe('string');
+                    expect(new Date(item.ends_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).created_at !== undefined) {
-                    expect(typeof (item as any).created_at).toBe('string');
-                    expect(new Date((item as any).created_at).getTime()).not.toBeNaN();
+                if (item.created_at !== undefined) {
+                    expect(typeof item.created_at).toBe('string');
+                    expect(new Date(item.created_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).updated_at !== undefined) {
-                    expect(typeof (item as any).updated_at).toBe('string');
-                    expect(new Date((item as any).updated_at).getTime()).not.toBeNaN();
+                if (item.updated_at !== undefined) {
+                    expect(typeof item.updated_at).toBe('string');
+                    expect(new Date(item.updated_at).getTime()).not.toBeNaN();
                 }
 
-                const relKeys = ['event', 'event_times', 'check_ins', 'location_event_periods'] as const;
-                relKeys.forEach((key) => {
-                    const val = (item as any)[key];
-                    if (val !== undefined && val !== null) {
-                        if (Array.isArray(val)) {
-                            val.forEach((v: unknown) => {
-                                expect(v).toBeDefined();
-                                expect(typeof (v as any) === 'object').toBe(true);
-                                if ((v as any).type !== undefined) expect(typeof (v as any).type).toBe('string');
-                                if ((v as any).id !== undefined) expect(typeof (v as any).id).toBe('string');
-                            });
-                        } else {
-                            expect(typeof val === 'object').toBe(true);
-                            if ((val as any).type !== undefined) expect(typeof (val as any).type).toBe('string');
-                            if ((val as any).id !== undefined) expect(typeof (val as any).id).toBe('string');
-                        }
-                    }
-                });
+                validateRelationshipKeys(item, ['event', 'event_times', 'check_ins', 'location_event_periods']);
             });
         }, 30000);
 
         it('should return JSON from getEventTimesForPeriod that matches EventTimeResource type', async () => {
-            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            const events = await client.events.getPage({ per_page: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
             const eventId = events.data[0].id;
 
@@ -290,62 +397,41 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(Array.isArray(result.data)).toBe(true);
             expect(result).not.toHaveProperty('included');
 
-            result.data.forEach((item: EventTimeResource, index: number) => {
+            result.data.forEach((item, index: number) => {
                 validateResourceStructure(item, 'EventTime', `getEventTimesForPeriod[${index}]`);
 
-                if ((item as any).starts_at !== undefined) {
-                    expect(typeof (item as any).starts_at).toBe('string');
-                    expect(new Date((item as any).starts_at).getTime()).not.toBeNaN();
+                if (item.starts_at !== undefined) {
+                    expect(typeof item.starts_at).toBe('string');
+                    expect(new Date(item.starts_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).ends_at !== undefined) {
-                    expect(typeof (item as any).ends_at).toBe('string');
-                    expect(new Date((item as any).ends_at).getTime()).not.toBeNaN();
+                if (item.ends_at !== undefined) {
+                    expect(typeof item.ends_at).toBe('string');
+                    expect(new Date(item.ends_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).created_at !== undefined) {
-                    expect(typeof (item as any).created_at).toBe('string');
-                    expect(new Date((item as any).created_at).getTime()).not.toBeNaN();
+                if (item.created_at !== undefined) {
+                    expect(typeof item.created_at).toBe('string');
+                    expect(new Date(item.created_at).getTime()).not.toBeNaN();
                 }
-                if ((item as any).updated_at !== undefined) {
-                    expect(typeof (item as any).updated_at).toBe('string');
-                    expect(new Date((item as any).updated_at).getTime()).not.toBeNaN();
+                if (item.updated_at !== undefined) {
+                    expect(typeof item.updated_at).toBe('string');
+                    expect(new Date(item.updated_at).getTime()).not.toBeNaN();
                 }
 
-                const relKeys = ['event', 'event_period', 'location_event_times', 'check_ins'] as const;
-                relKeys.forEach((key) => {
-                    const val = (item as any)[key];
-                    if (val !== undefined && val !== null) {
-                        if (Array.isArray(val)) {
-                            val.forEach((v: unknown) => {
-                                expect(v).toBeDefined();
-                                expect(typeof (v as any) === 'object').toBe(true);
-                                if ((v as any).type !== undefined) expect(typeof (v as any).type).toBe('string');
-                                if ((v as any).id !== undefined) expect(typeof (v as any).id).toBe('string');
-                            });
-                        } else {
-                            expect(typeof val === 'object').toBe(true);
-                            if ((val as any).type !== undefined) expect(typeof (val as any).type).toBe('string');
-                            if ((val as any).id !== undefined) expect(typeof (val as any).id).toBe('string');
-                        }
-                    }
-                });
+                validateRelationshipKeys(item, ['event', 'event_period', 'location_event_times', 'check_ins']);
             });
         }, 30000);
 
         it('getEventTimesForPeriod with include headcounts: client sends include; when API returns headcounts, validate shape', async () => {
-            const events = await client.events.getPage({ perPage: 100, page: 1 });
-            expect(events.data.length).toBeGreaterThan(0);
-            const event1 = events.data.find((e: any) => e.name === 'Event 1');
-            expect(event1).toBeDefined();
-            const eventId = event1!.id;
-            const periodId = '43407327';
-
-            // To log raw API response (included types + first item relationships), use:
-            //   client.updateConfig({ debug: { includePayloads: true } });
-            const result = await client.events.getEventTimesForPeriod(eventId, periodId, {
+            const includeOpt: { include: ('headcounts' | 'headcounts.attendance_type')[]; per_page: number } = {
                 include: ['headcounts', 'headcounts.attendance_type'],
-                perPage: 100,
-            });
+                per_page: 100,
+            };
+            const found = await findEventPeriodWithHeadcounts(client, includeOpt);
+            expect(found).not.toBeNull();
+            expect(found!.eventId).toBeTruthy();
+            expect(found!.periodId).toBeTruthy();
 
+            const result = found!.result;
             expect(result).toBeDefined();
             expect(result.data).toBeDefined();
             expect(Array.isArray(result.data)).toBe(true);
@@ -353,10 +439,7 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
             const data = result.data;
             const eventTimesWithHeadcounts = data.filter((et) => (et.headcounts?.length ?? 0) > 0);
-
-            const allHeadcounts = eventTimesWithHeadcounts.flatMap(
-                (et) => (et.headcounts ?? []) 
-            );
+            const allHeadcounts = eventTimesWithHeadcounts.flatMap((et) => (et.headcounts ?? []));
             const withResolvedAttendanceType = allHeadcounts.filter(
                 (hc) =>
                     hc?.attendance_type != null &&
@@ -367,40 +450,14 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
             eventTimesWithHeadcounts.forEach((eventTime) => {
                 const headcounts = eventTime.headcounts ?? [];
-                headcounts.forEach((hc) => {
-                    expect(hc).toBeDefined();
-                    expect(typeof hc === 'object').toBe(true);
-                    expect(hc).toHaveProperty('type');
-                    expect(hc).toHaveProperty('id');
-                    expect(typeof hc.type).toBe('string');
-                    expect(typeof hc.id).toBe('string');
-                    if (hc.type === 'Headcount') {
-                        if ('count' in hc && hc.count !== undefined) {
-                            expect(typeof hc.count).toBe('number');
-                        }
-                        if ('created_at' in hc && hc.created_at !== undefined) {
-                            expect(typeof hc.created_at).toBe('string');
-                            expect(new Date(hc.created_at).getTime()).not.toBeNaN();
-                        }
-                        if ('updated_at' in hc && hc.updated_at !== undefined) {
-                            expect(typeof hc.updated_at).toBe('string');
-                            expect(new Date(hc.updated_at).getTime()).not.toBeNaN();
-                        }
-                        if (hc.attendance_type !== undefined && hc.attendance_type !== null) {
-                            const at = hc.attendance_type;
-                            expect(typeof at === 'object').toBe(true);
-                            if (at.type !== undefined) expect(typeof at.type).toBe('string');
-                            if (at.id !== undefined) expect(typeof at.id).toBe('string');
-                        }
-                    }
-                });
+                headcounts.forEach((hc) => assertHeadcountItemShape(hc));
             });
-        }, 30000);
+        }, 60000);
     });
 
     describe('EventTime Attributes Type Validation', () => {
         it('should validate EventTimeAttributes types match API response', async () => {
-            const response = await client.eventTimes.getPage({ perPage: 1, page: 1 });
+            const response = await client.eventTimes.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const eventTime = response.data[0];
 
@@ -410,30 +467,29 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(eventTime.type).toBe('EventTime');
 
             // Validate optional string attributes
-            if ((eventTime as any).starts_at !== undefined) {
-                expect(typeof eventTime.starts_at).toBe('string');
-                expect(new Date(eventTime.starts_at).getTime()).not.toBeNaN();
+            const et = eventTime;
+            if (et.starts_at !== undefined) {
+                expect(typeof et.starts_at).toBe('string');
+                expect(new Date(et.starts_at).getTime()).not.toBeNaN();
             }
-            if ((eventTime as any).ends_at !== undefined) {
-                expect(typeof eventTime.ends_at).toBe('string');
-                expect(new Date(eventTime.ends_at).getTime()).not.toBeNaN();
+            if (et.ends_at !== undefined) {
+                expect(typeof et.ends_at).toBe('string');
+                expect(new Date(et.ends_at).getTime()).not.toBeNaN();
             }
-
-            // Validate date attributes
-            if ((eventTime as any).created_at !== undefined) {
-                expect(typeof eventTime.created_at).toBe('string');
-                expect(new Date(eventTime.created_at).getTime()).not.toBeNaN();
+            if (et.created_at !== undefined) {
+                expect(typeof et.created_at).toBe('string');
+                expect(new Date(et.created_at).getTime()).not.toBeNaN();
             }
-            if ((eventTime as any).updated_at !== undefined) {
-                expect(typeof eventTime.updated_at).toBe('string');
-                expect(new Date(eventTime.updated_at).getTime()).not.toBeNaN();
+            if (et.updated_at !== undefined) {
+                expect(typeof et.updated_at).toBe('string');
+                expect(new Date(et.updated_at).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Station Attributes Type Validation', () => {
         it('should validate StationAttributes types match API response', async () => {
-            const response = await client.stations.getPage({ perPage: 1, page: 1 });
+            const response = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const station = response.data[0];
 
@@ -443,25 +499,25 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(station.type).toBe('Station');
 
             // Validate optional string attributes
-            if ((station as any).name !== undefined) {
+            if (station.name !== undefined) {
                 expect(typeof station.name).toBe('string');
             }
 
             // Validate date attributes
-            if ((station as any).created_at !== undefined) {
+            if (station.created_at !== undefined) {
                 expect(typeof station.created_at).toBe('string');
-                expect(new Date(station.created_at).getTime()).not.toBeNaN();
+                expect(new Date(station.created_at!).getTime()).not.toBeNaN();
             }
-            if ((station as any).updated_at !== undefined) {
+            if (station.updated_at !== undefined) {
                 expect(typeof station.updated_at).toBe('string');
-                expect(new Date(station.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(station.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Label Attributes Type Validation', () => {
         it('should validate LabelAttributes types match API response', async () => {
-            const response = await client.labels.getPage({ perPage: 1, page: 1 });
+            const response = await client.labels.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const label = response.data[0];
 
@@ -471,25 +527,25 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(label.type).toBe('Label');
 
             // Validate optional string attributes
-            if ((label as any).name !== undefined) {
+            if (label.name !== undefined) {
                 expect(typeof label.name).toBe('string');
             }
 
             // Validate date attributes
-            if ((label as any).created_at !== undefined) {
+            if (label.created_at !== undefined) {
                 expect(typeof label.created_at).toBe('string');
-                expect(new Date(label.created_at).getTime()).not.toBeNaN();
+                expect(new Date(label.created_at!).getTime()).not.toBeNaN();
             }
-            if ((label as any).updated_at !== undefined) {
+            if (label.updated_at !== undefined) {
                 expect(typeof label.updated_at).toBe('string');
-                expect(new Date(label.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(label.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Option Attributes Type Validation', () => {
         it('should validate OptionAttributes types match API response', async () => {
-            const response = await client.options.getPage({ perPage: 1, page: 1 });
+            const response = await client.options.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const option = response.data[0];
 
@@ -499,28 +555,28 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(option.type).toBe('Option');
 
             // Validate optional string attributes
-            if ((option as any).name !== undefined) {
+            if (option.name !== undefined) {
                 expect(typeof option.name).toBe('string');
             }
 
             // Validate date attributes
-            if ((option as any).created_at !== undefined) {
+            if (option.created_at !== undefined) {
                 expect(typeof option.created_at).toBe('string');
-                expect(new Date(option.created_at).getTime()).not.toBeNaN();
+                expect(new Date(option.created_at!).getTime()).not.toBeNaN();
             }
-            if ((option as any).updated_at !== undefined) {
+            if (option.updated_at !== undefined) {
                 expect(typeof option.updated_at).toBe('string');
-                expect(new Date(option.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(option.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('CheckInGroup Attributes Type Validation', () => {
         it('should validate CheckInGroupAttributes types match API response', async () => {
-            const stationsPage = await client.stations.getPage({ perPage: 1, page: 1 });
+            const stationsPage = await client.stations.getPage({ per_page: 1, page: 1 });
             expect(stationsPage.data.length).toBeGreaterThan(0);
             const stationId = stationsPage.data[0].id;
-            const response = await client.checkInGroups.getPage({ stationId, perPage: 1, page: 1 });
+            const response = await client.checkInGroups.getPage(stationId, { per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const checkInGroup = response.data[0];
 
@@ -530,25 +586,25 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(checkInGroup.type).toBe('CheckInGroup');
 
             // Validate optional string attributes
-            if ((checkInGroup as any).name !== undefined) {
+            if (checkInGroup.name !== undefined) {
                 expect(typeof checkInGroup.name).toBe('string');
             }
 
             // Validate date attributes
-            if ((checkInGroup as any).created_at !== undefined) {
+            if (checkInGroup.created_at !== undefined) {
                 expect(typeof checkInGroup.created_at).toBe('string');
-                expect(new Date(checkInGroup.created_at).getTime()).not.toBeNaN();
+                expect(new Date(checkInGroup.created_at!).getTime()).not.toBeNaN();
             }
-            if ((checkInGroup as any).updated_at !== undefined) {
+            if (checkInGroup.updated_at !== undefined) {
                 expect(typeof checkInGroup.updated_at).toBe('string');
-                expect(new Date(checkInGroup.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(checkInGroup.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('CheckInTime Attributes Type Validation', () => {
         it('should validate CheckInTimeAttributes types match API response', async () => {
-            const checkInsPage = await client.checkIns.getPage({ perPage: 1 });
+            const checkInsPage = await client.checkIns.getPage({ per_page: 1 });
             expect(checkInsPage.data.length).toBeGreaterThan(0);
             const response = await client.checkIns.getCheckInTimes(checkInsPage.data[0].id);
             expect(response.data.length).toBeGreaterThan(0);
@@ -557,13 +613,13 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
                 expect(checkInTime.id).toBeDefined();
                 expect(typeof checkInTime.id).toBe('string');
                 expect(checkInTime.type).toBe('CheckInTime');
-                if ((checkInTime as any).created_at !== undefined) {
-                    expect(typeof (checkInTime as any).created_at).toBe('string');
-                    expect(new Date((checkInTime as any).created_at).getTime()).not.toBeNaN();
+                if (checkInTime.created_at !== undefined) {
+                    expect(typeof checkInTime.created_at).toBe('string');
+                    expect(new Date(checkInTime.created_at).getTime()).not.toBeNaN();
                 }
-                if ((checkInTime as any).updated_at !== undefined) {
-                    expect(typeof (checkInTime as any).updated_at).toBe('string');
-                    expect(new Date((checkInTime as any).updated_at).getTime()).not.toBeNaN();
+                if (checkInTime.updated_at !== undefined) {
+                    expect(typeof checkInTime.updated_at).toBe('string');
+                    expect(new Date(checkInTime.updated_at).getTime()).not.toBeNaN();
                 }
             }
         }, 30000);
@@ -571,7 +627,7 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
     describe('PersonEvent Attributes Type Validation', () => {
         it('should validate PersonEventAttributes types match API response', async () => {
-            const eventsPage = await client.events.getPage({ perPage: 1 });
+            const eventsPage = await client.events.getPage({ per_page: 1 });
             expect(eventsPage.data.length).toBeGreaterThan(0);
             const response = await client.events.getPersonEvents(eventsPage.data[0].id);
             expect(response.data.length).toBeGreaterThan(0);
@@ -580,13 +636,13 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
                 expect(personEvent.id).toBeDefined();
                 expect(typeof personEvent.id).toBe('string');
                 expect(personEvent.type).toBe('PersonEvent');
-                if ((personEvent as any).created_at !== undefined) {
-                    expect(typeof (personEvent as any).created_at).toBe('string');
-                    expect(new Date((personEvent as any).created_at).getTime()).not.toBeNaN();
+                if (personEvent.created_at !== undefined) {
+                    expect(typeof personEvent.created_at).toBe('string');
+                    expect(new Date(personEvent.created_at).getTime()).not.toBeNaN();
                 }
-                if ((personEvent as any).updated_at !== undefined) {
-                    expect(typeof (personEvent as any).updated_at).toBe('string');
-                    expect(new Date((personEvent as any).updated_at).getTime()).not.toBeNaN();
+                if (personEvent.updated_at !== undefined) {
+                    expect(typeof personEvent.updated_at).toBe('string');
+                    expect(new Date(personEvent.updated_at).getTime()).not.toBeNaN();
                 }
             }
         }, 30000);
@@ -594,8 +650,8 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
 
     describe('PreCheck Attributes Type Validation', () => {
         it('should validate PreCheckAttributes types match API response', async () => {
-            if (!(await isPreChecksApiAvailable(client))) return;
-            const response = await client.preChecks.getPage({ perPage: 1, page: 1 });
+            expect(await isPreChecksApiAvailable(client)).toBe(true);
+            const response = await client.preChecks.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const preCheck = response.data[0];
 
@@ -605,20 +661,20 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(preCheck.type).toBe('PreCheck');
 
             // Validate date attributes
-            if ((preCheck as any).created_at !== undefined) {
+            if (preCheck.created_at !== undefined) {
                 expect(typeof preCheck.created_at).toBe('string');
-                expect(new Date(preCheck.created_at).getTime()).not.toBeNaN();
+                expect(new Date(preCheck.created_at!).getTime()).not.toBeNaN();
             }
-            if ((preCheck as any).updated_at !== undefined) {
+            if (preCheck.updated_at !== undefined) {
                 expect(typeof preCheck.updated_at).toBe('string');
-                expect(new Date(preCheck.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(preCheck.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Pass Attributes Type Validation', () => {
         it('should validate PassAttributes types match API response', async () => {
-            const response = await client.passes.getPage({ perPage: 1, page: 1 });
+            const response = await client.passes.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const pass = response.data[0];
 
@@ -627,26 +683,29 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(typeof pass.id).toBe('string');
             expect(pass.type).toBe('Pass');
 
-            // Validate optional string attributes
-            if ((pass as any).name !== undefined) {
-                expect(typeof pass.name).toBe('string');
+            // Validate optional string attributes (see pass.html vertex)
+            if (pass.code !== undefined) {
+                expect(typeof pass.code).toBe('string');
+            }
+            if (pass.kind !== undefined) {
+                expect(typeof pass.kind).toBe('string');
             }
 
             // Validate date attributes
-            if ((pass as any).created_at !== undefined) {
+            if (pass.created_at !== undefined) {
                 expect(typeof pass.created_at).toBe('string');
-                expect(new Date(pass.created_at).getTime()).not.toBeNaN();
+                expect(new Date(pass.created_at!).getTime()).not.toBeNaN();
             }
-            if ((pass as any).updated_at !== undefined) {
+            if (pass.updated_at !== undefined) {
                 expect(typeof pass.updated_at).toBe('string');
-                expect(new Date(pass.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(pass.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Headcount Attributes Type Validation', () => {
         it('should validate HeadcountAttributes types match API response', async () => {
-            const response = await client.headcounts.getPage({ perPage: 1, page: 1 });
+            const response = await client.headcounts.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const headcount = response.data[0];
 
@@ -656,25 +715,26 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(headcount.type).toBe('Headcount');
 
             // Validate optional number attributes
-            if ((headcount as any).count !== undefined) {
+            if (headcount.count !== undefined) {
                 expect(typeof headcount.count).toBe('number');
             }
 
             // Validate date attributes
-            if ((headcount as any).created_at !== undefined) {
-                expect(typeof headcount.created_at).toBe('string');
-                expect(new Date(headcount.created_at).getTime()).not.toBeNaN();
+            const hcDates = headcount;
+            if (hcDates.created_at !== undefined) {
+                expect(typeof hcDates.created_at).toBe('string');
+                expect(new Date(hcDates.created_at).getTime()).not.toBeNaN();
             }
-            if ((headcount as any).updated_at !== undefined) {
-                expect(typeof headcount.updated_at).toBe('string');
-                expect(new Date(headcount.updated_at).getTime()).not.toBeNaN();
+            if (hcDates.updated_at !== undefined) {
+                expect(typeof hcDates.updated_at).toBe('string');
+                expect(new Date(hcDates.updated_at).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('AttendanceType Attributes Type Validation', () => {
         it('should validate AttendanceTypeAttributes types match API response', async () => {
-            const response = await client.events.getPage({ perPage: 1, page: 1 });
+            const response = await client.events.getPage({ per_page: 1, page: 1 });
             expect(response.data.length).toBeGreaterThan(0);
             const eventId = response.data[0].id;
             const attendanceTypesResponse = await client.events.getAttendanceTypes(eventId);
@@ -686,64 +746,28 @@ describe('Check-ins API Attribute Type Validation Integration Tests', () => {
             expect(typeof attendanceType.id).toBe('string');
             expect(attendanceType.type).toBe('AttendanceType');
 
-            // Validate optional string attributes
-            if (attendanceType.attributes?.name !== undefined) {
+            // Validate optional string attributes (flattened: at top level)
+            if (attendanceType.name !== undefined) {
                 expect(typeof attendanceType.name).toBe('string');
             }
 
             // Validate date attributes
-            if (attendanceType.attributes?.created_at !== undefined) {
+            if (attendanceType.created_at !== undefined) {
                 expect(typeof attendanceType.created_at).toBe('string');
-                expect(new Date(attendanceType.created_at).getTime()).not.toBeNaN();
+                expect(new Date(attendanceType.created_at!).getTime()).not.toBeNaN();
             }
-            if (attendanceType.attributes?.updated_at !== undefined) {
+            if (attendanceType.updated_at !== undefined) {
                 expect(typeof attendanceType.updated_at).toBe('string');
-                expect(new Date(attendanceType.updated_at).getTime()).not.toBeNaN();
+                expect(new Date(attendanceType.updated_at!).getTime()).not.toBeNaN();
             }
         }, 30000);
     });
 
     describe('Pagination and Meta Type Validation', () => {
         it('should validate pagination structure types', async () => {
-            const response = await client.events.getAll({ perPage: 5 });
-
-            // Validate pagination links
-            if (response.links) {
-                if (response.links.self) {
-                    expect(typeof response.links.self).toBe('string');
-                }
-                if (response.links.first) {
-                    expect(typeof response.links.first).toBe('string');
-                }
-                if (response.links.last) {
-                    expect(typeof response.links.last).toBe('string');
-                }
-                if (response.links.prev) {
-                    expect(typeof response.links.prev).toBe('string');
-                }
-                if (response.links.next) {
-                    expect(typeof response.links.next).toBe('string');
-                }
-            }
-
-            // Validate pagination meta
-            if (response.meta) {
-                if (response.meta.count !== undefined) {
-                    expect(typeof response.meta.count).toBe('number');
-                }
-                if (response.meta.total_count !== undefined) {
-                    expect(typeof response.meta.total_count).toBe('number');
-                }
-                if (response.meta.total_pages !== undefined) {
-                    expect(typeof response.meta.total_pages).toBe('number');
-                }
-                if (response.meta.per_page !== undefined) {
-                    expect(typeof response.meta.per_page).toBe('number');
-                }
-                if (response.meta.current_page !== undefined) {
-                    expect(typeof response.meta.current_page).toBe('number');
-                }
-            }
+            const response = await client.events.getAll({ per_page: 5 });
+            assertPaginationLinks(response.links);
+            assertPaginationMeta(response.meta);
         }, 30000);
     });
 });

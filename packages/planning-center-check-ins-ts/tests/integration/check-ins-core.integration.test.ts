@@ -17,19 +17,53 @@
 import { PcoCheckInsClient } from '../../src';
 import type { PcoCheckInsClientConfig } from '../../src';
 
-// Test configuration
-const RATE_LIMIT_MAX = parseInt(process.env.PCO_RATE_LIMIT_MAX || '90');
-const RATE_LIMIT_WINDOW = parseInt(process.env.PCO_RATE_LIMIT_WINDOW || '20000');
+function getCheckInsCoreConfig(): PcoCheckInsClientConfig {
+    const hasPersonalToken = !!process.env.PCO_PERSONAL_ACCESS_TOKEN;
+    const hasOAuthCredentials = !!process.env.PCO_ACCESS_TOKEN;
+    if (hasPersonalToken) {
+        return {
+            auth: {
+                type: 'personal_access_token',
+                personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
+                ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
+                    personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
+                }),
+            },
+            retry: { enabled: true, maxRetries: 3 },
+            timeout: 30000,
+        };
+    }
+    if (hasOAuthCredentials) {
+        return {
+            auth: {
+                type: 'oauth',
+                accessToken: process.env.PCO_ACCESS_TOKEN!,
+                refreshToken: process.env.PCO_REFRESH_TOKEN ?? '',
+                onRefresh: async () => { },
+                onRefreshFailure: async () => { },
+            },
+            retry: { enabled: true, maxRetries: 3 },
+            timeout: 30000,
+        };
+    }
+    return {
+        auth: {
+            type: 'basic',
+            appId: process.env.PCO_APP_ID!,
+            appSecret: process.env.PCO_APP_SECRET!,
+        },
+        retry: { enabled: true, maxRetries: 3 },
+        timeout: 30000,
+    };
+}
 
 describe('Check-Ins Core API Integration Tests', () => {
     let client: PcoCheckInsClient;
 
     beforeAll(async () => {
-        // Validate environment variables
         const hasAppCredentials = process.env.PCO_APP_ID && process.env.PCO_APP_SECRET;
         const hasOAuthCredentials = process.env.PCO_ACCESS_TOKEN;
         const hasPersonalToken = process.env.PCO_PERSONAL_ACCESS_TOKEN;
-
         if (!hasAppCredentials && !hasOAuthCredentials && !hasPersonalToken) {
             throw new Error(
                 'PCO credentials not found. Please set one of:\n' +
@@ -39,65 +73,7 @@ describe('Check-Ins Core API Integration Tests', () => {
                 'in .env.test file'
             );
         }
-
-        // Create client configuration
-        const config: PcoCheckInsClientConfig = hasPersonalToken
-            ? {
-                auth: {
-                    type: 'personal_access_token',
-                    personalAccessToken: process.env.PCO_PERSONAL_ACCESS_TOKEN!,
-                    ...(process.env.PCO_PERSONAL_ACCESS_SECRET && {
-                        personalAccessTokenSecret: process.env.PCO_PERSONAL_ACCESS_SECRET,
-                    }),
-                },
-                retry: {
-                    enabled: true,
-                    maxRetries: 3,
-                },
-                timeout: 30000,
-                events: {
-                    onError: (event) => {
-                        console.error('PCO Error:', event.error.message);
-                    },
-                },
-            }
-            : hasOAuthCredentials
-            ? {
-                auth: {
-                    type: 'oauth',
-                    accessToken: process.env.PCO_ACCESS_TOKEN!,
-                },
-                retry: {
-                    enabled: true,
-                    maxRetries: 3,
-                },
-                timeout: 30000,
-                events: {
-                    onError: (event) => {
-                        console.error('PCO Error:', event.error.message);
-                    },
-                },
-            }
-            : {
-                auth: {
-                    type: 'basic',
-                    appId: process.env.PCO_APP_ID!,
-                    appSecret: process.env.PCO_APP_SECRET!,
-                },
-                retry: {
-                    enabled: true,
-                    maxRetries: 3,
-                },
-                timeout: 30000,
-                events: {
-                    onError: (event) => {
-                        console.error('PCO Error:', event.error.message);
-                    },
-                },
-            };
-
-        // Create client
-        client = new PcoCheckInsClient(config);
+        client = new PcoCheckInsClient(getCheckInsCoreConfig());
     }, 30000);
 
     describe('Events Module - Real API', () => {
@@ -119,7 +95,7 @@ describe('Check-Ins Core API Integration Tests', () => {
 
         it('should get events with getPage (single page)', async () => {
             const result = await client.events.getPage({
-                perPage: 5,
+                per_page: 5,
                 page: 1
             });
 
@@ -230,7 +206,7 @@ describe('Check-Ins Core API Integration Tests', () => {
 
     describe('Event Periods Module - Real API', () => {
         it('should get event periods from real API via event associations', async () => {
-            const events = await client.events.getPage({ perPage: 1, page: 1 });
+            const events = await client.events.getPage({ per_page: 1, page: 1 });
             expect(events.data.length).toBeGreaterThan(0);
 
             const eventId = events.data[0].id;

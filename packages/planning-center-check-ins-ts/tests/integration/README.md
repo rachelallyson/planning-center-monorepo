@@ -73,9 +73,34 @@ Tests **fail** when a list is empty: they assert `expect(data.length).toBeGreate
 | **Attendance Types**| Check-Ins → Events → Attendance types |
 | **Integration Links** | Check-Ins → Integration links |
 | **Themes**         | Check-Ins → Themes |
-| **Roster list persons** | Check-Ins → Roster list persons |
+| **Roster list persons** | Check-Ins → **Registration event** (event linked to Registrations) with a roster; the API `GET /roster_list_persons` may only return data when the org has such an event and the feature is enabled. |
 
 Events, check-ins, locations, event times, and person events are required for core tests; the list above must also have at least one record each or those tests will fail.
+
+## How to get better seed data in the browser
+
+Use the same org and login as your integration-test credentials. Open Check-Ins in the browser and add the data below so tests that require it can pass.
+
+| Goal | Where in the browser | What to do |
+|------|----------------------|------------|
+| **Pre-checks** | Ensure **Church Center** is enabled for your org; then use the **Church Center** app (Check-Ins / PreCheck) before an event | Pre-checks are created when someone uses PreCheck in Church Center. If your plan doesn’t support Pre-checks, the API returns 404 and those tests will fail. |
+| **Roster list persons** | Check-Ins → **Events** → create or open a **registration event** (event linked to Registrations) that has a roster | A **registration event** is the event type that has a roster. The API `GET /roster_list_persons` returns 404 for some orgs/plans; when it’s enabled and you have such an event with roster data, the list and getById tests will have data. |
+| **Integration links** | Check-Ins → **Events** → open an event → **Integration links** (or product-level **Integrations** / **Registrations** link) | Create or link at least one integration (e.g. Registrations) so `integration_links` getPage returns a row and the test suite can use an ID for getById. |
+
+**In the browser:** Log in at [https://login.planningcenteronline.com](https://login.planningcenteronline.com), then open **Check-Ins** from your product menu. Use the same org as the one your `.env.test` credentials use.
+
+After adding data, re-run `npm run test:integration`. Tests that need Pre-checks, roster list persons, or integration link IDs will still fail if the API returns 404 or empty for those resources (no conditional skips).
+
+#### If you land on the station activation page (QR code)
+
+When you open **Check-Ins** from the **dropdown in the top left**, the app may show **"Let's connect your station"** (QR code) instead of the Events list. In that case:
+
+1. Click **More options** on that page to see if you can enter a station code or open the main Check-Ins admin (e.g. Events, Locations).
+2. If you still don’t see Events, the full admin UI may only be available from a direct link or after connecting a station; use another device where you’ve already opened the Events list, or ask an org admin for a bookmark to the Events page.
+3. The **step-by-step above** (create event, add times/locations, Church Center, Registrations, roster check-ins) applies once you can see **Events** and **Add event** in the Check-Ins UI.
+
+**Optional: seed data via the API**  
+This SDK is read-only (no `create` methods). If your org allows it, you can create events (and related data) with the [Planning Center Check-Ins API](https://developer.planning.center/docs/#/apps/check-ins) using your `.env.test` credentials (e.g. `POST /check-ins/v2/events`). That can help when the browser always opens the station activation flow.
 
 ## How to add missing data in Planning Center
 
@@ -104,7 +129,7 @@ Passes then appear under that person and in the top-level Passes list. Details: 
 
 - Pre-checks are created when people use **PreCheck** in the **Church Center** app (Check-Ins tab) before an event.
 - Your org must have **Church Center** and **Check-Ins** enabled; then families can pre-check and the Pre-checks API may return data.
-- If `GET /pre_checks` returns **404**, the feature may not be available for your plan. Tests that require Pre-checks use `isPreChecksApiAvailable(client)` and **skip** when the API returns 404, so the suite can pass without Pre-checks enabled.
+- If `GET /pre_checks` returns **404**, the feature may not be available for your plan. Tests that require Pre-checks assert `expect(await isPreChecksApiAvailable(client)).toBe(true)` and **fail** when the API is not available, so the suite only passes when Pre-checks is enabled.
 
 ### Location labels (fix `getLocationLabels` test)
 

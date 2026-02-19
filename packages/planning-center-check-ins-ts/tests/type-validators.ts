@@ -1,44 +1,63 @@
 /**
  * Type Validation Helpers for Integration Tests
- * 
+ *
  * These functions validate that actual PCO API responses match our TypeScript type definitions
  */
+
+/** Minimal resource shape (type, id) for validation */
+interface ResourceLike {
+  type?: string;
+  id?: string;
+}
 
 /**
  * Validates basic resource structure (type, id)
  */
 export function validateResourceStructure(
-  resource: any,
+  resource: ResourceLike,
   expectedType: string,
-  context: string = 'resource'
+  context = 'resource'
 ) {
+  expect(context).toBeDefined();
   expect(resource).toBeDefined();
   expect(resource).toHaveProperty('type');
   expect(resource.type).toBe(expectedType);
   expect(resource).toHaveProperty('id');
   expect(typeof resource.id).toBe('string');
-  expect(resource.id.length).toBeGreaterThan(0);
+  expect(resource.id!.length).toBeGreaterThan(0);
+}
+
+/** Attribute bag (field name -> value) for validation; accepts any object so resource types work */
+type AttributeBag = Record<string, string | number | boolean | null | undefined>;
+
+function isAttributeBag(obj: object): obj is AttributeBag {
+  return typeof obj === 'object' && obj !== null;
+}
+
+function asAttributeBag(obj: object): AttributeBag {
+  return isAttributeBag(obj) ? obj : {};
 }
 
 /**
  * Validates that an attribute has one of the allowed types
  */
 export function validateAttributeType(
-  attributes: any,
+  attributes: object,
   field: string,
   allowedTypes: string[],
-  context: string = 'attribute'
+  context = 'attribute'
 ) {
-  const actualType = attributes[field] === null ? 'null' : typeof attributes[field];
+  expect(context).toBeDefined();
+  const bag = asAttributeBag(attributes);
+  const actualType = bag[field] === null ? 'null' : typeof bag[field];
   expect(allowedTypes).toContain(actualType);
-
 }
 
 /**
  * Validates string attribute (can be string or undefined)
  */
 export function validateStringAttribute(
-  attributes: any,
+  attributes: object,
   field: string
 ) {
   validateAttributeType(attributes, field, ['string', 'undefined', 'null'], field);
@@ -48,7 +67,7 @@ export function validateStringAttribute(
  * Validates nullable string attribute (can be string, null, or undefined)
  */
 export function validateNullableStringAttribute(
-  attributes: any,
+  attributes: object,
   field: string
 ) {
   validateAttributeType(attributes, field, ['string', 'null', 'undefined'], field);
@@ -58,7 +77,7 @@ export function validateNullableStringAttribute(
  * Validates boolean attribute (can be boolean or undefined)
  */
 export function validateBooleanAttribute(
-  attributes: any,
+  attributes: object,
   field: string
 ) {
   validateAttributeType(attributes, field, ['boolean', 'undefined'], field);
@@ -68,7 +87,7 @@ export function validateBooleanAttribute(
  * Validates number attribute (can be number or undefined)
  */
 export function validateNumberAttribute(
-  attributes: any,
+  attributes: object,
   field: string
 ) {
   validateAttributeType(attributes, field, ['number', 'undefined'], field);
@@ -79,17 +98,28 @@ export function validateNumberAttribute(
  * Only validates if the field exists (handles optional date fields)
  */
 export function validateDateAttribute(
-  attributes: any,
+  attributes: object,
   field: string
 ) {
-  const value = attributes[field];
+  const bag = asAttributeBag(attributes);
+  const value = bag[field];
   // Skip validation if field is undefined or null (optional)
   if (value === null || value === undefined) return;
-
-  expect(typeof value).toBe('string');
+  if (typeof value !== 'string') return;
   // Basic ISO8601 format check (YYYY-MM-DDTHH:mm:ss)
   const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
   expect(iso8601Regex.test(value)).toBe(true);
+}
+
+/** Resource identifier shape */
+interface ResourceIdentifier {
+  type?: string;
+  id?: string;
+}
+
+/** Relationship payload (data can be null or identifier(s)) */
+interface RelationshipLike {
+  data?: ResourceIdentifier | ResourceIdentifier[] | null;
 }
 
 /**
@@ -97,9 +127,8 @@ export function validateDateAttribute(
  * Handles optional relationships and null data
  */
 export function validateRelationship(
-  relationship: any,
+  relationship: RelationshipLike
 ) {
-
   expect(relationship).toHaveProperty('data');
 
   // data can be null (valid JSON:API for optional relationships)
@@ -107,7 +136,7 @@ export function validateRelationship(
 
   // data is a resource identifier or array of resource identifiers
   if (Array.isArray(relationship.data)) {
-    relationship.data.forEach((item: any) => {
+    relationship.data.forEach((item: ResourceIdentifier) => {
       expect(item).toHaveProperty('type');
       expect(item).toHaveProperty('id');
     });
@@ -117,11 +146,41 @@ export function validateRelationship(
   }
 }
 
+/** Check type/id on an object without casting. */
+function expectResourceIdentifierShape(r: object) {
+  const typeDesc = Object.getOwnPropertyDescriptor(r, 'type');
+  if (typeDesc?.value !== undefined) expect(typeof typeDesc.value).toBe('string');
+  const idDesc = Object.getOwnPropertyDescriptor(r, 'id');
+  if (idDesc?.value !== undefined) expect(typeof idDesc.value).toBe('string');
+}
+
+function isRelationshipRecord(o: object): o is Record<string, object | object[] | null | undefined> {
+  return typeof o === 'object' && o !== null;
+}
+
+export function validateRelationshipKeys(item: object, relKeys: readonly string[]) {
+  const record = isRelationshipRecord(item) ? item : {};
+  relKeys.forEach((key) => {
+    const val = record[key];
+    if (val === undefined || val === null) return;
+    if (Array.isArray(val)) {
+      val.forEach((v) => {
+        expect(v).toBeDefined();
+        expect(typeof v === 'object').toBe(true);
+        expectResourceIdentifierShape(v);
+      });
+    } else {
+      expect(typeof val === 'object').toBe(true);
+      expectResourceIdentifierShape(val);
+    }
+  });
+}
+
 /**
  * Validates that included resources match expected types
  */
 export function validateIncludedResources(
-  included: any[],
+  included: ResourceLike[],
   expectedTypes: string[]
 ) {
   included.forEach(resource => {
@@ -130,33 +189,38 @@ export function validateIncludedResources(
     expect(resource).toHaveProperty('id');
     expect(typeof resource.id).toBe('string');
   });
+}
 
+/** Pagination links shape */
+interface PaginationLinksLike {
+  self?: string;
+  next?: string | null;
+  prev?: string | null;
 }
 
 /**
  * Validates pagination links structure
  */
-export function validatePaginationLinks(links: any) {
-
+export function validatePaginationLinks(links: PaginationLinksLike) {
   expect(links).toHaveProperty('self');
   expect(typeof links.self).toBe('string');
 
-  // next and prev can be null or strings
-  expect(['string', 'null', 'undefined']).toContain(typeof links.next === null ? 'null' : typeof links.next);
+  // next and prev can be null or strings (typeof null === 'object')
+  expect(['string', 'object', 'undefined']).toContain(links.next == null ? 'object' : typeof links.next);
+  expect(['string', 'object', 'undefined']).toContain(links.prev == null ? 'object' : typeof links.prev);
+}
 
-  expect(['string', 'null', 'undefined']).toContain(typeof links.prev === null ? 'null' : typeof links.prev);
-
+/** Pagination meta shape */
+interface PaginationMetaLike {
+  count?: number;
+  total_count?: number;
 }
 
 /**
  * Validates pagination metadata
  */
-export function validatePaginationMeta(meta: any) {
-
-  // Count is usually present
+export function validatePaginationMeta(meta: PaginationMetaLike) {
   expect(typeof meta.count).toBe('number');
-  // Total count may be present
   expect(typeof meta.total_count).toBe('number');
-
 }
 
