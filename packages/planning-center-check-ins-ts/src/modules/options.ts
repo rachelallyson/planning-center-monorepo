@@ -1,70 +1,51 @@
 /**
  * Options Module for Check-Ins API
+ * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/option
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    PcoClientConfig
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    OptionGetByIdOptions,
+    OptionsGetAllOptions,
+    OptionsGetPageOptions,
+} from '../types/api-options';
 
-export interface OptionsListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Options: getPage, getById. */
 export class OptionsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
-
 
     /**
      * Get all options across all pages with optional filtering.
-     * Use getPage() when you need a single page or custom perPage/page.
+     * Use getPage() when you need a single page or custom per_page/page.
      */
-    async getAll(options: OptionsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getAllPages<Types.OptionResourceObject>('/options', params);
+    async getAll(options?: OptionsGetAllOptions) {
+        return this.getAllPages<Types.OptionResource, OptionsGetAllOptions>('/options', options);
     }
 
     /**
      * Get a single page of options with optional filtering and pagination.
      */
-    async getPage(options: OptionsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getList<Types.OptionResourceObject, Types.OptionRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/options', params);
-    }
-
-    private buildParams(options: OptionsListOptions): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(options?: OptionsGetPageOptions) {
+        return this.getList<Types.OptionResource, OptionsGetPageOptions>('/options', options);
     }
 
     /**
-     * Get a single option by ID
+     * Get a single option by ID. Can Include: label (include associated label).
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.OptionResourceObject, Types.OptionRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/options/${id}`, params);
+    async getById(id: string, options?: OptionGetByIdOptions) {
+        return this.getSingle<Types.OptionResource>(`/options/${id}`, options);
     }
 }
 

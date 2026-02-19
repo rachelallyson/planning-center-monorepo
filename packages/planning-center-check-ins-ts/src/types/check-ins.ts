@@ -1,37 +1,40 @@
 /**
  * Planning Center Check-Ins API Types
- * Based on JSON:API 1.0 specification
+ * Based on JSON:API 1.0 specification.
+ * Each *Resource is a plain interface (type, id, attributes and resolved relationships at top level).
  */
 
-import {
-  Attributes,
-  FlattenedResource,
-  Meta,
-  Relationship,
-  ResourceObject,
-  TopLevelLinks,
-} from '@rachelallyson/planning-center-base-ts';
+import type { Links, Meta, Relationship } from '@rachelallyson/planning-center-base-ts';
+import type { ListResponse } from '@rachelallyson/planning-center-base-ts';
 
-/** List response shape returned by the client (data is always flattened) */
-export interface ListResponse<T> {
-  data: T[];
+export type { ListResponse };
+
+/**
+ * Minimal Person shape for Check-Ins association endpoints (getPerson, getCheckedInBy, getCheckedOutBy).
+ * Full Person type lives in @rachelallyson/planning-center-people-ts.
+ */
+export interface PersonStub {
+  type: 'Person';
+  id: string;
+  links?: Links;
   meta?: Meta;
-  links?: TopLevelLinks;
+  [key: string]: string | number | boolean | null | object | object[] | undefined;
 }
 
 // ===== Event Resource =====
 
-export interface EventAttributes extends Attributes {
-  name?: string;
-  frequency?: string;
-  enable_services_integration?: boolean;
-  location_times_enabled?: boolean;
-  pre_select_enabled?: boolean;
-  integration_key?: string;
+/** @see docs/public/vertices/check-ins/vertices/event.html */
+export interface EventAttributes {
   app_source?: string;
+  archived_at?: string | null;
   created_at?: string;
+  enable_services_integration?: boolean;
+  frequency?: string;
+  integration_key?: string | null;
+  location_times_enabled?: boolean;
+  name?: string;
+  pre_select_enabled?: boolean;
   updated_at?: string;
-  archived_at?: string;
 }
 
 export interface EventRelationships {
@@ -45,49 +48,46 @@ export interface EventRelationships {
   person_events?: Relationship;
 }
 
-/** Maps Event relationship keys to specific resource types (internal JSON:API shape) */
-export interface EventRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  attendance_types: AttendanceTypeResourceObject[];
-  check_ins: CheckInResourceObject[];
-  current_event_times: EventTimeResourceObject[];
-  event_labels: EventLabelResourceObject[];
-  event_periods: EventPeriodResourceObject[];
-  integration_links: IntegrationLinkResourceObject[];
-  locations: LocationResourceObject[];
-  person_events: PersonEventResourceObject[];
+/** Event relationship keys with resolved *Resource types (output of getSingle/getList) */
+export interface EventRelOutputs {
+  attendance_types?: AttendanceTypeResource[];
+  check_ins?: CheckInResource[];
+  current_event_times?: EventTimeResource[];
+  event_labels?: EventLabelResource[];
+  event_periods?: EventPeriodResource[];
+  integration_links?: IntegrationLinkResource[];
+  locations?: LocationResource[];
+  person_events?: PersonEventResource[];
 }
 
-/** Internal JSON:API resource shape; use EventResource for the type returned by the client */
-export interface EventResourceObject
-  extends ResourceObject<'Event', EventAttributes, EventRelationships> { }
-
 /** Event resource as returned by the client (attributes and relationships at top level) */
-export type EventResource = FlattenedResource<
-  'Event',
-  EventAttributes,
-  EventRelationships,
-  EventRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface EventResource extends EventAttributes, EventRelOutputs {
+  type: 'Event';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type EventsList = ListResponse<EventResource>;
 export type EventSingle = EventResource;
 
 // ===== CheckIn Resource =====
 
-export interface CheckInAttributes extends Attributes {
-  first_name?: string;
-  last_name?: string;
-  medical_notes?: string;
-  number?: number;
-  security_code?: string;
+/** @see docs/public/vertices/check-ins/vertices/check_in.html */
+export interface CheckInAttributes {
+  checked_out_at?: string | null;
+  confirmed_at?: string | null;
   created_at?: string;
-  updated_at?: string;
-  checked_out_at?: string;
-  confirmed_at?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone_number?: string;
-  one_time_guest?: boolean;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone_number?: string | null;
+  first_name?: string;
   kind?: string;
+  last_name?: string;
+  medical_notes?: string | null;
+  number?: number;
+  one_time_guest?: boolean;
+  security_code?: string;
+  updated_at?: string;
 }
 
 export interface CheckInRelationships {
@@ -104,38 +104,38 @@ export interface CheckInRelationships {
   person?: Relationship;
 }
 
-/** Maps CheckIn relationship keys to specific resource types (Person/checked_in_by/checked_out_by are external) */
-export interface CheckInRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  check_in_group: CheckInGroupResourceObject;
-  check_in_times: CheckInTimeResourceObject[];
-  checked_in_at: StationResourceObject;
-  event: EventResourceObject;
-  event_period: EventPeriodResourceObject;
-  event_times: EventTimeResourceObject[];
-  locations: LocationResourceObject[];
-  options: OptionResourceObject[];
+/** Check-in relationship keys with resolved *Resource types. Person/checked_in_by/checked_out_by are from People API. */
+export interface CheckInRelOutputs {
+  check_in_group?: CheckInGroupResource | null;
+  check_in_times?: CheckInTimeResource[];
+  checked_in_at?: StationResource | null;
+  checked_in_by?: PersonStub | null;
+  checked_out_by?: PersonStub | null;
+  event?: EventResource | null;
+  event_period?: EventPeriodResource | null;
+  event_times?: EventTimeResource[];
+  locations?: LocationResource[];
+  options?: OptionResource[];
+  person?: PersonStub | null;
 }
 
-/** Internal JSON:API resource shape; use CheckInResource for the type returned by the client */
-export interface CheckInResourceObject
-  extends ResourceObject<'CheckIn', CheckInAttributes, CheckInRelationships> { }
-
 /** Check-in resource as returned by the client (attributes and relationships at top level) */
-export type CheckInResource = FlattenedResource<
-  'CheckIn',
-  CheckInAttributes,
-  CheckInRelationships,
-  CheckInRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface CheckInResource extends CheckInAttributes, CheckInRelOutputs {
+  type: 'CheckIn';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type CheckInsList = ListResponse<CheckInResource>;
 export type CheckInSingle = CheckInResource;
 
 // ===== Location Resource =====
 
-export interface LocationAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/location.html */
+export interface LocationAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -146,36 +146,37 @@ export interface LocationRelationships {
   location_labels?: Relationship;
 }
 
-/** Maps Location relationship keys to specific resource types */
-export interface LocationRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
-  location_event_periods: LocationEventPeriodResourceObject[];
-  location_event_times: LocationEventTimeResourceObject[];
-  location_labels: LocationLabelResourceObject[];
+/** Location relationship keys with resolved *Resource types */
+export interface LocationRelOutputs {
+  event?: EventResource | null;
+  location_event_periods?: LocationEventPeriodResource[];
+  location_event_times?: LocationEventTimeResource[];
+  location_labels?: LocationLabelResource[];
 }
 
-/** Internal JSON:API resource shape; use LocationResource for the type returned by the client */
-export interface LocationResourceObject
-  extends ResourceObject<'Location', LocationAttributes, LocationRelationships> { }
-
 /** Location resource as returned by the client (attributes and relationships at top level) */
-export type LocationResource = FlattenedResource<
-  'Location',
-  LocationAttributes,
-  LocationRelationships,
-  LocationRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface LocationResource extends LocationAttributes, LocationRelOutputs {
+  type: 'Location';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type LocationsList = ListResponse<LocationResource>;
 export type LocationSingle = LocationResource;
 
 // ===== EventPeriod Resource =====
 
-export interface EventPeriodAttributes extends Attributes {
-  starts_at?: string;
-  ends_at?: string;
+/** @see docs/public/vertices/check-ins/vertices/event_period.html */
+export interface EventPeriodAttributes {
   created_at?: string;
+  ends_at?: string;
+  guest_count?: number;
+  note?: string | null;
+  regular_count?: number;
+  starts_at?: string;
   updated_at?: string;
+  volunteer_count?: number;
 }
 
 export interface EventPeriodRelationships {
@@ -185,35 +186,32 @@ export interface EventPeriodRelationships {
   location_event_periods?: Relationship;
 }
 
-/** Maps EventPeriod relationship keys to specific resource types */
-export interface EventPeriodRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
-  event_times: EventTimeResourceObject[];
-  check_ins: CheckInResourceObject[];
-  location_event_periods: LocationEventPeriodResourceObject[];
+/** EventPeriod relationship keys with resolved *Resource types */
+export interface EventPeriodRelOutputs {
+  event?: EventResource | null;
+  event_times?: EventTimeResource[];
+  check_ins?: CheckInResource[];
+  location_event_periods?: LocationEventPeriodResource[];
 }
 
-/** Internal JSON:API resource shape; use EventPeriodResource for the type returned by the client */
-export interface EventPeriodResourceObject
-  extends ResourceObject<'EventPeriod', EventPeriodAttributes, EventPeriodRelationships> { }
-
 /** Event period resource as returned by the client (attributes and relationships at top level) */
-export type EventPeriodResource = FlattenedResource<
-  'EventPeriod',
-  EventPeriodAttributes,
-  EventPeriodRelationships,
-  EventPeriodRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface EventPeriodResource extends EventPeriodAttributes, EventPeriodRelOutputs {
+  type: 'EventPeriod';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type EventPeriodsList = ListResponse<EventPeriodResource>;
 export type EventPeriodSingle = EventPeriodResource;
 
 // ===== EventTime Resource =====
 
-export interface EventTimeAttributes extends Attributes {
-  starts_at?: string;
-  ends_at?: string;
+/** @see docs/public/vertices/check-ins/vertices/event_time.html */
+export interface EventTimeAttributes {
   created_at?: string;
+  ends_at?: string;
+  starts_at?: string;
   updated_at?: string;
 }
 
@@ -225,35 +223,32 @@ export interface EventTimeRelationships {
   headcounts?: Relationship;
 }
 
-/** Maps EventTime relationship keys to specific resource types */
-export interface EventTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
-  event_period: EventPeriodResourceObject;
-  location_event_times: LocationEventTimeResourceObject[];
-  check_ins: CheckInResourceObject[];
-  headcounts: HeadcountResourceObject[];
+/** EventTime relationship keys with resolved *Resource types */
+export interface EventTimeRelOutputs {
+  event?: EventResource | null;
+  event_period?: EventPeriodResource | null;
+  location_event_times?: LocationEventTimeResource[];
+  check_ins?: CheckInResource[];
+  headcounts?: HeadcountResource[];
 }
 
-/** Internal JSON:API resource shape; use EventTimeResource for the type returned by the client */
-export interface EventTimeResourceObject
-  extends ResourceObject<'EventTime', EventTimeAttributes, EventTimeRelationships> { }
-
 /** Event time resource as returned by the client (attributes and relationships at top level) */
-export type EventTimeResource = FlattenedResource<
-  'EventTime',
-  EventTimeAttributes,
-  EventTimeRelationships,
-  EventTimeRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface EventTimeResource extends EventTimeAttributes, EventTimeRelOutputs {
+  type: 'EventTime';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type EventTimesList = ListResponse<EventTimeResource>;
 export type EventTimeSingle = EventTimeResource;
 
 // ===== Station Resource =====
 
-export interface StationAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/station.html */
+export interface StationAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -261,31 +256,30 @@ export interface StationRelationships {
   check_ins?: Relationship;
 }
 
-/** Maps Station relationship keys to specific resource types */
-export interface StationRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  check_ins: CheckInResourceObject[];
+/** Station relationship keys with resolved *Resource types */
+export interface StationRelOutputs {
+  check_ins?: CheckInResource[];
+  event?: EventResource | null;
+  location?: LocationResource | null;
 }
 
-/** Internal JSON:API resource shape; use StationResource for the type returned by the client */
-export interface StationResourceObject
-  extends ResourceObject<'Station', StationAttributes, StationRelationships> { }
-
 /** Station resource as returned by the client (attributes and relationships at top level) */
-export type StationResource = FlattenedResource<
-  'Station',
-  StationAttributes,
-  StationRelationships,
-  StationRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface StationResource extends StationAttributes, StationRelOutputs {
+  type: 'Station';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type StationsList = ListResponse<StationResource>;
 export type StationSingle = StationResource;
 
 // ===== Label Resource =====
 
-export interface LabelAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/label.html */
+export interface LabelAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -294,31 +288,32 @@ export interface LabelRelationships {
   location_labels?: Relationship;
 }
 
-/** Maps Label relationship keys to specific resource types */
-export interface LabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event_labels: EventLabelResourceObject[];
-  location_labels: LocationLabelResourceObject[];
+/** Label relationship keys with resolved *Resource types */
+export interface LabelRelOutputs {
+  event_labels?: EventLabelResource[];
+  location_labels?: LocationLabelResource[];
 }
 
-/** Internal JSON:API resource shape; use LabelResource for the type returned by the client */
-export interface LabelResourceObject
-  extends ResourceObject<'Label', LabelAttributes, LabelRelationships> { }
-
 /** Label resource as returned by the client (attributes and relationships at top level) */
-export type LabelResource = FlattenedResource<
-  'Label',
-  LabelAttributes,
-  LabelRelationships,
-  LabelRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface LabelResource extends LabelAttributes, LabelRelOutputs {
+  type: 'Label';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type LabelsList = ListResponse<LabelResource>;
 export type LabelSingle = LabelResource;
 
 // ===== EventLabel Resource =====
 
-export interface EventLabelAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/event_label.html */
+export interface EventLabelAttributes {
   created_at?: string;
+  for_guest?: boolean;
+  for_regular?: boolean;
+  for_volunteer?: boolean;
+  quantity?: number;
   updated_at?: string;
 }
 
@@ -327,31 +322,32 @@ export interface EventLabelRelationships {
   label?: Relationship;
 }
 
-/** Maps EventLabel relationship keys to specific resource types */
-export interface EventLabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
-  label: LabelResourceObject;
+/** EventLabel relationship keys with resolved *Resource types */
+export interface EventLabelRelOutputs {
+  event?: EventResource | null;
+  label?: LabelResource | null;
 }
 
-/** Internal JSON:API resource shape; use EventLabelResource for the type returned by the client */
-export interface EventLabelResourceObject
-  extends ResourceObject<'EventLabel', EventLabelAttributes, EventLabelRelationships> { }
-
 /** Event label resource as returned by the client (attributes and relationships at top level) */
-export type EventLabelResource = FlattenedResource<
-  'EventLabel',
-  EventLabelAttributes,
-  EventLabelRelationships,
-  EventLabelRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface EventLabelResource extends EventLabelAttributes, EventLabelRelOutputs {
+  type: 'EventLabel';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type EventLabelsList = ListResponse<EventLabelResource>;
 export type EventLabelSingle = EventLabelResource;
 
 // ===== LocationLabel Resource =====
 
-export interface LocationLabelAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/location_label.html */
+export interface LocationLabelAttributes {
   created_at?: string;
+  for_guest?: boolean;
+  for_regular?: boolean;
+  for_volunteer?: boolean;
+  quantity?: number;
   updated_at?: string;
 }
 
@@ -360,32 +356,29 @@ export interface LocationLabelRelationships {
   label?: Relationship;
 }
 
-/** Maps LocationLabel relationship keys to specific resource types */
-export interface LocationLabelRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  location: LocationResourceObject;
-  label: LabelResourceObject;
+/** LocationLabel relationship keys with resolved *Resource types */
+export interface LocationLabelRelOutputs {
+  location?: LocationResource | null;
+  label?: LabelResource | null;
 }
 
-/** Internal JSON:API resource shape; use LocationLabelResource for the type returned by the client */
-export interface LocationLabelResourceObject
-  extends ResourceObject<'LocationLabel', LocationLabelAttributes, LocationLabelRelationships> { }
-
 /** Location label resource as returned by the client (attributes and relationships at top level) */
-export type LocationLabelResource = FlattenedResource<
-  'LocationLabel',
-  LocationLabelAttributes,
-  LocationLabelRelationships,
-  LocationLabelRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface LocationLabelResource extends LocationLabelAttributes, LocationLabelRelOutputs {
+  type: 'LocationLabel';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type LocationLabelsList = ListResponse<LocationLabelResource>;
 export type LocationLabelSingle = LocationLabelResource;
 
 // ===== Option Resource =====
 
-export interface OptionAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/option.html */
+export interface OptionAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -393,31 +386,28 @@ export interface OptionRelationships {
   check_ins?: Relationship;
 }
 
-/** Maps Option relationship keys to specific resource types */
-export interface OptionRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  check_ins: CheckInResourceObject[];
+/** Option relationship keys with resolved *Resource types */
+export interface OptionRelOutputs {
+  check_ins?: CheckInResource[];
 }
 
-/** Internal JSON:API resource shape; use OptionResource for the type returned by the client */
-export interface OptionResourceObject
-  extends ResourceObject<'Option', OptionAttributes, OptionRelationships> { }
-
 /** Option resource as returned by the client (attributes and relationships at top level) */
-export type OptionResource = FlattenedResource<
-  'Option',
-  OptionAttributes,
-  OptionRelationships,
-  OptionRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface OptionResource extends OptionAttributes, OptionRelOutputs {
+  type: 'Option';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type OptionsList = ListResponse<OptionResource>;
 export type OptionSingle = OptionResource;
 
 // ===== CheckInGroup Resource =====
 
-export interface CheckInGroupAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/check_in_group.html */
+export interface CheckInGroupAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -425,29 +415,26 @@ export interface CheckInGroupRelationships {
   check_ins?: Relationship;
 }
 
-/** Maps CheckInGroup relationship keys to specific resource types */
-export interface CheckInGroupRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  check_ins: CheckInResourceObject[];
+/** CheckInGroup relationship keys with resolved *Resource types */
+export interface CheckInGroupRelOutputs {
+  check_ins?: CheckInResource[];
 }
 
-/** Internal JSON:API resource shape; use CheckInGroupResource for the type returned by the client */
-export interface CheckInGroupResourceObject
-  extends ResourceObject<'CheckInGroup', CheckInGroupAttributes, CheckInGroupRelationships> { }
-
 /** Check-in group resource as returned by the client (attributes and relationships at top level) */
-export type CheckInGroupResource = FlattenedResource<
-  'CheckInGroup',
-  CheckInGroupAttributes,
-  CheckInGroupRelationships,
-  CheckInGroupRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface CheckInGroupResource extends CheckInGroupAttributes, CheckInGroupRelOutputs {
+  type: 'CheckInGroup';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type CheckInGroupsList = ListResponse<CheckInGroupResource>;
 export type CheckInGroupSingle = CheckInGroupResource;
 
 // ===== CheckInTime Resource =====
 
-export interface CheckInTimeAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/check_in_time.html */
+export interface CheckInTimeAttributes {
   created_at?: string;
   updated_at?: string;
 }
@@ -457,30 +444,27 @@ export interface CheckInTimeRelationships {
   event_time?: Relationship;
 }
 
-/** Maps CheckInTime relationship keys to specific resource types */
-export interface CheckInTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  check_in: CheckInResourceObject;
-  event_time: EventTimeResourceObject;
+/** CheckInTime relationship keys with resolved *Resource types */
+export interface CheckInTimeRelOutputs {
+  check_in?: CheckInResource | null;
+  event_time?: EventTimeResource | null;
 }
 
-/** Internal JSON:API resource shape; use CheckInTimeResource for the type returned by the client */
-export interface CheckInTimeResourceObject
-  extends ResourceObject<'CheckInTime', CheckInTimeAttributes, CheckInTimeRelationships> { }
-
 /** Check-in time resource as returned by the client (attributes and relationships at top level) */
-export type CheckInTimeResource = FlattenedResource<
-  'CheckInTime',
-  CheckInTimeAttributes,
-  CheckInTimeRelationships,
-  CheckInTimeRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface CheckInTimeResource extends CheckInTimeAttributes, CheckInTimeRelOutputs {
+  type: 'CheckInTime';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type CheckInTimesList = ListResponse<CheckInTimeResource>;
 export type CheckInTimeSingle = CheckInTimeResource;
 
 // ===== PersonEvent Resource =====
 
-export interface PersonEventAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/person_event.html */
+export interface PersonEventAttributes {
   created_at?: string;
   updated_at?: string;
 }
@@ -490,29 +474,27 @@ export interface PersonEventRelationships {
   person?: Relationship;
 }
 
-/** Maps PersonEvent relationship keys to specific resource types (person is external/People API) */
-export interface PersonEventRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
+/** PersonEvent relationship keys with resolved *Resource types (person is from People API) */
+export interface PersonEventRelOutputs {
+  event?: EventResource | null;
+  person?: PersonStub | null;
 }
 
-/** Internal JSON:API resource shape; use PersonEventResource for the type returned by the client */
-export interface PersonEventResourceObject
-  extends ResourceObject<'PersonEvent', PersonEventAttributes, PersonEventRelationships> { }
-
 /** Person event resource as returned by the client (attributes and relationships at top level) */
-export type PersonEventResource = FlattenedResource<
-  'PersonEvent',
-  PersonEventAttributes,
-  PersonEventRelationships,
-  PersonEventRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface PersonEventResource extends PersonEventAttributes, PersonEventRelOutputs {
+  type: 'PersonEvent';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type PersonEventsList = ListResponse<PersonEventResource>;
 export type PersonEventSingle = PersonEventResource;
 
 // ===== PreCheck Resource =====
 
-export interface PreCheckAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/pre_check.html */
+export interface PreCheckAttributes {
   created_at?: string;
   updated_at?: string;
 }
@@ -522,51 +504,48 @@ export interface PreCheckRelationships {
   person?: Relationship;
 }
 
-/** Maps PreCheck relationship keys to specific resource types (person is external/People API) */
-export interface PreCheckRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
+/** PreCheck relationship keys with resolved *Resource types (person is from People API) */
+export interface PreCheckRelOutputs {
+  event?: EventResource | null;
+  person?: PersonStub | null;
 }
 
-/** Internal JSON:API resource shape; use PreCheckResource for the type returned by the client */
-export interface PreCheckResourceObject
-  extends ResourceObject<'PreCheck', PreCheckAttributes, PreCheckRelationships> { }
-
 /** Pre-check resource as returned by the client (attributes and relationships at top level) */
-export type PreCheckResource = FlattenedResource<
-  'PreCheck',
-  PreCheckAttributes,
-  PreCheckRelationships,
-  PreCheckRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface PreCheckResource extends PreCheckAttributes, PreCheckRelOutputs {
+  type: 'PreCheck';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type PreChecksList = ListResponse<PreCheckResource>;
 export type PreCheckSingle = PreCheckResource;
 
 // ===== Pass Resource =====
 
-export interface PassAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/pass.html */
+export interface PassAttributes {
+  code?: string;
   created_at?: string;
+  kind?: string;
   updated_at?: string;
 }
 
-export interface PassRelationships {
-  // Relationships TBD
-}
-
-/** Internal JSON:API resource shape; use PassResource for the type returned by the client */
-export interface PassResourceObject
-  extends ResourceObject<'Pass', PassAttributes, PassRelationships> { }
-
 /** Pass resource as returned by the client (attributes at top level) */
-export type PassResource = FlattenedResource<'Pass', PassAttributes, PassRelationships>;
+export interface PassResource extends PassAttributes {
+  type: 'Pass';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type PassesList = ListResponse<PassResource>;
 export type PassSingle = PassResource;
 
 // ===== Headcount Resource =====
 
-export interface HeadcountAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/headcount.html */
+export interface HeadcountAttributes {
   count?: number;
   created_at?: string;
   updated_at?: string;
@@ -577,32 +556,29 @@ export interface HeadcountRelationships {
   event_time?: Relationship;
 }
 
-/** Maps Headcount relationship keys to specific resource types */
-export interface HeadcountRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  attendance_type: AttendanceTypeResourceObject;
-  event_time: EventTimeResourceObject;
+/** Headcount relationship keys with resolved *Resource types */
+export interface HeadcountRelOutputs {
+  attendance_type?: AttendanceTypeResource | null;
+  event_time?: EventTimeResource | null;
 }
 
-/** Internal JSON:API resource shape; use HeadcountResource for the type returned by the client */
-export interface HeadcountResourceObject
-  extends ResourceObject<'Headcount', HeadcountAttributes, HeadcountRelationships> { }
-
 /** Headcount resource as returned by the client (attributes and relationships at top level) */
-export type HeadcountResource = FlattenedResource<
-  'Headcount',
-  HeadcountAttributes,
-  HeadcountRelationships,
-  HeadcountRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface HeadcountResource extends HeadcountAttributes, HeadcountRelOutputs {
+  type: 'Headcount';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type HeadcountsList = ListResponse<HeadcountResource>;
 export type HeadcountSingle = HeadcountResource;
 
 // ===== AttendanceType Resource =====
 
-export interface AttendanceTypeAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/attendance_type.html */
+export interface AttendanceTypeAttributes {
   created_at?: string;
+  name?: string;
   updated_at?: string;
 }
 
@@ -610,77 +586,81 @@ export interface AttendanceTypeRelationships {
   event?: Relationship;
 }
 
-/** Maps AttendanceType relationship keys to specific resource types */
-export interface AttendanceTypeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
+/** AttendanceType relationship keys with resolved *Resource types */
+export interface AttendanceTypeRelOutputs {
+  event?: EventResource | null;
 }
 
-/** Internal JSON:API resource shape; use AttendanceTypeResource for the type returned by the client */
-export interface AttendanceTypeResourceObject
-  extends ResourceObject<'AttendanceType', AttendanceTypeAttributes, AttendanceTypeRelationships> { }
-
 /** Attendance type resource as returned by the client (attributes and relationships at top level) */
-export type AttendanceTypeResource = FlattenedResource<
-  'AttendanceType',
-  AttendanceTypeAttributes,
-  AttendanceTypeRelationships,
-  AttendanceTypeRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface AttendanceTypeResource extends AttendanceTypeAttributes, AttendanceTypeRelOutputs {
+  type: 'AttendanceType';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type AttendanceTypesList = ListResponse<AttendanceTypeResource>;
 export type AttendanceTypeSingle = AttendanceTypeResource;
 
 // ===== RosterListPerson Resource =====
 
-export interface RosterListPersonAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/roster_list_person.html */
+export interface RosterListPersonAttributes {
   created_at?: string;
   updated_at?: string;
 }
 
 export interface RosterListPersonRelationships {
   person?: Relationship;
-  // Additional relationships TBD
 }
 
-/** Internal JSON:API resource shape; use RosterListPersonResource for the type returned by the client */
-export interface RosterListPersonResourceObject
-  extends ResourceObject<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships> { }
+/** RosterListPerson relationship keys (person is from People API) */
+export interface RosterListPersonRelOutputs {
+  person?: PersonStub | null;
+}
 
 /** Roster list person resource as returned by the client (attributes at top level) */
-export type RosterListPersonResource = FlattenedResource<'RosterListPerson', RosterListPersonAttributes, RosterListPersonRelationships>;
+export interface RosterListPersonResource extends RosterListPersonAttributes, RosterListPersonRelOutputs {
+  type: 'RosterListPerson';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type RosterListPersonsList = ListResponse<RosterListPersonResource>;
 export type RosterListPersonSingle = RosterListPersonResource;
 
 // ===== Organization Resource =====
 
-export interface OrganizationAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/organization.html */
+export interface OrganizationAttributes {
+  avatar_url?: string | null;
+  created_at?: string;
+  daily_check_ins?: number;
+  date_format_pattern?: string;
   name?: string;
   time_zone?: string;
-  created_at?: string;
   updated_at?: string;
 }
 
-export interface OrganizationRelationships {
-  // Relationships TBD
-}
-
-/** Internal JSON:API resource shape; use OrganizationResource for the type returned by the client */
-export interface OrganizationResourceObject
-  extends ResourceObject<'Organization', OrganizationAttributes, OrganizationRelationships> { }
-
 /** Organization resource as returned by the client (attributes at top level) */
-export type OrganizationResource = FlattenedResource<'Organization', OrganizationAttributes, OrganizationRelationships>;
+export interface OrganizationResource extends OrganizationAttributes {
+  type: 'Organization';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type OrganizationsList = ListResponse<OrganizationResource>;
 export type OrganizationSingle = OrganizationResource;
 
 // ===== IntegrationLink Resource =====
 
-export interface IntegrationLinkAttributes extends Attributes {
-  integration_type?: string;
-  external_id?: string;
+/** @see docs/public/vertices/check-ins/vertices/integration_link.html */
+export interface IntegrationLinkAttributes {
   created_at?: string;
+  external_id?: string;
+  integration_type?: string;
   updated_at?: string;
 }
 
@@ -688,51 +668,54 @@ export interface IntegrationLinkRelationships {
   event?: Relationship;
 }
 
-/** Maps IntegrationLink relationship keys to specific resource types */
-export interface IntegrationLinkRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  event: EventResourceObject;
+/** IntegrationLink relationship keys with resolved *Resource types */
+export interface IntegrationLinkRelOutputs {
+  event?: EventResource | null;
 }
 
-/** Internal JSON:API resource shape; use IntegrationLinkResource for the type returned by the client */
-export interface IntegrationLinkResourceObject
-  extends ResourceObject<'IntegrationLink', IntegrationLinkAttributes, IntegrationLinkRelationships> { }
-
 /** Integration link resource as returned by the client (attributes and relationships at top level) */
-export type IntegrationLinkResource = FlattenedResource<
-  'IntegrationLink',
-  IntegrationLinkAttributes,
-  IntegrationLinkRelationships,
-  IntegrationLinkRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface IntegrationLinkResource extends IntegrationLinkAttributes, IntegrationLinkRelOutputs {
+  type: 'IntegrationLink';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type IntegrationLinksList = ListResponse<IntegrationLinkResource>;
 export type IntegrationLinkSingle = IntegrationLinkResource;
 
 // ===== Theme Resource =====
 
-export interface ThemeAttributes extends Attributes {
-  name?: string;
+/** @see docs/public/vertices/check-ins/vertices/theme.html */
+export interface ThemeAttributes {
+  background_color?: string;
+  color?: string;
   created_at?: string;
+  /** API may return string URL or an image object (e.g. { url }). */
+  image?: string | null | Record<string, string | number | boolean | null | object>;
+  /** API may return null when no thumbnail. */
+  image_thumbnail?: string | null;
+  mode?: string;
+  name?: string;
+  text_color?: string;
   updated_at?: string;
 }
 
-export interface ThemeRelationships {
-  // Relationships TBD
-}
-
-/** Internal JSON:API resource shape; use ThemeResource for the type returned by the client */
-export interface ThemeResourceObject
-  extends ResourceObject<'Theme', ThemeAttributes, ThemeRelationships> { }
-
 /** Theme resource as returned by the client (attributes at top level) */
-export type ThemeResource = FlattenedResource<'Theme', ThemeAttributes, ThemeRelationships>;
+export interface ThemeResource extends ThemeAttributes {
+  type: 'Theme';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ThemesList = ListResponse<ThemeResource>;
 export type ThemeSingle = ThemeResource;
 
 // ===== LocationEventPeriod Resource =====
 
-export interface LocationEventPeriodAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/location_event_period.html */
+export interface LocationEventPeriodAttributes {
   created_at?: string;
   updated_at?: string;
 }
@@ -743,31 +726,28 @@ export interface LocationEventPeriodRelationships {
   check_ins?: Relationship;
 }
 
-/** Maps LocationEventPeriod relationship keys to specific resource types */
-export interface LocationEventPeriodRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  location: LocationResourceObject;
-  event_period: EventPeriodResourceObject;
-  check_ins: CheckInResourceObject[];
+/** LocationEventPeriod relationship keys with resolved *Resource types */
+export interface LocationEventPeriodRelOutputs {
+  location?: LocationResource | null;
+  event_period?: EventPeriodResource | null;
+  check_ins?: CheckInResource[];
 }
 
-/** Internal JSON:API resource shape; use LocationEventPeriodResource for the type returned by the client */
-export interface LocationEventPeriodResourceObject
-  extends ResourceObject<'LocationEventPeriod', LocationEventPeriodAttributes, LocationEventPeriodRelationships> { }
-
 /** Location event period resource as returned by the client (attributes and relationships at top level) */
-export type LocationEventPeriodResource = FlattenedResource<
-  'LocationEventPeriod',
-  LocationEventPeriodAttributes,
-  LocationEventPeriodRelationships,
-  LocationEventPeriodRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface LocationEventPeriodResource extends LocationEventPeriodAttributes, LocationEventPeriodRelOutputs {
+  type: 'LocationEventPeriod';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type LocationEventPeriodsList = ListResponse<LocationEventPeriodResource>;
 export type LocationEventPeriodSingle = LocationEventPeriodResource;
 
 // ===== LocationEventTime Resource =====
 
-export interface LocationEventTimeAttributes extends Attributes {
+/** @see docs/public/vertices/check-ins/vertices/location_event_time.html */
+export interface LocationEventTimeAttributes {
   created_at?: string;
   updated_at?: string;
 }
@@ -777,47 +757,21 @@ export interface LocationEventTimeRelationships {
   event_time?: Relationship;
 }
 
-/** Maps LocationEventTime relationship keys to specific resource types */
-export interface LocationEventTimeRelResourceMap extends Record<string, ResourceObject<string, any, any> | ResourceObject<string, any, any>[]> {
-  location: LocationResourceObject;
-  event_time: EventTimeResourceObject;
+/** LocationEventTime relationship keys with resolved *Resource types */
+export interface LocationEventTimeRelOutputs {
+  location?: LocationResource | null;
+  event_time?: EventTimeResource | null;
 }
 
-/** Internal JSON:API resource shape; use LocationEventTimeResource for the type returned by the client */
-export interface LocationEventTimeResourceObject
-  extends ResourceObject<'LocationEventTime', LocationEventTimeAttributes, LocationEventTimeRelationships> { }
-
 /** Location event time resource as returned by the client (attributes and relationships at top level) */
-export type LocationEventTimeResource = FlattenedResource<
-  'LocationEventTime',
-  LocationEventTimeAttributes,
-  LocationEventTimeRelationships,
-  LocationEventTimeRelResourceMap,
-  CheckInsResourceTypeToRelMap>;
+export interface LocationEventTimeResource extends LocationEventTimeAttributes, LocationEventTimeRelOutputs {
+  type: 'LocationEventTime';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type LocationEventTimesList = ListResponse<LocationEventTimeResource>;
 export type LocationEventTimeSingle = LocationEventTimeResource;
 
-/** Map from resource type name to its relationship map; used as 5th generic of FlattenedResource for nested typing */
-export interface CheckInsResourceTypeToRelMap extends Record<string, object> {
-  Event: EventRelResourceMap;
-  CheckIn: CheckInRelResourceMap;
-  Location: LocationRelResourceMap;
-  EventPeriod: EventPeriodRelResourceMap;
-  EventTime: EventTimeRelResourceMap;
-  Station: StationRelResourceMap;
-  Label: LabelRelResourceMap;
-  EventLabel: EventLabelRelResourceMap;
-  LocationLabel: LocationLabelRelResourceMap;
-  Option: OptionRelResourceMap;
-  CheckInGroup: CheckInGroupRelResourceMap;
-  CheckInTime: CheckInTimeRelResourceMap;
-  PersonEvent: PersonEventRelResourceMap;
-  PreCheck: PreCheckRelResourceMap;
-  Headcount: HeadcountRelResourceMap;
-  AttendanceType: AttendanceTypeRelResourceMap;
-  IntegrationLink: IntegrationLinkRelResourceMap;
-  LocationEventPeriod: LocationEventPeriodRelResourceMap;
-  LocationEventTime: LocationEventTimeRelResourceMap;
-}
 

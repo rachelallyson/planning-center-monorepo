@@ -1,69 +1,50 @@
 /**
  * AttendanceTypes Module for Check-Ins API
+ * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/attendance_type
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    PcoClientConfig
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    AttendanceTypeGetByIdOptions,
+    AttendanceTypesGetAllOptions,
+    AttendanceTypesGetPageOptions,
+} from '../types/api-options';
 
-export interface AttendanceTypesListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Attendance types: getPage, getById. */
 export class AttendanceTypesModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
 
     /**
      * Get all attendance types across all pages with optional filtering.
-     * Use getPage() when you need a single page or custom perPage/page.
+     * Use getPage() when you need a single page or custom per_page/page.
      */
-    async getAll(options: AttendanceTypesListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getAllPages<Types.AttendanceTypeResourceObject>('/attendance_types', params);
+    async getAll(options?: AttendanceTypesGetAllOptions) {
+        return this.getAllPages<Types.AttendanceTypeResource, AttendanceTypesGetAllOptions>('/attendance_types', options);
     }
 
     /**
      * Get a single page of attendance types with optional filtering and pagination.
      */
-    async getPage(options: AttendanceTypesListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getList<Types.AttendanceTypeResourceObject, Types.AttendanceTypeRelResourceMap>('/attendance_types', params);
-    }
-
-    private buildParams(options: AttendanceTypesListOptions): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(options?: AttendanceTypesGetPageOptions) {
+        return this.getList<Types.AttendanceTypeResource, AttendanceTypesGetPageOptions>('/attendance_types', options);
     }
 
     /**
-     * Get a single attendance type by ID
+     * Get a single attendance type by ID. Can Include: event.
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.AttendanceTypeResourceObject, Types.AttendanceTypeRelResourceMap>(`/attendance_types/${id}`, params);
+    async getById(id: string, options?: AttendanceTypeGetByIdOptions) {
+        return this.getSingle<Types.AttendanceTypeResource>(`/attendance_types/${id}`, options);
     }
 }
-

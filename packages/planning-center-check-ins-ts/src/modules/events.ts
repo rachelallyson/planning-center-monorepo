@@ -6,78 +6,56 @@ import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    Meta,
-    TopLevelLinks,
     PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    EventGetAllEventPeriodsOptions,
+    EventGetAttendanceTypesGetPageOptions,
+    EventCheckInsGetPageOptions,
+    EventGetCurrentEventTimesGetPageOptions,
+    EventGetEventLabelsGetPageOptions,
+    EventGetEventPeriodsGetPageOptions,
+    EventGetEventTimesForPeriodGetPageOptions,
+    EventGetIntegrationLinksGetPageOptions,
+    EventGetLocationsGetPageOptions,
+    EventGetPersonEventsGetPageOptions,
+    EventsGetAllOptions,
+    EventsGetPageOptions,
+    EventGetByIdOptions,
+} from '../types/api-options';
+export type { CheckInFilter, EventFilter, EventInclude, EventOrderField, EventWhereClause } from '../types/api-options';
 
-export interface EventsListOptions {
-    where?: Record<string, any>;
-    filter?: string | string[]; // e.g., 'not_archived' or ['not_archived']
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Events API: getAll, getPage, getById, create, update, delete, and nested resource access (event_times, locations, etc.). */
 export class EventsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
 
     /**
      * Get all events across all pages with optional filtering.
-     * Use getPage() when you need a single page or custom perPage/page.
+     * Use getPage() when you need a single page or custom per_page/page.
      */
-    async getAll(options: EventsListOptions = {}) {
-        const params = this.buildEventsListParams(options);
-        return this.getAllPages<Types.EventResourceObject, Types.EventResourceObject, Types.EventRelResourceMap>('/events', params);
+    async getAll(options?: EventsGetAllOptions) {
+        return this.getAllPages<Types.EventResource, EventsGetAllOptions>('/events', options);
     }
 
     /**
      * Get a single page of events with optional filtering and pagination.
      */
-    async getPage(options: EventsListOptions = {}) {
-        const params = this.buildEventsListParams(options);
-        return this.getList<Types.EventResourceObject, Types.EventRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/events', params);
-    }
-
-    private buildEventsListParams(options: EventsListOptions): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) {
-            Object.entries(options.where).forEach(([key, value]) => {
-                params[`where[${key}]`] = value;
-            });
-        }
-        if (options.filter) {
-            if (Array.isArray(options.filter)) {
-                options.filter.forEach(filter => { params.filter = filter; });
-            } else {
-                params.filter = options.filter;
-            }
-        }
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(options?: EventsGetPageOptions) {
+        return this.getList<Types.EventResource, EventsGetPageOptions>('/events', options);
     }
 
     /**
      * Get a single event by ID
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.EventResourceObject, Types.EventRelResourceMap>(`/events/${id}`, params);
+    async getById(id: string, options?: EventGetByIdOptions) {
+        return this.getSingle<Types.EventResource>(`/events/${id}`, options);
     }
 
     // ===== Associations =====
@@ -85,127 +63,86 @@ export class EventsModule extends BaseModule {
     /**
      * Get attendance types for an event
      */
-    async getAttendanceTypes(eventId: string) {
-        return this.getList<Types.AttendanceTypeResourceObject, Types.AttendanceTypeRelResourceMap>(`/events/${eventId}/attendance_types`);
+    async getAttendanceTypes(eventId: string, options?: EventGetAttendanceTypesGetPageOptions) {
+        return this.getList<Types.AttendanceTypeResource, EventGetAttendanceTypesGetPageOptions>(`/events/${eventId}/attendance_types`, options);
     }
 
     /**
-     * Get check-ins for an event
+     * Get check-ins for an event.
+     * Options support Filter By (e.g. filter: ['attendee'], filter: 'checked_out') plus include, order, where, per_page, page.
      */
-    async getCheckIns(eventId: string, options: { filter?: string[] } = {}) {
-        const params: Record<string, any> = {};
-        
-        // Apply filters: attendee, checked_out, first_time, guest, not_checked_out, 
-        // not_one_time_guest, one_time_guest, regular, volunteer
-        if (options.filter && options.filter.length > 0) {
-            options.filter.forEach(filter => {
-                params[filter] = 'true';
-            });
-        }
-
-        return this.getList<Types.CheckInResourceObject, Types.CheckInRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/check_ins`, params);
+    async getCheckIns(eventId: string, options?: EventCheckInsGetPageOptions) {
+        return this.getList<Types.CheckInResource, EventCheckInsGetPageOptions>(`/events/${eventId}/check_ins`, options);
     }
 
     /**
      * Get current event times for an event
      */
-    async getCurrentEventTimes(eventId: string) {
-        return this.getList<Types.EventTimeResourceObject, Types.EventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/current_event_times`);
+    async getCurrentEventTimes(eventId: string, options?: EventGetCurrentEventTimesGetPageOptions) {
+        return this.getList<Types.EventTimeResource, EventGetCurrentEventTimesGetPageOptions>(`/events/${eventId}/current_event_times`, options);
     }
 
     /**
      * Get event labels for an event
      */
-    async getEventLabels(eventId: string) {
-        return this.getList<Types.EventLabelResourceObject, Types.EventLabelRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/event_labels`);
+    async getEventLabels(eventId: string, options?: EventGetEventLabelsGetPageOptions) {
+        return this.getList<Types.EventLabelResource, EventGetEventLabelsGetPageOptions>(`/events/${eventId}/event_labels`, options);
     }
 
     /**
      * Get event periods for an event (single page)
      */
-    async getEventPeriods(eventId: string) {
-        return this.getList<Types.EventPeriodResourceObject, Types.EventPeriodRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/event_periods`);
+    async getEventPeriods(eventId: string, options?: EventGetEventPeriodsGetPageOptions) {
+        return this.getList<Types.EventPeriodResource, EventGetEventPeriodsGetPageOptions>(`/events/${eventId}/event_periods`, options);
     }
 
     /**
      * Get all event periods for an event (all pages)
      */
-    async getAllEventPeriods(eventId: string, options?: { perPage?: number }) {
-        const result = await this.getAllPages<Types.EventPeriodResourceObject, Types.EventPeriodResourceObject, Types.EventPeriodRelResourceMap, Types.CheckInsResourceTypeToRelMap>(
-            `/events/${eventId}/event_periods`,
-            {},
-            { perPage: options?.perPage || 100 }
-        );
-        return result.data;
+    async getAllEventPeriods(eventId: string, options?: EventGetAllEventPeriodsOptions) {
+        return this.getAllPages<Types.EventPeriodResource, EventGetAllEventPeriodsOptions>(`/events/${eventId}/event_periods`, options);
     }
 
     /**
      * Get all events with pagination (all pages)
      */
-    async getAllEvents(options?: { filter?: string | string[]; perPage?: number }) {
-        const params: Record<string, any> = {};
-        
-        if (options?.filter) {
-            if (Array.isArray(options.filter)) {
-                params.filter = options.filter[0]; // Use first filter if array
-            } else {
-                params.filter = options.filter;
-            }
-        }
-
-        const result = await this.getAllPages<Types.EventResourceObject>(
-            '/events',
-            params,
-            { perPage: options?.perPage || 100 }
-        );
-        return result.data;
+    async getAllEvents(options?: EventsGetAllOptions) {
+        return this.getAllPages<Types.EventResource, EventsGetAllOptions>(`/events`, options);
     }
 
     /**
      * Get event times for a specific event period.
-     * Uses the same flattened response shape as other list methods.
      * Possible includes: headcounts, headcounts.attendance_type.
-     * Note: Each event time's `headcounts` will be full objects only when the API
-     * returns those resources in the response's `included` array. Otherwise you get
-     * identifier objects ({ type, id }). If the API doesn't support these includes
-     * for this endpoint, headcounts may be identifiers or absent.
      */
     async getEventTimesForPeriod(
         eventId: string,
         periodId: string,
-        options?: { include?: string[] | string; perPage?: number }
+        options?: EventGetEventTimesForPeriodGetPageOptions,
     ) {
-        const params: Record<string, any> = {};
-        if (options?.include) {
-            params.include = Array.isArray(options.include) ? options.include.join(',') : options.include;
-        }
-        if (options?.perPage) {
-            params.per_page = options.perPage;
-        }
-        return this.getList<Types.EventTimeResourceObject, Types.EventTimeRelResourceMap, Types.CheckInsResourceTypeToRelMap>(
+        return this.getList<Types.EventTimeResource, EventGetEventTimesForPeriodGetPageOptions>(
             `/events/${eventId}/event_periods/${periodId}/event_times`,
-            params
+            options
         );
     }
 
     /**
      * Get integration links for an event
      */
-    async getIntegrationLinks(eventId: string) {
-        return this.getList<Types.IntegrationLinkResourceObject, Types.IntegrationLinkRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/integration_links`);
+    async getIntegrationLinks(eventId: string, options?: EventGetIntegrationLinksGetPageOptions) {
+        return this.getList<Types.IntegrationLinkResource, EventGetIntegrationLinksGetPageOptions>(`/events/${eventId}/integration_links`, options);
     }
 
     /**
      * Get locations for an event
      */
-    async getLocations(eventId: string) {
-        return this.getList<Types.LocationResourceObject, Types.LocationRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/locations`);
+    async getLocations(eventId: string, options?: EventGetLocationsGetPageOptions) {
+        return this.getList<Types.LocationResource, EventGetLocationsGetPageOptions>(`/events/${eventId}/locations`, options);
     }
 
     /**
      * Get person events for an event
      */
-    async getPersonEvents(eventId: string) {
-        return this.getList<Types.PersonEventResourceObject, Types.PersonEventRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/events/${eventId}/person_events`);
+    async getPersonEvents(eventId: string, options?: EventGetPersonEventsGetPageOptions) {
+        return this.getList<Types.PersonEventResource, EventGetPersonEventsGetPageOptions>(`/events/${eventId}/person_events`, options);
     }
 }

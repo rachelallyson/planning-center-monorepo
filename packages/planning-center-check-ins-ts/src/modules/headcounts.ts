@@ -1,70 +1,51 @@
 /**
  * Headcounts Module for Check-Ins API
+ * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/headcount
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    PcoClientConfig
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    HeadcountGetByIdOptions,
+    HeadcountsGetAllOptions,
+    HeadcountsGetPageOptions,
+} from '../types/api-options';
 
-export interface HeadcountsListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Headcounts: getPage, getById. */
 export class HeadcountsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
-
 
     /**
      * Get all headcounts across all pages with optional filtering.
-     * Use getPage() when you need a single page or custom perPage/page.
+     * Use getPage() when you need a single page or custom per_page/page.
      */
-    async getAll(options: HeadcountsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getAllPages<Types.HeadcountResourceObject>('/headcounts', params);
+    async getAll(options?: HeadcountsGetAllOptions) {
+        return this.getAllPages<Types.HeadcountResource, HeadcountsGetAllOptions>('/headcounts', options);
     }
 
     /**
      * Get a single page of headcounts with optional filtering and pagination.
      */
-    async getPage(options: HeadcountsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getList<Types.HeadcountResourceObject, Types.HeadcountRelResourceMap, Types.CheckInsResourceTypeToRelMap>('/headcounts', params);
-    }
-
-    private buildParams(options: HeadcountsListOptions): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(options?: HeadcountsGetPageOptions) {
+        return this.getList<Types.HeadcountResource, HeadcountsGetPageOptions>('/headcounts', options);
     }
 
     /**
-     * Get a single headcount by ID
+     * Get a single headcount by ID. Can Include: attendance_type, event_time.
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.HeadcountResourceObject, Types.HeadcountRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/headcounts/${id}`, params);
+    async getById(id: string, options?: HeadcountGetByIdOptions) {
+        return this.getSingle<Types.HeadcountResource>(`/headcounts/${id}`, options);
     }
 }
 

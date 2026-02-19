@@ -1,70 +1,51 @@
 /**
  * RosterListPersons Module for Check-Ins API
+ * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/roster_list_person
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    PcoClientConfig
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    RosterListPersonGetByIdOptions,
+    RosterListPersonsGetAllOptions,
+    RosterListPersonsGetPageOptions,
+} from '../types/api-options';
 
-export interface RosterListPersonsListOptions {
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Roster list persons: getPage, getById. */
 export class RosterListPersonsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
-
 
     /**
      * Get all roster list persons across all pages with optional filtering.
-     * Use getPage() when you need a single page or custom perPage/page.
+     * Use getPage() when you need a single page or custom per_page/page.
      */
-    async getAll(options: RosterListPersonsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getAllPages<Types.RosterListPersonResourceObject>('/roster_list_persons', params);
+    async getAll(options?: RosterListPersonsGetAllOptions) {
+        return this.getAllPages<Types.RosterListPersonResource, RosterListPersonsGetAllOptions>('/roster_list_persons', options);
     }
 
     /**
      * Get a single page of roster list persons with optional filtering and pagination.
      */
-    async getPage(options: RosterListPersonsListOptions = {}) {
-        const params = this.buildParams(options);
-        return this.getList<Types.RosterListPersonResourceObject>('/roster_list_persons', params);
-    }
-
-    private buildParams(options: RosterListPersonsListOptions): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(options?: RosterListPersonsGetPageOptions) {
+        return this.getList<Types.RosterListPersonResource, RosterListPersonsGetPageOptions>('/roster_list_persons', options);
     }
 
     /**
-     * Get a single roster list person by ID
+     * Get a single roster list person by ID. URL Parameters: Pagination only; Can Include not documented.
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.RosterListPersonResourceObject>(`/roster_list_persons/${id}`, params);
+    async getById(id: string, options?: RosterListPersonGetByIdOptions) {
+        return this.getSingle<Types.RosterListPersonResource>(`/roster_list_persons/${id}`, options);
     }
 }
 

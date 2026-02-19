@@ -1,74 +1,51 @@
 /**
  * CheckInGroups Module for Check-Ins API
+ * @see https://developer.planning.center/docs/#/apps/check-ins/2025-05-28/vertices/check_in_group
  */
 
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
-    PcoClientConfig
+    PcoClientConfig,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
+import type {
+    CheckInGroupGetByIdOptions,
+    CheckInGroupsGetAllOptions,
+    CheckInGroupsGetPageOptions,
+} from '../types/api-options';
 
-export interface CheckInGroupsListOptions {
-    /** Required: check-in groups are listed per station. */
-    stationId: string;
-    where?: Record<string, any>;
-    include?: string[];
-    perPage?: number;
-    page?: number;
-}
-
+/** Check-in groups: getPage, getById. */
 export class CheckInGroupsModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
     }
-
 
     /**
      * Get all check-in groups for a station across all pages.
      * Check-Ins API lists check-in groups under a station: GET /stations/:station_id/check_in_groups.
      */
-    async getAll(options: CheckInGroupsListOptions) {
-        const { stationId, ...rest } = options;
-        const params = this.buildParams(rest);
-        return this.getAllPages<Types.CheckInGroupResourceObject>(`/stations/${stationId}/check_in_groups`, params);
+    async getAll(stationId: string, options?: CheckInGroupsGetAllOptions) {
+        return this.getAllPages<Types.CheckInGroupResource, CheckInGroupsGetAllOptions>(`/stations/${stationId}/check_in_groups`, options);
     }
 
     /**
      * Get a single page of check-in groups for a station.
      */
-    async getPage(options: CheckInGroupsListOptions) {
-        const { stationId, ...rest } = options;
-        const params = this.buildParams(rest);
-        return this.getList<Types.CheckInGroupResourceObject, Types.CheckInGroupRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/stations/${stationId}/check_in_groups`, params);
-    }
-
-    private buildParams(options: Omit<CheckInGroupsListOptions, 'stationId'>): Record<string, any> {
-        const params: Record<string, any> = {};
-        if (options.where) Object.entries(options.where).forEach(([k, v]) => { params[`where[${k}]`] = v; });
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage != null) params.per_page = options.perPage;
-        if (options.page != null) params.page = options.page;
-        return params;
+    async getPage(stationId: string, options?: CheckInGroupsGetPageOptions) {
+        return this.getList<Types.CheckInGroupResource, CheckInGroupsGetPageOptions>(`/stations/${stationId}/check_in_groups`, options);
     }
 
     /**
-     * Get a single check-in group by ID
+     * Get a single check-in group by ID. Can Include: check_ins, event_period, print_station.
      */
-    async getById(id: string, include?: string[]) {
-        const params: Record<string, any> = {};
-        if (include) {
-            params.include = include.join(',');
-        }
-
-        return this.getSingle<Types.CheckInGroupResourceObject, Types.CheckInGroupRelResourceMap, Types.CheckInsResourceTypeToRelMap>(`/check_in_groups/${id}`, params);
+    async getById(id: string, options?: CheckInGroupGetByIdOptions) {
+        return this.getSingle<Types.CheckInGroupResource>(`/check_in_groups/${id}`, options);
     }
 }
 
