@@ -22,7 +22,7 @@ This monorepo provides **type-safe, production-ready TypeScript client libraries
 
 - **JSON:API 1.0 Compliant** - Follows the JSON:API specification exactly
 - **Zero External Runtime Dependencies** - Uses native fetch API (no axios, node-fetch, etc.)
-- **Comprehensive Error Handling** - Typed errors with categories and severity levels
+- **Comprehensive Error Handling** - Typed `PcoApiError` with `status`, `statusText`, and optional rate limit headers
 - **Built-in Rate Limiting** - Respects PCO's 100 requests per 20 seconds policy
 - **Authentication Support** - Personal Access Tokens and OAuth 2.0 with token refresh
 
@@ -65,8 +65,9 @@ Additional reference files:
 
 - **TypeScript strict mode**: No `any` types
 - **JSON:API compliance**: All responses follow JSON:API 1.0
-- **Error handling**: Always use `PcoApiError` or `PcoError`
+- **Error handling**: Use `PcoApiError`; check `error.status` (401, 422, 429, etc.)
 - **Rate limiting**: Never bypass `PcoHttpClient` (it enforces rate limits)
+- **Pagination**: Use `module.getAll()` for all pages or `module.getPage()` for a single page (not `getAllPages` in user code)
 - **Monorepo structure**: Always run `npm install` from root, not package directories
 
 ## When Uncertain
@@ -94,7 +95,7 @@ Additional reference files:
 - **packages/planning-center-people-ts**: People API client (depends on base)
 - **packages/planning-center-check-ins-ts**: Check-Ins API client (depends on base)
 
-**Dependencies**: Both People and Check-Ins packages depend on base package via workspace link (`"*"` locally, `"^1.0.0"` when published).
+**Dependencies**: Both People and Check-Ins packages depend on base package via workspace link (`"*"` locally, `"^2.0.0"` when published for base 2.x).
 
 ## Testing Strategy
 
@@ -279,7 +280,7 @@ it('should get person', async () => {
 - All documentation site infrastructure lives in `docs/` directory (app/, next.config.mjs, mdx-components.js)
 - This keeps everything documentation-related in one place - docs/ is self-contained
 - Just edit .mdx files directly in docs/content/ - no conversion needed
-- Documentation site builds successfully (`npm run build:docs` - runs from docs/ directory)
+- Documentation site builds successfully (`npm run docs:build` from monorepo root)
 
 ## Code Generation Checklist
 
@@ -335,7 +336,5 @@ class MyModule extends BaseModule {
 
 ## Version Information
 
-- Base Package: v1.0.0
-- People Package: v2.8.0
 - Node.js: >= 16.0.0 required
 - TypeScript: ^5.9.3

@@ -5,28 +5,18 @@
     "packages/planning-center-people-ts/src/index.ts",
     "packages/planning-center-check-ins-ts/src/index.ts"
   ],
+  "entryPointStrategy": "resolve",
   "out": "docs/content/api",
-  "plugin": [
-    "typedoc-plugin-markdown"
-  ],
+  "plugin": ["typedoc-plugin-markdown"],
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,
   "includeVersion": true,
   "readme": "none",
-  "entryPointStrategy": "resolve",
-  "sort": [
-    "source-order"
-  ],
+  "name": "PCO API Reference",
+  "sort": ["source-order"],
   "categorizeByGroup": true,
-  "categoryOrder": [
-    "Classes",
-    "Interfaces",
-    "Types",
-    "Enums",
-    "Functions",
-    "*"
-  ],
+  "categoryOrder": ["Classes", "Interfaces", "Types", "Enums", "Functions", "*"],
   "compilerOptions": {
     "skipLibCheck": true,
     "moduleResolution": "node",
