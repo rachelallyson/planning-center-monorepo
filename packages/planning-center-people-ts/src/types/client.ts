@@ -1,7 +1,6 @@
 /**
- * v2.0.0 Client Configuration Types
- *
- * Re-exports from base package for consistency. Debug options live in base so all PCO packages share the same behavior.
+ * People client configuration. Re-exports base auth and debug types; PeopleClientConfig
+ * is an alias for PcoClientConfig (same shape: auth, baseURL, timeout, headers, debug).
  */
 
 export type {
@@ -11,13 +10,7 @@ export type {
     PersonalAccessTokenAuth,
     OAuthAuth,
     BasicAuth,
-    ErrorEvent,
-    AuthFailureEvent,
-    RequestStartEvent,
-    RequestCompleteEvent,
-    RateLimitEvent,
-    CacheEvent,
 } from '@rachelallyson/planning-center-base-ts';
 
-/** Alias for PcoClientConfig (base now includes debug). Use for clarity in People package. */
+/** Same as PcoClientConfig. Use when constructing PcoClient for the People API. */
 export type PeopleClientConfig = import('@rachelallyson/planning-center-base-ts').PcoClientConfig;

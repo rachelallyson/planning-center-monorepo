@@ -1,24 +1,23 @@
 /**
- * Strictly typed API options for Planning Center People API endpoints
- * Based on official API documentation: https://developer.planning.center/docs
+ * Strictly typed API options for Planning Center People API endpoints.
+ * Includes, order fields, and where clauses align with the API docs per vertex.
+ * Verify against: https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/<vertex>
  */
 
+import type { QueryOptions, PaginationOptions } from '@rachelallyson/planning-center-base-ts';
+
 // ===== Person Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/person
 
 /**
- * Valid include values for Person endpoint
+ * Valid include values for Person endpoint (Can Include)
  */
 export type PersonInclude =
     | 'addresses'
     | 'emails'
     | 'field_data'
+    | 'household'
     | 'households'
-    | 'inactive_reason'
-    | 'marital_status'
-    | 'name_prefix'
-    | 'name_suffix'
-    | 'organization'
-    | 'person_apps'
     | 'phone_numbers'
     | 'platform_notifications'
     | 'primary_campus'
@@ -51,7 +50,7 @@ export type PersonOrderField =
     | 'updated_at';
 
 /**
- * Strictly typed where clause for Person endpoint
+ * Strictly typed where clause for Person endpoint (Query By per doc)
  */
 export interface PersonWhereClause {
     accounting_administrator?: boolean;
@@ -73,7 +72,7 @@ export interface PersonWhereClause {
     middle_name?: string;
     nickname?: string;
     people_permissions?: string;
-    primary_campus_id?: number;
+    primary_campus_id?: number | string;
     remote_id?: number;
     search_name?: string;
     search_name_or_email?: string;
@@ -85,34 +84,41 @@ export interface PersonWhereClause {
     updated_at?: string; // date_time format: ISO 8601
 }
 
-/**
- * Strictly typed options for Person getAll() - no pagination options
- */
-export interface PersonListOptions {
-    /** Filter by specific fields */
+/** Params for people getPage(). */
+export interface PersonGetPageOptions extends QueryOptions {
     where?: PersonWhereClause;
-    /** Include related resources */
     include?: PersonInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: PersonOrderField | `-${PersonOrderField}`;
-}
-
-/**
- * Strictly typed options for Person getPage() - includes pagination
- */
-export interface PersonPageOptions extends PersonListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+    per_page?: number;
     page?: number;
 }
 
+/** Params for people getAll(). Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type PersonGetAllOptions = Omit<PersonGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single person). */
+export type PersonGetByIdOptions = { include?: PersonInclude[] };
+
+/** Params for GET /people/:person_id/social_profiles. Include/where per social_profile vertex. */
+export interface SocialProfileGetPageOptions extends QueryOptions {
+    include?: string[];
+    per_page?: number;
+    page?: number;
+}
+
+/** Options for people.verifyPersonExists(personId). */
+export interface PersonVerifyExistsOptions {
+    /** Timeout in ms (default 30000). */
+    timeout?: number;
+}
+
 // ===== Field Definition Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/field_definition
 
 /**
- * Valid include values for FieldDefinition endpoint
+ * Valid include values for FieldDefinition endpoint (Can Include)
  */
-export type FieldDefinitionInclude = 'tab' | 'field_options';
+export type FieldDefinitionInclude = 'field_options' | 'tab';
 
 /**
  * Valid order fields for FieldDefinition endpoint
@@ -139,19 +145,19 @@ export interface FieldDefinitionWhereClause {
     tab_id?: string; // primary_key
 }
 
-/**
- * Strictly typed options for FieldDefinition list endpoints
- */
-export interface FieldDefinitionListOptions {
-    /** Include related resources */
+/** Params for field-definitions getPage(). */
+export interface FieldDefinitionGetPageOptions extends QueryOptions {
     include?: FieldDefinitionInclude[];
-    /** Filter by specific fields */
     where?: FieldDefinitionWhereClause;
-    /** Order by field (prefix with '-' for descending) */
     order?: FieldDefinitionOrderField | `-${FieldDefinitionOrderField}`;
-    /** Include deleted field definitions */
     includeDeleted?: boolean;
 }
+
+/** Params for field-definitions getAll(). Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type FieldDefinitionGetAllOptions = Omit<FieldDefinitionGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single field definition). */
+export type FieldDefinitionGetByIdOptions = { include?: FieldDefinitionInclude[] };
 
 export type FieldDataOrderField =
     | 'file'
@@ -171,21 +177,28 @@ export interface FieldDataWhereClause {
 
 
 
-export interface FieldDataOptions {
-    /** Include related resources */
-    include?: ('field_definition' | 'field_option' | 'tab')[];
-    /** Filter by specific fields */
+export type FieldDataInclude = 'field_definition' | 'field_option' | 'tab';
+
+/** Params for field-data list (getPage) per person. */
+export interface FieldDataGetPageOptions extends QueryOptions {
+    include?: FieldDataInclude[];
     where?: FieldDataWhereClause;
-    /** Order by field (prefix with '-' for descending) */
     order?: FieldDataOrderField | `-${FieldDataOrderField}`;
 }
 
+/** Valid include values for Tab endpoint (GET /tabs/:id). Can Include: field_definitions */
+export type TabInclude = 'field_definitions' | 'field_options';
+
+/** Params for getTabById(id). */
+export type TabGetByIdOptions = { include?: TabInclude[] };
+
 // ===== Workflow Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/workflow
 
 /**
- * Valid include values for Workflow endpoint
+ * Valid include values for Workflow endpoint (Can Include)
  */
-export type WorkflowInclude = 'category' | 'shares' | 'steps';
+export type WorkflowInclude = 'category' | 'shares';
 
 /**
  * Valid order fields for Workflow endpoint
@@ -200,7 +213,7 @@ export type WorkflowOrderField =
     | 'workflow_category_id';
 
 /**
- * Strictly typed where clause for Workflow endpoint
+ * Strictly typed where clause for Workflow endpoint (Query By per doc)
  */
 export interface WorkflowWhereClause {
     archived_at?: string; // date_time format: ISO 8601
@@ -213,34 +226,35 @@ export interface WorkflowWhereClause {
     workflow_category_id?: string; // primary_key
 }
 
-/**
- * Strictly typed options for Workflow getAll() - no pagination options
- */
-export interface WorkflowListOptions {
-    /** Filter by specific fields */
+/** Params for workflows getPage(). */
+export interface WorkflowGetPageOptions extends QueryOptions {
     where?: WorkflowWhereClause;
-    /** Include related resources */
     include?: WorkflowInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: WorkflowOrderField | `-${WorkflowOrderField}`;
+    per_page?: number;
+    page?: number;
 }
 
-/**
- * Strictly typed options for Workflow getPage() - includes pagination
- */
-export interface WorkflowPageOptions extends WorkflowListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+/** Params for workflows getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type WorkflowGetAllOptions = Omit<WorkflowGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single workflow). */
+export type WorkflowGetByIdOptions = { include?: WorkflowInclude[] };
+
+/** Params for GET /people/{person_id}/workflow_cards (list). Pagination only; include/where per workflow_card vertex if needed. */
+export interface WorkflowCardGetPageOptions extends QueryOptions {
+    per_page?: number;
     page?: number;
 }
 
 // ===== Note Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/note
 
 /**
- * Valid include values for Note endpoint
+ * Valid include values for Note endpoint (Can Include)
  */
-export type NoteInclude = 'note_category' | 'created_by' | 'person' | 'organization';
+export type NoteInclude = 'category' | 'created_by' | 'person';
 
 /**
  * Valid order fields for Note endpoint
@@ -255,34 +269,35 @@ export interface NoteWhereClause {
     note_category_id?: string; // primary_key
 }
 
-/**
- * Strictly typed options for Note getAll() - no pagination options
- */
-export interface NoteListOptions {
-    /** Filter by specific fields */
+/** Params for notes getPage(). */
+export interface NoteGetPageOptions extends QueryOptions {
     where?: NoteWhereClause;
-    /** Include related resources */
     include?: NoteInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: NoteOrderField | `-${NoteOrderField}`;
+    per_page?: number;
+    page?: number;
 }
 
-/**
- * Strictly typed options for Note getPage() - includes pagination
- */
-export interface NotePageOptions extends NoteListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+/** Params for notes getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type NoteGetAllOptions = Omit<NoteGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single note). */
+export type NoteGetByIdOptions = { include?: NoteInclude[] };
+
+/** Params for getNoteCategories(). List endpoint with pagination only. */
+export interface NoteCategoryGetPageOptions extends QueryOptions {
+    per_page?: number;
     page?: number;
 }
 
 // ===== List Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/list
 
 /**
- * Valid include values for List endpoint
+ * Valid include values for List endpoint (Can Include)
  */
-export type ListInclude = 'campus' | 'category' | 'created_by' | 'mailchimp_sync_status' | 'people' | 'rules' | 'shares' | 'updated_by';
+export type ListInclude = 'campus' | 'category' | 'created_by' | 'rules' | 'shares';
 
 /**
  * Valid order fields for List endpoint
@@ -298,45 +313,46 @@ export type ListOrderField =
     | 'updated_at';
 
 /**
- * Strictly typed where clause for List endpoint
+ * Strictly typed where clause for List endpoint (Query By per doc)
  */
 export interface ListWhereClause {
     batch_completed_at?: string; // date_time format: ISO 8601
     created_at?: string; // date_time format: ISO 8601
     id?: string; // primary_key
-    list_category_id?: string; // primary_key
+    list_category_id?: string;
     name?: string;
     updated_at?: string; // date_time format: ISO 8601
 }
 
-/**
- * Strictly typed options for List getAll() - no pagination options
- */
-export interface ListListOptions {
-    /** Filter by specific fields */
+/** Params for lists getPage(). */
+export interface ListGetPageOptions extends QueryOptions {
     where?: ListWhereClause;
-    /** Include related resources */
     include?: ListInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: ListOrderField | `-${ListOrderField}`;
+    per_page?: number;
+    page?: number;
 }
 
-/**
- * Strictly typed options for List getPage() - includes pagination
- */
-export interface ListPageOptions extends ListListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+/** Params for lists getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type ListGetAllOptions = Omit<ListGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single list). */
+export type ListGetByIdOptions = { include?: ListInclude[] };
+
+/** Params for getListCategories(). List endpoint with pagination only. */
+export interface ListCategoryGetPageOptions extends QueryOptions {
+    per_page?: number;
     page?: number;
 }
 
 // ===== Household Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/household
 
 /**
- * Valid include values for Household endpoint
+ * Valid include values for Household endpoint (Can Include)
  */
-export type HouseholdInclude = 'people' | 'primary_contact';
+export type HouseholdInclude = 'people';
 
 /**
  * Valid order fields for Household endpoint
@@ -349,43 +365,39 @@ export type HouseholdOrderField =
     | 'updated_at';
 
 /**
- * Strictly typed where clause for Household endpoint
+ * Strictly typed where clause for Household endpoint (Query By per doc)
  */
 export interface HouseholdWhereClause {
     created_at?: string; // date_time format: ISO 8601
     member_count?: number;
     name?: string;
+    primary_contact_name?: string;
     updated_at?: string; // date_time format: ISO 8601
 }
 
-/**
- * Strictly typed options for Household getAll() - no pagination options
- */
-export interface HouseholdListOptions {
-    /** Filter by specific fields */
+/** Params for households getPage(). */
+export interface HouseholdGetPageOptions extends QueryOptions {
     where?: HouseholdWhereClause;
-    /** Include related resources */
     include?: HouseholdInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: HouseholdOrderField | `-${HouseholdOrderField}`;
-}
-
-/**
- * Strictly typed options for Household getPage() - includes pagination
- */
-export interface HouseholdPageOptions extends HouseholdListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+    per_page?: number;
     page?: number;
 }
 
+/** Params for households getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type HouseholdGetAllOptions = Omit<HouseholdGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single household). */
+export type HouseholdGetByIdOptions = { include?: HouseholdInclude[] };
+
 // ===== Campus Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/campus
 
 /**
- * Valid include values for Campus endpoint
+ * Valid include values for Campus endpoint (Can Include)
  */
-export type CampusInclude = 'organization' | 'lists' | 'service_times';
+export type CampusInclude = 'lists' | 'service_times';
 
 /**
  * Valid order fields for Campus endpoint
@@ -393,7 +405,7 @@ export type CampusInclude = 'organization' | 'lists' | 'service_times';
 export type CampusOrderField = 'created_at' | 'name' | 'updated_at';
 
 /**
- * Strictly typed where clause for Campus endpoint
+ * Strictly typed where clause for Campus endpoint (Query By per doc)
  */
 export interface CampusWhereClause {
     created_at?: string; // date_time format: ISO 8601
@@ -401,64 +413,165 @@ export interface CampusWhereClause {
     updated_at?: string; // date_time format: ISO 8601
 }
 
-/**
- * Strictly typed options for Campus getAll() - no pagination options
- */
-export interface CampusListOptions {
-    /** Filter by specific fields */
+/** Params for campus getPage(). */
+export interface CampusGetPageOptions extends QueryOptions {
     where?: CampusWhereClause;
-    /** Include related resources */
     include?: CampusInclude[];
-    /** Order by field (prefix with '-' for descending) */
     order?: CampusOrderField | `-${CampusOrderField}`;
+    per_page?: number;
+    page?: number;
 }
 
-/**
- * Strictly typed options for Campus getPage() - includes pagination
- */
-export interface CampusPageOptions extends CampusListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+/** Params for campus getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type CampusGetAllOptions = Omit<CampusGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single campus). */
+export type CampusGetByIdOptions = { include?: CampusInclude[] };
+
+/** Params for campus.getLists(campusId). Lists under a campus use List where/include. */
+export interface CampusGetListsOptions extends QueryOptions {
+    where?: ListWhereClause;
+    include?: ListInclude[];
+    per_page?: number;
+    page?: number;
+}
+
+/** Params for campus.getServiceTimes(campusId). ServiceTime does not support where[]. */
+export interface CampusGetServiceTimesOptions extends QueryOptions {
+    where?: never;
+    include?: ServiceTimeInclude[];
+    per_page?: number;
     page?: number;
 }
 
 // ===== Form Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/form
 
 /**
- * Strictly typed where clause for Form endpoint
+ * Valid include values for Form endpoint (Can Include)
+ */
+export type FormInclude = 'campus' | 'category';
+
+/**
+ * Strictly typed where clause for Form endpoint (Query By)
  */
 export interface FormWhereClause {
     active?: boolean;
     id?: string; // primary_key
 }
 
-/**
- * Strictly typed options for Form getAll() - no pagination options
- */
-export interface FormListOptions {
-    /** Filter by specific fields */
+/** Params for forms getPage(). */
+export interface FormGetPageOptions extends QueryOptions {
     where?: FormWhereClause;
-    /** Include related resources */
-    include?: string[];
-    /** Order by field (prefix with '-' for descending) */
+    include?: FormInclude[];
     order?: string;
+    per_page?: number;
+    page?: number;
+}
+
+/** Params for forms getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type FormGetAllOptions = Omit<FormGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single form). */
+export type FormGetByIdOptions = { include?: FormInclude[] };
+
+/**
+ * Valid include values for FormSubmission (nested under form). Can Include: form_submission_values.
+ */
+export type FormSubmissionInclude = 'form_submission_values';
+
+/** Params for getFormSubmissionById (single form submission). */
+export type FormSubmissionGetByIdOptions = { include?: FormSubmissionInclude[] };
+
+/**
+ * Strictly typed where clause for Form Field (nested under form). Query By: name, field_type, required, sequence, created_at, updated_at.
+ */
+export interface FormFieldWhereClause {
+    name?: string;
+    field_type?: string;
+    required?: boolean;
+    sequence?: number;
+    created_at?: string; // date_time format: ISO 8601
+    updated_at?: string; // date_time format: ISO 8601
+}
+
+/** Params for getFormFields(formId). Nested resource; where/include per Form Field vertex. */
+export interface FormFieldGetPageOptions extends QueryOptions {
+    where?: FormFieldWhereClause;
+    include?: string[];
+    per_page?: number;
+    page?: number;
 }
 
 /**
- * Strictly typed options for Form getPage() - includes pagination
+ * Strictly typed where clause for Form Field Option (nested under form field). Query By: value, sequence, created_at, updated_at.
  */
-export interface FormPageOptions extends FormListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+export interface FormFieldOptionWhereClause {
+    value?: string;
+    sequence?: number;
+    created_at?: string; // date_time format: ISO 8601
+    updated_at?: string; // date_time format: ISO 8601
+}
+
+/** Params for getFormFieldOptions(formId, formFieldId). Nested resource. */
+export interface FormFieldOptionGetPageOptions extends QueryOptions {
+    where?: FormFieldOptionWhereClause;
+    include?: string[];
+    per_page?: number;
+    page?: number;
+}
+
+/**
+ * Strictly typed where clause for Form Submission (nested under form). Query By: submitted_at, created_at, updated_at.
+ */
+export interface FormSubmissionWhereClause {
+    submitted_at?: string; // date_time format: ISO 8601
+    created_at?: string; // date_time format: ISO 8601
+    updated_at?: string; // date_time format: ISO 8601
+}
+
+/** Params for getFormSubmissions(formId). Nested resource. */
+export interface FormSubmissionGetPageOptions extends QueryOptions {
+    where?: FormSubmissionWhereClause;
+    include?: FormSubmissionInclude[];
+    per_page?: number;
+    page?: number;
+}
+
+/**
+ * Strictly typed where clause for Form Submission Value (nested under form submission). Query By: value, created_at, updated_at.
+ */
+export interface FormSubmissionValueWhereClause {
+    value?: string;
+    created_at?: string; // date_time format: ISO 8601
+    updated_at?: string; // date_time format: ISO 8601
+}
+
+/** Params for getFormSubmissionValues(formId, formSubmissionId). Nested resource. */
+export interface FormSubmissionValueGetPageOptions extends QueryOptions {
+    where?: FormSubmissionValueWhereClause;
+    include?: string[];
+    per_page?: number;
     page?: number;
 }
 
 // ===== Report Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/report
 
 /**
- * Strictly typed where clause for Report endpoint
+ * Valid include values for Report endpoint (Can Include)
+ */
+export type ReportInclude = 'created_by' | 'updated_by';
+
+/**
+ * Valid order fields for Report endpoint
+ */
+export type ReportOrderField = 'body' | 'created_at' | 'name' | 'updated_at';
+
+/**
+ * Strictly typed where clause for Report endpoint (Query By)
  */
 export interface ReportWhereClause {
     body?: string;
@@ -467,48 +580,49 @@ export interface ReportWhereClause {
     updated_at?: string; // date_time format: ISO 8601
 }
 
-/**
- * Strictly typed options for Report getAll() - no pagination options
- */
-export interface ReportListOptions {
-    /** Filter by specific fields */
+/** Params for reports getPage(). */
+export interface ReportGetPageOptions extends QueryOptions {
     where?: ReportWhereClause;
-    /** Include related resources */
-    include?: string[];
-    /** Order by field (prefix with '-' for descending) */
-    order?: string;
-}
-
-/**
- * Strictly typed options for Report getPage() - includes pagination
- */
-export interface ReportPageOptions extends ReportListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+    include?: ReportInclude[];
+    order?: ReportOrderField | `-${ReportOrderField}`;
+    per_page?: number;
     page?: number;
 }
+
+/** Params for reports getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type ReportGetAllOptions = Omit<ReportGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single report). */
+export type ReportGetByIdOptions = { include?: ReportInclude[] };
 
 // ===== ServiceTime Endpoint Options =====
+// @see https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/service_time
 // Note: ServiceTime endpoint does not support where[] filtering in the API
-/**
- * Strictly typed options for ServiceTime getAll() - no pagination options
- */
-export interface ServiceTimeListOptions {
-    /** Filter by specific fields - Note: ServiceTime endpoint does not support where[] filtering */
-    where?: never; // ServiceTime endpoint doesn't support where clauses
-    /** Include related resources */
-    include?: string[];
-    /** Order by field (prefix with '-' for descending) */
-    order?: string;
-}
 
 /**
- * Strictly typed options for ServiceTime getPage() - includes pagination
+ * Valid include values for ServiceTime endpoint (Can Include)
  */
-export interface ServiceTimePageOptions extends ServiceTimeListOptions {
-    /** Items per page (1-100, default: 25) */
-    perPage?: number;
-    /** Page number */
+export type ServiceTimeInclude = 'campus';
+
+/**
+ * Valid order fields for ServiceTime endpoint (Order By per doc)
+ */
+export type ServiceTimeOrderField = 'time';
+
+/** Params for service-times getPage(). (ServiceTime endpoint does not support where[].) */
+export interface ServiceTimeGetPageOptions extends QueryOptions {
+    where?: never;
+    include?: ServiceTimeInclude[];
+    order?: ServiceTimeOrderField | `-${ServiceTimeOrderField}`;
+    per_page?: number;
     page?: number;
 }
+
+/** Params for service-times getAll(). */
+/** Fetches all pages using max per_page (100); per_page/page are not accepted. */
+export type ServiceTimeGetAllOptions = Omit<ServiceTimeGetPageOptions, 'per_page' | 'page'> & PaginationOptions;
+
+/** Params for getById (single service time). */
+export type ServiceTimeGetByIdOptions = { include?: ServiceTimeInclude[] };
+

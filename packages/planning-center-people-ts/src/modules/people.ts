@@ -1,62 +1,41 @@
 /**
- * v2.0.0 People Module
+ * People API module: getById, getAll, getPage, create, update, delete, findOrCreatePerson,
+ * and relationship helpers (primary campus, household). All methods return flattened resources.
  */
 
-import { BaseModule } from '@rachelallyson/planning-center-base-ts';
+import { BaseModule, singleFromCreateResponse } from '@rachelallyson/planning-center-base-ts';
 import type {
     PcoHttpClient,
     PaginationHelper,
-    PcoEventEmitter,
     PcoClientConfig,
+    ResourceObject,
+    Relationship,
+    Attributes,
 } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
-import type { Meta, TopLevelLinks } from '../types/json-api';
-import type { ResourceObject, Attributes, Relationship } from '../types/json-api';
 import { PersonMatcher } from '../matching/matcher';
+import { getStatusFromError, getStringId } from '../internal/type-guards';
 
-import type { PersonListOptions, PersonPageOptions, PersonWhereClause } from '../types/api-options';
-
-// Re-export for backward compatibility
-export type PeopleListOptions = PersonListOptions;
-
-export interface PersonCreateOptions {
-    firstName?: string;
-    lastName?: string;
-    givenName?: string;
-    middleName?: string;
-    nickname?: string;
-    birthdate?: string;
-    anniversary?: string;
-    gender?: string;
-    grade?: string;
-    child?: boolean;
-    status?: string;
-    medicalNotes?: string;
-    jobTitle?: string;
-    employer?: string;
-    school?: string;
-    graduationYear?: string;
-    avatar?: string;
-    siteAdministrator?: boolean;
-    accountingAdministrator?: boolean;
-    peoplePermissions?: string;
-    directoryStatus?: string;
-    loginIdentifier?: string;
-    membership?: string;
-    remoteId?: string;
-    demographicAvatarUrl?: string;
-    inactivatedAt?: string;
-    resourcePermissionFlags?: Record<string, boolean>;
-}
+import type {
+    PersonGetPageOptions,
+    PersonGetAllOptions,
+    PersonGetByIdOptions,
+    PersonWhereClause,
+    NoteGetPageOptions,
+    FieldDataGetPageOptions,
+    WorkflowCardGetPageOptions,
+    SocialProfileGetPageOptions,
+    PersonVerifyExistsOptions,
+} from '../types/api-options';
 
 /**
  * Options for finding or creating a person with smart matching
  */
 export interface PersonMatchOptions {
     /** Person's first name */
-    firstName?: string;
+    first_name?: string;
     /** Person's last name */
-    lastName?: string;
+    last_name?: string;
     /** Person's email address */
     email?: string;
     /** Person's phone number */
@@ -120,7 +99,7 @@ export interface PersonMatchOptions {
     };
     /**
      * If true, fall back to name-based search when email/phone search fails.
-     * Requires both firstName and lastName to be provided.
+     * Requires both first_name and last_name to be provided.
      * Uses contact validation to avoid wrong-person matches. (default: false)
      */
     fallbackToNameSearch?: boolean;
@@ -175,48 +154,31 @@ export class PeopleModule extends BaseModule {
     constructor(
         httpClient: PcoHttpClient,
         paginationHelper: PaginationHelper,
-        eventEmitter: PcoEventEmitter,
         getConfig?: () => PcoClientConfig
     ) {
-        super(httpClient, paginationHelper, eventEmitter, getConfig);
+        super(httpClient, paginationHelper, getConfig);
         this.personMatcher = new PersonMatcher(this, getConfig);
     }
 
     /**
      * Get all people across all pages with optional filtering
      */
-    async getAll(options: PersonListOptions = {}) {
-        this.debugLog('people.getAll', { options });
-        return await this.getAllPages<Types.PersonResourceObject, Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
-            where: options.where,
-            include: options.include,
-            order: options.order
-        });
+    async getAll(options?: PersonGetAllOptions) {
+        return this.getAllPages<Types.PersonResource>('/people', options);
     }
 
     /**
      * Get a single page of people with optional filtering and pagination control
-     * Use this when you need a specific page or want to limit the number of results
-     * @param options - List options including where, include, perPage, page, and order
-     * @returns A single page of results with meta and links for pagination
      */
-    async getPage(options: PersonPageOptions = {}) {
-        this.debugLog('people.getPage', { options });
-        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
-            where: options.where,
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page,
-            order: options.order
-        });
+    async getPage(options?: PersonGetPageOptions) {
+        return this.getList<Types.PersonResource, PersonGetPageOptions>('/people', options);
     }
 
     /**
      * Get a single person by ID
      */
-    async getById(id: string, include?: string[]) {
-        this.debugLog('people.getById', { id, include });
-        return this.getSingle<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>(`/people/${id}`, include);
+    async getById(id: string, options?: PersonGetByIdOptions) {
+        return this.getSingle<Types.PersonResource>(`/people/${id}`, options);
     }
 
     /**
@@ -242,147 +204,48 @@ export class PeopleModule extends BaseModule {
      */
     async verifyPersonExists(
         personId: string,
-        options?: { timeout?: number }
+        options?: PersonVerifyExistsOptions
     ) {
-        this.debugLog('people.verifyPersonExists', { personId, options });
         const timeout = options?.timeout ?? 30000;
-        
+
         const verificationPromise = this.getById(personId)
             .then(() => true)
-            .catch((error: unknown) => {
-                // 404 means person doesn't exist (merged or deleted)
-                const status = (error as { status?: number; response?: { status?: number } })?.status 
-                    ?? (error as { response?: { status?: number } })?.response?.status;
-                if (status === 404) {
-                    return false;
-                }
-                // Re-throw other errors
+            .catch((error) => {
+                const status = getStatusFromError(error);
+                if (status === 404) return false;
                 throw error;
             });
-        
-        const timeoutPromise = new Promise<never>((_, reject) => {
+
+        const timeoutPromise = new Promise<never>((resolve, reject) => {
+            void resolve;
             setTimeout(() => {
                 reject(new Error(`Person verification timed out after ${timeout}ms`));
             }, timeout);
         });
-        
-        return Promise.race([verificationPromise, timeoutPromise]);
-    }
 
-    /**
-     * Transform PersonCreateOptions (camelCase) to API format (snake_case)
-     * Also handles snake_case input directly (passes through)
-     */
-    private transformPersonData(data: PersonCreateOptions | Partial<PersonCreateOptions> | Partial<Types.PersonAttributes>) {
-        const transformed: Partial<Types.PersonAttributes> = {};
-        const dataObj = data as Record<string, any>;
-        
-        // If data is already in snake_case format, copy those fields directly
-        if (dataObj.first_name !== undefined) transformed.first_name = dataObj.first_name;
-        if (dataObj.last_name !== undefined) transformed.last_name = dataObj.last_name;
-        if (dataObj.given_name !== undefined) transformed.given_name = dataObj.given_name;
-        if (dataObj.middle_name !== undefined) transformed.middle_name = dataObj.middle_name;
-        if (dataObj.nickname !== undefined) transformed.nickname = dataObj.nickname;
-        if (dataObj.birthdate !== undefined) transformed.birthdate = dataObj.birthdate;
-        if (dataObj.anniversary !== undefined) transformed.anniversary = dataObj.anniversary;
-        if (dataObj.gender !== undefined) transformed.gender = dataObj.gender;
-        if (dataObj.grade !== undefined) transformed.grade = dataObj.grade;
-        if (dataObj.child !== undefined) transformed.child = dataObj.child;
-        if (dataObj.status !== undefined) transformed.status = dataObj.status;
-        if (dataObj.medical_notes !== undefined) transformed.medical_notes = dataObj.medical_notes;
-        if (dataObj.job_title !== undefined) transformed.job_title = dataObj.job_title;
-        if (dataObj.employer !== undefined) transformed.employer = dataObj.employer;
-        if (dataObj.school !== undefined) transformed.school = dataObj.school;
-        if (dataObj.graduation_year !== undefined) transformed.graduation_year = dataObj.graduation_year;
-        if (dataObj.avatar !== undefined) transformed.avatar = dataObj.avatar;
-        if (dataObj.site_administrator !== undefined) transformed.site_administrator = dataObj.site_administrator;
-        if (dataObj.accounting_administrator !== undefined) transformed.accounting_administrator = dataObj.accounting_administrator;
-        if (dataObj.people_permissions !== undefined) transformed.people_permissions = dataObj.people_permissions;
-        if (dataObj.directory_status !== undefined) transformed.directory_status = dataObj.directory_status;
-        if (dataObj.login_identifier !== undefined) transformed.login_identifier = dataObj.login_identifier;
-        if (dataObj.membership !== undefined) transformed.membership = dataObj.membership;
-        if (dataObj.remote_id !== undefined) transformed.remote_id = dataObj.remote_id;
-        if (dataObj.demographic_avatar_url !== undefined) transformed.demographic_avatar_url = dataObj.demographic_avatar_url;
-        if (dataObj.inactivated_at !== undefined) transformed.inactivated_at = dataObj.inactivated_at;
-        if (dataObj.resource_permission_flags !== undefined) transformed.resource_permission_flags = dataObj.resource_permission_flags;
-        if (dataObj.primary_campus_id !== undefined) transformed.primary_campus_id = dataObj.primary_campus_id;
-        if (dataObj.household_id !== undefined) transformed.household_id = dataObj.household_id;
-        
-        // Handle PersonCreateOptions fields (camelCase)
-        if (dataObj.firstName !== undefined) transformed.first_name = dataObj.firstName;
-        if (dataObj.lastName !== undefined) transformed.last_name = dataObj.lastName;
-        if (dataObj.givenName !== undefined) transformed.given_name = dataObj.givenName;
-        if (dataObj.middleName !== undefined) transformed.middle_name = dataObj.middleName;
-        if (dataObj.nickname !== undefined) transformed.nickname = dataObj.nickname;
-        if (dataObj.birthdate !== undefined) transformed.birthdate = dataObj.birthdate;
-        if (dataObj.anniversary !== undefined) transformed.anniversary = dataObj.anniversary;
-        if (dataObj.gender !== undefined) transformed.gender = dataObj.gender;
-        if (dataObj.grade !== undefined) transformed.grade = dataObj.grade;
-        if (dataObj.child !== undefined) transformed.child = dataObj.child;
-        if (dataObj.status !== undefined) transformed.status = dataObj.status;
-        if (dataObj.medicalNotes !== undefined) transformed.medical_notes = dataObj.medicalNotes;
-        if (dataObj.jobTitle !== undefined) transformed.job_title = dataObj.jobTitle;
-        if (dataObj.employer !== undefined) transformed.employer = dataObj.employer;
-        if (dataObj.school !== undefined) transformed.school = dataObj.school;
-        if (dataObj.graduationYear !== undefined) transformed.graduation_year = dataObj.graduationYear;
-        if (dataObj.avatar !== undefined) transformed.avatar = dataObj.avatar;
-        if (dataObj.siteAdministrator !== undefined) transformed.site_administrator = dataObj.siteAdministrator;
-        if (dataObj.accountingAdministrator !== undefined) transformed.accounting_administrator = dataObj.accountingAdministrator;
-        if (dataObj.peoplePermissions !== undefined) transformed.people_permissions = dataObj.peoplePermissions;
-        if (dataObj.directoryStatus !== undefined) transformed.directory_status = dataObj.directoryStatus;
-        if (dataObj.loginIdentifier !== undefined) transformed.login_identifier = dataObj.loginIdentifier;
-        if (dataObj.membership !== undefined) transformed.membership = dataObj.membership;
-        if (dataObj.remoteId !== undefined) transformed.remote_id = dataObj.remoteId;
-        if (dataObj.demographicAvatarUrl !== undefined) transformed.demographic_avatar_url = dataObj.demographicAvatarUrl;
-        if (dataObj.inactivatedAt !== undefined) transformed.inactivated_at = dataObj.inactivatedAt;
-        if (dataObj.resourcePermissionFlags !== undefined) transformed.resource_permission_flags = dataObj.resourcePermissionFlags;
-        
-        // Handle relationship fields
-        if (dataObj.primaryCampusId !== undefined) transformed.primary_campus_id = dataObj.primaryCampusId;
-        if (dataObj.householdId !== undefined) transformed.household_id = dataObj.householdId;
-        
-        return transformed;
+        return Promise.race([verificationPromise, timeoutPromise]);
     }
 
     /**
      * Create a new person
      * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
      */
-    async create(data: PersonCreateOptions | Partial<Types.PersonAttributes>) {
-        this.debugLog('people.create', { data });
-        // Check if data is already in snake_case format (has first_name, last_name, etc.)
-        const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
-        
-        // If it's already in snake_case, use it directly; otherwise transform
-        const transformedData = hasSnakeCase 
-            ? (data as Partial<Types.PersonAttributes>)
-            : this.transformPersonData(data as Partial<PersonCreateOptions>);
-        
-        return this.createResource<Types.PersonResourceObject>('/people', transformedData);
+    async create(data: Partial<Types.PersonAttributes>) {
+        return this.createResource<Types.PersonResource>('/people', data);
     }
 
     /**
      * Update a person
      * Accepts both camelCase (PersonCreateOptions) and snake_case (PersonAttributes) fields
      */
-    async update(id: string, data: Partial<PersonCreateOptions> | Partial<Types.PersonAttributes>) {
-        this.debugLog('people.update', { id, data });
-        // Check if data is already in snake_case format (has first_name, last_name, etc.)
-        const hasSnakeCase = Object.keys(data).some(key => key.includes('_'));
-        
-        // If it's already in snake_case, use it directly; otherwise transform
-        const transformedData = hasSnakeCase 
-            ? (data as Partial<Types.PersonAttributes>)
-            : this.transformPersonData(data as Partial<PersonCreateOptions>);
-        
-        return this.updateResource<Types.PersonResourceObject>(`/people/${id}`, transformedData);
+    async update(id: string, data: Partial<Types.PersonAttributes>) {
+        return this.updateResource<Types.PersonResource>(`/people/${id}`, data);
     }
 
     /**
      * Delete a person
      */
     async delete(id: string) {
-        this.debugLog('people.delete', { id });
         return this.deleteResource(`/people/${id}`);
     }
 
@@ -392,64 +255,58 @@ export class PeopleModule extends BaseModule {
      * Get a person's primary campus
      */
     async getPrimaryCampus(personId: string) {
-        this.debugLog('people.getPrimaryCampus', { personId });
-        const person = await this.getById(personId, ['primary_campus']);
+        const person = await this.getById(personId, { include: ['primary_campus'] });
         const campusData = person.primary_campus;
-        
+
         // campusData can be CampusResource, ResourceIdentifier, or null
         if (!campusData || Array.isArray(campusData)) {
             return null;
         }
-        
+
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in campusData && 'type' in campusData) {
             // Get the full campus resource
-            return this.getSingle<Types.CampusResourceObject>(`/campuses/${(campusData as { id: string }).id}`);
+            return this.getSingle<Types.CampusResource>(`/campuses/${campusData.id}`);
         }
-        
+
         // If it's already a full resource, return it
-        return campusData as Types.CampusResource;
+        return campusData;
     }
 
     /**
      * Set a person's primary campus
      */
     async setPrimaryCampus(personId: string, campusId: string) {
-        this.debugLog('people.setPrimaryCampus', { personId, campusId });
-        const transformedData = this.transformPersonData({ primaryCampusId: campusId });
-        return this.updateResource<Types.PersonResourceObject>(`/people/${personId}`, transformedData);
+        return this.updateResource<Types.PersonResource>(`/people/${personId}`, { primary_campus_id: campusId });
     }
 
     /**
      * Remove a person's primary campus
      */
     async removePrimaryCampus(personId: string) {
-        this.debugLog('people.removePrimaryCampus', { personId });
-        const transformedData = this.transformPersonData({ primaryCampusId: null });
-        return this.updateResource<Types.PersonResourceObject>(`/people/${personId}`, transformedData);
+        return this.updateResource<Types.PersonResource>(`/people/${personId}`, { primary_campus_id: null });
     }
 
     /**
      * Get a person's household
      */
     async getHousehold(personId: string) {
-        this.debugLog('people.getHousehold', { personId });
-        const person = await this.getById(personId, ['household']);
+        const person = await this.getById(personId, { include: ['household'] });
         const householdData = person.household;
-        
+
         // householdData can be HouseholdResource, ResourceIdentifier, or null
         if (!householdData || Array.isArray(householdData)) {
             return null;
         }
-        
+
         // Check if it's a ResourceIdentifier (has id but might not have full attributes)
         if ('id' in householdData && 'type' in householdData) {
             // Get the full household resource
-            return this.getSingle<Types.HouseholdResourceObject>(`/households/${(householdData as { id: string }).id}`);
+            return this.getSingle<Types.HouseholdResource>(`/households/${householdData.id}`);
         }
-        
+
         // If it's already a full resource, return it
-        return householdData as Types.HouseholdResource;
+        return householdData
     }
 
     /**
@@ -457,20 +314,8 @@ export class PeopleModule extends BaseModule {
      * Uses the household_memberships endpoint to create a membership record
      */
     async setHousehold(personId: string, householdId: string) {
-        this.debugLog('people.setHousehold', { personId, householdId });
-        // Create a household membership using the household_memberships endpoint
-        interface HouseholdMembershipCreateData {
-            relationships: {
-                person: {
-                    data: {
-                        type: 'Person';
-                        id: string;
-                    };
-                };
-            };
-        }
-        await this.createResource<ResourceObject<'HouseholdMembership', Attributes, { household?: Relationship; person?: Relationship }>>(
-            `/households/${householdId}/household_memberships`, 
+        await this.createResource(
+            `/households/${householdId}/household_memberships`,
             {
                 relationships: {
                     person: {
@@ -480,9 +325,9 @@ export class PeopleModule extends BaseModule {
                         }
                     }
                 }
-            } as HouseholdMembershipCreateData
+            }
         );
-        
+
         // Return the updated person
         return this.getById(personId);
     }
@@ -492,154 +337,98 @@ export class PeopleModule extends BaseModule {
      * Uses the household_memberships endpoint to delete the membership record
      */
     async removeFromHousehold(personId: string) {
-        this.debugLog('people.removeFromHousehold', { personId });
-        // Get the person's household memberships to find the membership ID
-        // Use the person's household_memberships endpoint
         type HouseholdMembershipResource = ResourceObject<'HouseholdMembership', Attributes, { household?: Relationship; person?: Relationship }>;
-        
-        type HouseholdMembershipResponse = {
-            data: HouseholdMembershipResource[];
-        };
-        
-        const membershipsResponse = await this.httpClient.request<HouseholdMembershipResponse>({
+        type HouseholdMembershipResponse = { data: HouseholdMembershipResource[] };
+
+        const res = await this.httpClient.request<HouseholdMembershipResponse>({
             method: 'GET',
-            endpoint: `/people/${personId}/household_memberships`
+            endpoint: `/people/${personId}/household_memberships`,
         });
-        
-        if (!membershipsResponse.data.data || membershipsResponse.data.data.length === 0) {
-            throw new Error(`Person ${personId} is not in a household`);
-        }
-        
-        // Get the first membership (a person can only be in one household)
-        const membership = membershipsResponse.data.data[0];
+        if (!res.data?.data?.length) throw new Error(`Person ${personId} is not in a household`);
+
+        const membership = res.data.data[0];
         const membershipId = membership.id;
-        
-        // Get the household ID from the membership relationship
-        const membershipHousehold = membership.relationships?.household?.data;
-        if (!membershipHousehold || Array.isArray(membershipHousehold) || !membershipHousehold.id) {
-            // If household relationship is not included, get it from the membership
-            interface HouseholdMembershipDetailResponse {
-                data: HouseholdMembershipResource;
-            }
-            const membershipDetails = await this.httpClient.request<HouseholdMembershipDetailResponse>({
-                method: 'GET',
-                endpoint: `/people/${personId}/household_memberships/${membershipId}`,
-                params: {
-                    include: 'household'
-                }
-            });
-            const householdData = membershipDetails.data.data.relationships?.household?.data;
-            if (!householdData || Array.isArray(householdData) || !householdData.id) {
-                throw new Error(`Could not determine household ID for membership ${membershipId}`);
-            }
-            const householdId = householdData.id;
-            await this.deleteResource(`/households/${householdId}/household_memberships/${membershipId}`);
-        } else {
-            const householdId = membershipHousehold.id;
-            await this.deleteResource(`/households/${householdId}/household_memberships/${membershipId}`);
-        }
-        
-        // Return the updated person
+        const householdId = await this.getHouseholdIdFromMembership(personId, membershipId, membership);
+        await this.deleteResource(`/households/${householdId}/household_memberships/${membershipId}`);
         return this.getById(personId);
     }
 
-    /**
-     * Get all people in a specific household
-     * Note: This uses getList() internally, so it returns a single page. Use getAll() with where[household_id] for all pages.
-     */
-    async getHouseholdMembers(householdId: string, options: PersonPageOptions = {}) {
-        this.debugLog('people.getHouseholdMembers', { householdId, options });
-        // household_id is not in PersonWhereClause, so we need to use flat params
-        // Build the where clause manually and merge with other options
-        const params: Record<string, any> = {};
-        if (options.include) params.include = options.include.join(',');
-        if (options.perPage) params.per_page = options.perPage;
-        if (options.page) params.page = options.page;
-        params['where[household_id]'] = householdId;
+    private getHouseholdIdFromRelationship(
+        householdData: Relationship['data']
+    ): string | undefined {
+        if (!householdData || Array.isArray(householdData) || typeof householdData !== 'object') return undefined;
+        return getStringId(householdData);
+    }
 
-        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', params);
+    private async fetchHouseholdIdFromMembershipEndpoint(
+        personId: string,
+        membershipId: string
+    ): Promise<string> {
+        type MembershipWithHousehold = { id: string; household?: Types.HouseholdResource | null };
+        const details = await this.getSingle<MembershipWithHousehold>(
+            `/people/${personId}/household_memberships/${membershipId}`,
+            { include: ['household'] }
+        );
+        const householdId = details.household?.id;
+        if (!householdId) throw new Error(`Could not determine household ID for membership ${membershipId}`);
+        return householdId;
+    }
+
+    private async getHouseholdIdFromMembership(
+        personId: string,
+        membershipId: string,
+        membership: ResourceObject<'HouseholdMembership', Attributes, { household?: Relationship; person?: Relationship }>
+    ): Promise<string> {
+        const fromRel = this.getHouseholdIdFromRelationship(membership.relationships?.household?.data);
+        if (fromRel) return fromRel;
+        return this.fetchHouseholdIdFromMembershipEndpoint(personId, membershipId);
+    }
+
+    /**
+     * Get people in a specific household (GET /households/:id/people).
+     * Returns a single page; use per_page and page for pagination.
+     */
+    async getHouseholdMembers(householdId: string, options?: PersonGetPageOptions) {
+        return this.getList<Types.PersonResource, PersonGetPageOptions>(`/households/${householdId}/people`, options);
     }
 
     /**
      * Get people by campus
      * Note: This uses getList() internally, so it returns a single page. Use getAll() with where[primary_campus_id] for all pages.
      */
-    async getByCampus(campusId: string, options: PersonPageOptions = {}) {
-        this.debugLog('people.getByCampus', { campusId, options });
-        const campusIdNum = Number(campusId);
-        if (isNaN(campusIdNum)) {
-            throw new Error(`Invalid campus ID: ${campusId}`);
-        }
-        return this.getList<Types.PersonResourceObject, Types.PersonRelationshipMap, Types.PeopleResourceTypeToRelMap>('/people', {
-            where: { primary_campus_id: campusIdNum } as PersonWhereClause,
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page
+    async getByCampus(campusId: string, options?: PersonGetPageOptions) {
+        return this.getList<Types.PersonResource, PersonGetPageOptions>('/people', {
+            ...(options ?? {}),
+            where: { ...options?.where, primary_campus_id: campusId },
         });
     }
 
     /**
      * Get a person's workflow cards
      */
-    async getWorkflowCards(personId: string, options: {
-        include?: string[];
-        perPage?: number;
-        page?: number;
-    } = {}) {
-        this.debugLog('people.getWorkflowCards', { personId, options });
-        return this.getList<Types.WorkflowCardResourceObject>(`/people/${personId}/workflow_cards`, {
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page
-        });
+    async getWorkflowCards(personId: string, options?: WorkflowCardGetPageOptions) {
+        return this.getList<Types.WorkflowCardResource>(`/people/${personId}/workflow_cards`, options);
     }
 
     /**
      * Get a person's notes
      */
-    async getNotes(personId: string, options: {
-        include?: string[];
-        perPage?: number;
-        page?: number;
-    } = {}) {
-        this.debugLog('people.getNotes', { personId, options });
-        return this.getList<Types.NoteResourceObject>(`/people/${personId}/notes`, {
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page
-        });
+    async getNotes(personId: string, options?: NoteGetPageOptions) {
+        return this.getList<Types.NoteResource>(`/people/${personId}/notes`, options);
     }
 
     /**
      * Get a person's field data
      */
-    async getFieldData(personId: string, options: {
-        include?: string[];
-        perPage?: number;
-        page?: number;
-    } = {}) {
-        this.debugLog('people.getFieldData', { personId, options });
-        return this.getList<Types.FieldDatumResourceObject>(`/people/${personId}/field_data`, {
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page
-        });
+    async getFieldData(personId: string, options?: FieldDataGetPageOptions) {
+        return this.getList<Types.FieldDatumResource, FieldDataGetPageOptions>(`/people/${personId}/field_data`, options);
     }
 
     /**
      * Get a person's social profiles
      */
-    async getSocialProfiles(personId: string, options: {
-        include?: string[];
-        perPage?: number;
-        page?: number;
-    } = {}) {
-        this.debugLog('people.getSocialProfiles', { personId, options });
-        return this.getList<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, {
-            include: options.include,
-            per_page: options.perPage,
-            page: options.page
-        });
+    async getSocialProfiles(personId: string, options?: SocialProfileGetPageOptions) {
+        return this.getList<Types.SocialProfileResource>(`/people/${personId}/social_profiles`, options);
     }
 
     /**
@@ -657,16 +446,16 @@ export class PeopleModule extends BaseModule {
      * ```typescript
      * // Basic find or create
      * const person = await client.people.findOrCreate({
-     *   firstName: 'John',
-     *   lastName: 'Doe',
+     *   first_name: 'John',
+     *   last_name: 'Doe',
      *   email: 'john@gmail.com',
      *   phone: '+1234567890'
      * });
      * 
      * // Find and add missing contact info if match found
      * const person = await client.people.findOrCreate({
-     *   firstName: 'Jane',
-     *   lastName: 'Smith',
+     *   first_name: 'Jane',
+     *   last_name: 'Smith',
      *   email: 'jane@gmail.com',
      *   phone: '+1987654321',
      *   addMissingContactInfo: true  // Will add phone if person only has email
@@ -676,7 +465,6 @@ export class PeopleModule extends BaseModule {
      * @returns The found or newly created person
      */
     async findOrCreate(options: PersonMatchOptions) {
-        this.debugLog('people.findOrCreate', { options });
         return this.personMatcher.findOrCreate(options);
     }
 
@@ -688,41 +476,24 @@ export class PeopleModule extends BaseModule {
         email?: string;
         phone?: string;
         status?: string;
-        perPage?: number;
+        per_page?: number;
         page?: number;
     }) {
-        this.debugLog('people.search', { criteria });
+        const where = this.buildSearchWhere(criteria);
+        const hasPagination = criteria.per_page !== undefined || criteria.page !== undefined;
+        if (hasPagination) {
+            return this.getPage({ where, per_page: criteria.per_page, page: criteria.page });
+        }
+        return this.getAll({ where });
+    }
+
+    private buildSearchWhere(criteria: { name?: string; email?: string; phone?: string; status?: string }): PersonWhereClause {
         const where: PersonWhereClause = {};
-
-        // Use flexible search when we have multiple criteria or want broader matching
-        if (criteria.email || criteria.phone) {
-            // Use the powerful flexible search parameter
-            if (criteria.email) {
-                where.search_name_or_email_or_phone_number = criteria.email;
-            } else if (criteria.phone) {
-                where.search_name_or_email_or_phone_number = criteria.phone;
-            }
-        } else if (criteria.name) {
-            // Use specific name search when only name is provided
-            where.search_name = criteria.name;
-        }
-
-        if (criteria.status) {
-            where.status = criteria.status;
-        }
-
-        // If pagination options are provided, use getPage instead of getAll
-        if (criteria.perPage !== undefined || criteria.page !== undefined) {
-            return this.getPage({
-                where,
-                perPage: criteria.perPage,
-                page: criteria.page,
-            });
-        }
-
-        return this.getAll({
-            where,
-        });
+        if (criteria.email) where.search_name_or_email_or_phone_number = criteria.email;
+        else if (criteria.phone) where.search_name_or_email_or_phone_number = criteria.phone;
+        else if (criteria.name) where.search_name = criteria.name;
+        if (criteria.status) where.status = criteria.status;
+        return where;
     }
 
     // Contact methods
@@ -731,31 +502,27 @@ export class PeopleModule extends BaseModule {
      * Get person's emails
      */
     async getEmails(personId: string) {
-        this.debugLog('people.getEmails', { personId });
-        return this.getList<Types.EmailResourceObject>(`/people/${personId}/emails`);
+        return this.getList<Types.EmailResource>(`/people/${personId}/emails`);
     }
 
     /**
      * Add an email to a person
      */
     async addEmail(personId: string, data: Types.EmailAttributes) {
-        this.debugLog('people.addEmail', { personId, data });
-        return this.createResource<Types.EmailResourceObject>(`/people/${personId}/emails`, data);
+        return this.createResource<Types.EmailResource>(`/people/${personId}/emails`, data);
     }
 
     /**
      * Update a person's email
      */
     async updateEmail(personId: string, emailId: string, data: Partial<Types.EmailAttributes>) {
-        this.debugLog('people.updateEmail', { personId, emailId, data });
-        return this.updateResource<Types.EmailResourceObject>(`/people/${personId}/emails/${emailId}`, data);
+        return this.updateResource<Types.EmailResource>(`/people/${personId}/emails/${emailId}`, data);
     }
 
     /**
      * Delete a person's email
      */
     async deleteEmail(personId: string, emailId: string) {
-        this.debugLog('people.deleteEmail', { personId, emailId });
         return this.deleteResource(`/people/${personId}/emails/${emailId}`);
     }
 
@@ -763,31 +530,27 @@ export class PeopleModule extends BaseModule {
      * Get person's phone numbers
      */
     async getPhoneNumbers(personId: string) {
-        this.debugLog('people.getPhoneNumbers', { personId });
-        return this.getList<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`);
+        return this.getList<Types.PhoneNumberResource>(`/people/${personId}/phone_numbers`);
     }
 
     /**
      * Add a phone number to a person
      */
     async addPhoneNumber(personId: string, data: Types.PhoneNumberAttributes) {
-        this.debugLog('people.addPhoneNumber', { personId, data });
-        return this.createResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`, data);
+        return this.createResource<Types.PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
     }
 
     /**
      * Update a person's phone number
      */
     async updatePhoneNumber(personId: string, phoneId: string, data: Partial<Types.PhoneNumberAttributes>) {
-        this.debugLog('people.updatePhoneNumber', { personId, phoneId, data });
-        return this.updateResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers/${phoneId}`, data);
+        return this.updateResource<Types.PhoneNumberResource>(`/people/${personId}/phone_numbers/${phoneId}`, data);
     }
 
     /**
      * Delete a person's phone number
      */
     async deletePhoneNumber(personId: string, phoneId: string) {
-        this.debugLog('people.deletePhoneNumber', { personId, phoneId });
         return this.deleteResource(`/people/${personId}/phone_numbers/${phoneId}`);
     }
 
@@ -795,31 +558,27 @@ export class PeopleModule extends BaseModule {
      * Get person's addresses
      */
     async getAddresses(personId: string) {
-        this.debugLog('people.getAddresses', { personId });
-        return this.getList<Types.AddressResourceObject>(`/people/${personId}/addresses`);
+        return this.getList<Types.AddressResource>(`/people/${personId}/addresses`);
     }
 
     /**
      * Add an address to a person
      */
     async addAddress(personId: string, data: Types.AddressAttributes) {
-        this.debugLog('people.addAddress', { personId, data });
-        return this.createResource<Types.AddressResourceObject>(`/people/${personId}/addresses`, data);
+        return this.createResource<Types.AddressResource>(`/people/${personId}/addresses`, data);
     }
 
     /**
      * Update a person's address
      */
     async updateAddress(personId: string, addressId: string, data: Partial<Types.AddressAttributes>) {
-        this.debugLog('people.updateAddress', { personId, addressId, data });
-        return this.updateResource<Types.AddressResourceObject>(`/people/${personId}/addresses/${addressId}`, data);
+        return this.updateResource<Types.AddressResource>(`/people/${personId}/addresses/${addressId}`, data);
     }
 
     /**
      * Delete a person's address
      */
     async deleteAddress(personId: string, addressId: string) {
-        this.debugLog('people.deleteAddress', { personId, addressId });
         return this.deleteResource(`/people/${personId}/addresses/${addressId}`);
     }
 
@@ -828,58 +587,60 @@ export class PeopleModule extends BaseModule {
      * Add a social profile to a person
      */
     async addSocialProfile(personId: string, data: Types.SocialProfileAttributes) {
-        this.debugLog('people.addSocialProfile', { personId, data });
-        return this.createResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, data);
+        return this.createResource<Types.SocialProfileResource>(`/people/${personId}/social_profiles`, data);
     }
 
     /**
      * Update a person's social profile
      */
     async updateSocialProfile(personId: string, profileId: string, data: Partial<Types.SocialProfileAttributes>) {
-        this.debugLog('people.updateSocialProfile', { personId, profileId, data });
-        return this.updateResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles/${profileId}`, data);
+        return this.updateResource<Types.SocialProfileResource>(`/people/${personId}/social_profiles/${profileId}`, data);
     }
 
     /**
      * Delete a person's social profile
      */
     async deleteSocialProfile(personId: string, profileId: string) {
-        this.debugLog('people.deleteSocialProfile', { personId, profileId });
         return this.deleteResource(`/people/${personId}/social_profiles/${profileId}`);
+    }
+
+    private async addContactsToResult(
+        personId: string,
+        contacts: { email?: Types.EmailAttributes; phone?: Types.PhoneNumberAttributes; address?: Types.AddressAttributes },
+        result: { person: Types.PersonResource; email?: Types.EmailResource; phone?: Types.PhoneNumberResource; address?: Types.AddressResource }
+    ) {
+        if (contacts.email) result.email = singleFromCreateResponse(await this.addEmail(personId, contacts.email));
+        if (contacts.phone) result.phone = singleFromCreateResponse(await this.addPhoneNumber(personId, contacts.phone));
+        if (contacts.address) result.address = singleFromCreateResponse(await this.addAddress(personId, contacts.address));
     }
 
     /**
      * Create a person with contact information
      */
     async createWithContacts(
-        personData: PersonCreateOptions,
+        personData: Partial<Types.PersonAttributes>,
         contacts?: {
             email?: Types.EmailAttributes;
             phone?: Types.PhoneNumberAttributes;
             address?: Types.AddressAttributes;
         }
     ) {
-        this.debugLog('people.createWithContacts', { personData, contacts });
-        const person = (await this.create(personData)) as Types.PersonResource;
+        const createRes = await this.create(personData);
+        const person = singleFromCreateResponse(createRes);
+        if (!person) throw new Error('Create person did not return a resource');
         const result: {
             person: Types.PersonResource;
             email?: Types.EmailResource;
             phone?: Types.PhoneNumberResource;
             address?: Types.AddressResource;
         } = { person };
-
-        if (contacts?.email) {
-            result.email = (await this.addEmail(person.id, contacts.email)) as Types.EmailResource;
-        }
-
-        if (contacts?.phone) {
-            result.phone = (await this.addPhoneNumber(person.id, contacts.phone)) as Types.PhoneNumberResource;
-        }
-
-        if (contacts?.address) {
-            result.address = (await this.addAddress(person.id, contacts.address)) as Types.AddressResource;
-        }
-
+        if (contacts) await this.addContactsToResult(person.id, contacts, result);
         return result;
     }
 }
+
+/** Minimal deps for PersonMatcher/MatchScorer so tests can pass a partial mock without casting. */
+export type PersonMatcherDeps = Pick<
+    PeopleModule,
+    'search' | 'getEmails' | 'getPhoneNumbers' | 'create' | 'addEmail' | 'addPhoneNumber' | 'setPrimaryCampus' | 'getById'
+>;

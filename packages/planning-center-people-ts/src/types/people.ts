@@ -1,33 +1,34 @@
 /**
  * Planning Center People API Types
- * Based on JSON:API 1.0 specification
+ * Based on JSON:API 1.0 specification.
+ * Each *Resource is a plain interface (type, id, attributes and resolved relationships at top level).
  */
 
-import {
-  Attributes,
+import type {
+  Links,
   Meta,
   Relationship,
-  ResourceObject,
-  TopLevelLinks,
-} from './json-api';
-import type { FlattenedResource } from '@rachelallyson/planning-center-base-ts';
+  ListResponse,
+} from '@rachelallyson/planning-center-base-ts';
 
-/** List response shape returned by the client (data is always flattened) */
-export interface ListResponse<T> {
-  data: T[];
-  meta?: Meta;
-  links?: TopLevelLinks;
+export type { ListResponse };
+
+/** Relationship reference when the related resource was not in the response's `included` (resolver leaves it as { type, id }). */
+export interface ResourceRef {
+  type: string;
+  id: string;
 }
 
 // ===== Person Resource =====
 
-export interface PersonAttributes extends Attributes {
+export interface PersonAttributes {
   first_name?: string;
   last_name?: string;
   given_name?: string | null;
   middle_name?: string | null;
   nickname?: string | null;
-  birthdate?: string;
+  /** API may return YYYY-MM-DD string or null when not set */
+  birthdate?: string | null;
   anniversary?: string | null;
   gender?: string | null;
   grade?: string | null;
@@ -54,152 +55,147 @@ export interface PersonAttributes extends Attributes {
   demographic_avatar_url?: string | null;
   inactivated_at?: string | null;
   resource_permission_flags?: Record<string, boolean>;
+  /** Relationship ID for create/update payloads */
+  primary_campus_id?: string | null;
+  /** Relationship ID for create/update payloads */
+  household_id?: string | null;
 }
 
-export interface PersonRelationships {
-  emails?: Relationship;
-  phone_numbers?: Relationship;
-  addresses?: Relationship;
-  household?: Relationship;
-  primary_campus?: Relationship;
-  gender?: Relationship;
-  workflow_cards?: Relationship;
-  notes?: Relationship;
-  field_data?: Relationship;
-  social_profiles?: Relationship;
+/** Person relationship keys with resolved *Resource types (output of getSingle/getList) */
+export interface PersonRelOutputs {
+  emails?: EmailResource[];
+  phone_numbers?: PhoneNumberResource[];
+  addresses?: AddressResource[];
+  household?: HouseholdResource | null;
+  primary_campus?: CampusResource | null;
+  workflow_cards?: WorkflowCardResource[];
+  notes?: NoteResource[];
+  field_data?: FieldDatumResource[];
+  social_profiles?: SocialProfileResource[];
 }
 
-/** Internal JSON:API resource shape; use PersonResource for the type returned by the client */
-export interface PersonResourceObject
-  extends ResourceObject<'Person', PersonAttributes, PersonRelationships> { }
-
-/**
- * Mapping of Person relationship keys to their resource types (internal JSON:API shape)
- */
-export type PersonRelationshipMap = {
-  emails: EmailResourceObject[];
-  phone_numbers: PhoneNumberResourceObject[];
-  addresses: AddressResourceObject[];
-  household: HouseholdResourceObject;
-  primary_campus: CampusResourceObject;
-  gender: ResourceObject<string, any, any>; // Gender is a simple resource, not fully typed
-  workflow_cards: WorkflowCardResourceObject[];
-  notes: NoteResourceObject[];
-  field_data: FieldDatumResourceObject[];
-  social_profiles: SocialProfileResourceObject[];
-};
-
-/**
- * Map from People API resource type name to that type's relationship map.
- * Used so nested FlattenedResource types get correct relationship typing.
- */
-export interface PeopleResourceTypeToRelMap extends Record<string, object> {
-  Person: PersonRelationshipMap;
-  FieldDatum: FieldDatumRelationshipMap;
+/** Person resource as returned by the client (attributes and relationships at top level). API may return type as "Person" or "person". */
+export interface PersonResource extends PersonAttributes, PersonRelOutputs {
+  type: 'Person' | 'person';
+  id: string;
+  links?: Links;
+  meta?: Meta;
 }
-
-/** Person resource as returned by the client (attributes and relationships at top level) */
-export type PersonResource = FlattenedResource<
-  PersonResourceObject['type'],
-  PersonAttributes,
-  PersonRelationships,
-  PersonRelationshipMap,
-  PeopleResourceTypeToRelMap
->;
 
 export type PeopleList = ListResponse<PersonResource>;
 export type PersonSingle = PersonResource;
 
 // ===== Email Resource =====
 
-export interface EmailAttributes extends Attributes {
+/** Per docs/public/vertices/people/vertices/email.html */
+export interface EmailAttributes {
   address: string;
-  location: 'Home' | 'Work' | 'Other';
+  /** API returns string (e.g. "Home", "Work", "Other") */
+  location: string;
   primary?: boolean;
   created_at?: string;
   updated_at?: string;
   blocked?: boolean;
 }
 
-export interface EmailRelationships {
-  person?: Relationship;
+/** Email relationship keys with resolved *Resource types */
+export interface EmailRelOutputs {
+  person?: PersonResource | null;
 }
 
-/** Internal JSON:API resource shape; use EmailResource for the type returned by the client */
-export interface EmailResourceObject
-  extends ResourceObject<'Email', EmailAttributes, EmailRelationships> { }
-
 /** Email resource as returned by the client (attributes and relationships at top level) */
-export type EmailResource = FlattenedResource<'Email', EmailAttributes, EmailRelationships>;
+export interface EmailResource extends EmailAttributes, EmailRelOutputs {
+  type: 'Email';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type EmailsList = ListResponse<EmailResource>;
 export type EmailSingle = EmailResource;
 
 // ===== Phone Number Resource =====
 
-export interface PhoneNumberAttributes extends Attributes {
+/** Per docs/public/vertices/people/vertices/phone.html */
+export interface PhoneNumberAttributes {
   number: string;
-  location: 'Home' | 'Work' | 'Other';
+  /** API returns string (e.g. "Home", "Work", "Other") */
+  location?: string;
   primary?: boolean;
   created_at?: string;
   updated_at?: string;
+  /** Assignable on create/update per API docs */
+  carrier?: string | null;
+  country_code?: string | null;
+  /** E.164 format; only with ?fields */
+  e164?: string | null;
+  /** Only when requested with ?fields */
+  formatted_number?: string | null;
+  international?: string | null;
+  national?: string | null;
 }
 
-export interface PhoneNumberRelationships {
-  person?: Relationship;
+/** PhoneNumber relationship keys with resolved *Resource types */
+export interface PhoneNumberRelOutputs {
+  person?: PersonResource | null;
 }
-
-/** Internal JSON:API resource shape; use PhoneNumberResource for the type returned by the client */
-export interface PhoneNumberResourceObject
-  extends ResourceObject<
-    'PhoneNumber',
-    PhoneNumberAttributes,
-    PhoneNumberRelationships
-  > { }
 
 /** PhoneNumber resource as returned by the client */
-export type PhoneNumberResource = FlattenedResource<'PhoneNumber', PhoneNumberAttributes, PhoneNumberRelationships>;
+export interface PhoneNumberResource extends PhoneNumberAttributes, PhoneNumberRelOutputs {
+  type: 'PhoneNumber';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type PhoneNumbersList = ListResponse<PhoneNumberResource>;
 export type PhoneNumberSingle = PhoneNumberResource;
 
 // ===== Address Resource =====
 
-export interface AddressAttributes extends Attributes {
-  street_line_1?: string;
-  street_line_2?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  country_code?: string;
-  country_name?: string;
+export interface AddressAttributes {
+  street_line_1?: string | null;
+  street_line_2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country_code?: string | null;
+  country_name?: string | null;
   location?: string;
   primary?: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface AddressRelationships {
-  person?: Relationship;
-  household?: Relationship;
+/** Address relationship keys with resolved *Resource types */
+export interface AddressRelOutputs {
+  person?: PersonResource | null;
+  household?: HouseholdResource | null;
 }
 
-/** Internal JSON:API resource shape; use AddressResource for the type returned by the client */
-export interface AddressResourceObject
-  extends ResourceObject<'Address', AddressAttributes, AddressRelationships> { }
-
 /** Address resource as returned by the client */
-export type AddressResource = FlattenedResource<'Address', AddressAttributes, AddressRelationships>;
+export interface AddressResource extends AddressAttributes, AddressRelOutputs {
+  type: 'Address';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type AddressesList = ListResponse<AddressResource>;
 export type AddressSingle = AddressResource;
 
 // ===== Household Resource =====
 
-export interface HouseholdAttributes extends Attributes {
+/** Per docs/public/vertices/people/vertices/household.html */
+export interface HouseholdAttributes {
   name?: string;
   created_at?: string;
   updated_at?: string;
+  /** File UUID (see File Uploads in API docs) */
+  avatar?: string | null;
+  member_count?: number;
+  primary_contact_id?: string | null;
+  primary_contact_name?: string | null;
 }
 
 export interface HouseholdRelationships {
@@ -207,23 +203,31 @@ export interface HouseholdRelationships {
   primary_contact?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use HouseholdResource for the type returned by the client */
-export interface HouseholdResourceObject
-  extends ResourceObject<
-    'Household',
-    HouseholdAttributes,
-    HouseholdRelationships
-  > { }
+/** Household relationship keys with resolved *Resource types */
+export interface HouseholdRelOutputs {
+  people?: PersonResource[];
+  primary_contact?: PersonResource | null;
+}
 
 /** Household resource as returned by the client */
-export type HouseholdResource = FlattenedResource<'Household', HouseholdAttributes, HouseholdRelationships>;
+export interface HouseholdResource extends HouseholdAttributes, HouseholdRelOutputs {
+  type: 'Household';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type HouseholdsList = ListResponse<HouseholdResource>;
 export type HouseholdSingle = HouseholdResource;
 
+/** Payload for creating a household; API accepts attributes and optional relationships (e.g. people). */
+export type HouseholdCreatePayload = HouseholdAttributes & {
+  relationships?: { people?: { data: Array<{ type: 'Person'; id: string }> } };
+};
+
 // ===== Social Profile Resource =====
 
-export interface SocialProfileAttributes extends Attributes {
+export interface SocialProfileAttributes {
   site?: string;
   url?: string;
   verified?: boolean;
@@ -231,105 +235,81 @@ export interface SocialProfileAttributes extends Attributes {
   updated_at?: string;
 }
 
-export interface SocialProfileRelationships {
-  // According to API docs, SocialProfile has no relationships
+/** SocialProfile has no relationships in API */
+export type SocialProfileRelOutputs = Record<string, never>;
+
+/** SocialProfile resource as returned by the client (attributes at top level, no relationships) */
+export interface SocialProfileResource extends SocialProfileAttributes {
+  type: 'SocialProfile';
+  id: string;
+  links?: Links;
+  meta?: Meta;
 }
-
-/** Internal JSON:API resource shape; use SocialProfileResource for the type returned by the client */
-export interface SocialProfileResourceObject
-  extends ResourceObject<
-    'SocialProfile',
-    SocialProfileAttributes,
-    SocialProfileRelationships
-  > { }
-
-/** SocialProfile resource as returned by the client */
-export type SocialProfileResource = FlattenedResource<'SocialProfile', SocialProfileAttributes, SocialProfileRelationships>;
 
 export type SocialProfilesList = ListResponse<SocialProfileResource>;
 export type SocialProfileSingle = SocialProfileResource;
 
 // ===== Field Definition Resource =====
 
-export type FieldDataType = 'boolean' | 'checkboxes' | 'date' | 'file' | 'number'| 'select' | 'string' | 'text';
+/** API returns these; additional values may exist in some orgs */
+export type FieldDataType = 'boolean' | 'checkboxes' | 'date' | 'file' | 'number' | 'select' | 'string' | 'text' | string;
 
-export interface FieldDefinitionAttributes extends Attributes {
-  config: string | Record<string, any> | null;
-  data_type: FieldDataType;
-  deleted_at: string | null | false; // Can be date string, null, or boolean false
+export interface FieldDefinitionAttributes {
+  /** API returns varying shapes; use unknown to accept any response */
+  config: unknown;
+  data_type: FieldDataType | undefined;
+  deleted_at: string | null | false | undefined; // API can omit (undefined) or return date string, null, or false
   name: string;
   sequence: number;
   slug: string;
   tab_id: number;
 }
 
-export interface FieldDefinitionRelationships {
-  tab?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use FieldDefinitionResource for the type returned by the client */
-export interface FieldDefinitionResourceObject
-  extends ResourceObject<
-    'FieldDefinition',
-    FieldDefinitionAttributes,
-    FieldDefinitionRelationships
-  > { }
-
 /** FieldDefinition resource as returned by the client */
-export type FieldDefinitionResource = FlattenedResource<'FieldDefinition', FieldDefinitionAttributes, FieldDefinitionRelationships>;
+export interface FieldDefinitionResource extends FieldDefinitionAttributes {
+  type: 'FieldDefinition';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FieldDefinitionsList = ListResponse<FieldDefinitionResource>;
 export type FieldDefinitionSingle = FieldDefinitionResource;
 
 // ===== Tab Resource =====
 
-export interface TabAttributes extends Attributes {
+/** Per docs/public/vertices/people/vertices/tab.html */
+export interface TabAttributes {
   name?: string;
-  sequence?: string | number;
-  created_at?: string;
-  updated_at?: string;
+  sequence?: number;
+  slug?: string;
 }
-
-export interface TabRelationships {
-  // Tabs may have relationships to field definitions
-  field_definitions?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use TabResource for the type returned by the client */
-export interface TabResourceObject
-  extends ResourceObject<
-    'Tab',
-    TabAttributes,
-    TabRelationships
-  > { }
 
 /** Tab resource as returned by the client */
-export type TabResource = FlattenedResource<'Tab', TabAttributes, TabRelationships>;
+export interface TabResource extends TabAttributes {
+  type: 'Tab';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type TabsList = ListResponse<TabResource>;
 export type TabSingle = TabResource;
 
 // ===== Field Option Resource =====
 
-export interface FieldOptionAttributes extends Attributes {
+export interface FieldOptionAttributes {
   value: string;
   sequence: string | number;
 }
 
-export interface FieldOptionRelationships {
-  field_definition?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use FieldOptionResource for the type returned by the client */
-export interface FieldOptionResourceObject
-  extends ResourceObject<
-    'FieldOption',
-    FieldOptionAttributes,
-    FieldOptionRelationships
-  > { }
-
 /** FieldOption resource as returned by the client */
-export type FieldOptionResource = FlattenedResource<'FieldOption', FieldOptionAttributes, FieldOptionRelationships>;
+export interface FieldOptionResource extends FieldOptionAttributes {
+  type: 'FieldOption';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FieldOptionsList = ListResponse<FieldOptionResource>;
 export type FieldOptionSingle = FieldOptionResource;
@@ -342,54 +322,38 @@ export interface FieldDatumFileMetadata {
   [key: string]: string | number | boolean | null | undefined;
 }
 
-export interface FieldDatumAttributes extends Attributes {
+/** Per docs/public/vertices/people/vertices/field_data.html */
+export interface FieldDatumAttributes {
   value?: string | null;
-  file?: FieldDatumFileMetadata | null;
+  /** URL string or metadata object from API */
+  file?: string | FieldDatumFileMetadata | null;
   file_content_type?: string | null;
   file_name?: string | null;
-  file_size?: string | number | null;
-
+  /** integer in API */
+  file_size?: number | null;
 }
 
-export interface FieldDatumRelationships {
-  field_definition?: Relationship;
-  field_option?: Relationship;
-  // The API uses a polymorphic "customizable" relationship pointing to Person
-  customizable?: Relationship;
+/** FieldDatum relationship keys. field_definition is full resource when included, or ResourceRef when not in response. */
+export interface FieldDatumRelOutputs {
+  field_definition?: FieldDefinitionResource | ResourceRef | null;
+  field_option?: FieldOptionResource | null;
+  customizable?: PersonResource | null;
 }
-
-/** Internal JSON:API resource shape; use FieldDatumResource for the type returned by the client */
-export interface FieldDatumResourceObject
-  extends ResourceObject<
-    'FieldDatum',
-    FieldDatumAttributes,
-    FieldDatumRelationships
-  > { }
-
-/**
- * Mapping of FieldDatum relationship keys to their resource types (internal JSON:API shape)
- */
-export type FieldDatumRelationshipMap = {
-  field_definition: FieldDefinitionResourceObject;
-  field_option: FieldOptionResourceObject;
-  customizable: PersonResourceObject; // Polymorphic relationship to Person
-};
 
 /** FieldDatum resource as returned by the client (attributes and relationships at top level) */
-export type FieldDatumResource = FlattenedResource<
-  FieldDatumResourceObject['type'],
-  FieldDatumAttributes,
-  FieldDatumRelationships,
-  FieldDatumRelationshipMap,
-  PeopleResourceTypeToRelMap
->;
+export interface FieldDatumResource extends FieldDatumAttributes, FieldDatumRelOutputs {
+  type: 'FieldDatum';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FieldDataList = ListResponse<FieldDatumResource>;
 export type FieldDataSingle = FieldDatumResource;
 
 // ===== List Resource =====
 
-export interface ListAttributes extends Attributes {
+export interface ListAttributes {
   name?: string;
   description?: string;
   created_at?: string;
@@ -397,92 +361,71 @@ export interface ListAttributes extends Attributes {
 }
 
 
-/** Internal JSON:API resource shape; use ListResource for the type returned by the client */
-export interface ListResourceObject
-  extends ResourceObject<'List', ListAttributes, {}> { }
-
 /** List resource as returned by the client */
-export type ListResource = FlattenedResource<'List', ListAttributes, Record<string, never>>;
+export interface ListResource extends ListAttributes {
+  type: 'List';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ListsList = ListResponse<ListResource>;
 export type ListSingle = ListResource;
 
 // ===== List Category Resource =====
 
-export interface ListCategoryAttributes extends Attributes {
+export interface ListCategoryAttributes {
   name?: string;
   created_at: string;
   updated_at: string;
-  organization_id: string;
+  /** API may return string or number */
+  organization_id: string | number;
 }
-
-export interface ListCategoryRelationships {
-  organization?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use ListCategoryResource for the type returned by the client */
-export interface ListCategoryResourceObject
-  extends ResourceObject<
-    'ListCategory',
-    ListCategoryAttributes,
-    ListCategoryRelationships
-  > { }
 
 /** ListCategory resource as returned by the client */
-export type ListCategoryResource = FlattenedResource<'ListCategory', ListCategoryAttributes, ListCategoryRelationships>;
+export interface ListCategoryResource extends ListCategoryAttributes {
+  type: 'ListCategory';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ListCategoriesList = ListResponse<ListCategoryResource>;
 export type ListCategorySingle = ListCategoryResource;
 
 // ===== List Share Resource =====
 
-export interface ListShareAttributes extends Attributes {
+export interface ListShareAttributes {
   permission?: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface ListShareRelationships {
-  list?: Relationship;
-  person?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use ListShareResource for the type returned by the client */
-export interface ListShareResourceObject
-  extends ResourceObject<
-    'ListShare',
-    ListShareAttributes,
-    ListShareRelationships
-  > { }
-
 /** ListShare resource as returned by the client */
-export type ListShareResource = FlattenedResource<'ListShare', ListShareAttributes, ListShareRelationships>;
+export interface ListShareResource extends ListShareAttributes {
+  type: 'ListShare';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ListSharesList = ListResponse<ListShareResource>;
 export type ListShareSingle = ListShareResource;
 
 // ===== List Star Resource =====
 
-export interface ListStarAttributes extends Attributes {
+export interface ListStarAttributes {
   created_at?: string;
   updated_at?: string;
 }
 
-export interface ListStarRelationships {
-  list?: Relationship;
-  person?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use ListStarResource for the type returned by the client */
-export interface ListStarResourceObject
-  extends ResourceObject<
-    'ListStar',
-    ListStarAttributes,
-    ListStarRelationships
-  > { }
-
 /** ListStar resource as returned by the client */
-export type ListStarResource = FlattenedResource<'ListStar', ListStarAttributes, ListStarRelationships>;
+export interface ListStarResource extends ListStarAttributes {
+  type: 'ListStar';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ListStarsList = ListResponse<ListStarResource>;
 export type ListStarSingle = ListStarResource;
@@ -490,7 +433,7 @@ export type ListStarSingle = ListStarResource;
 // ===== List Rule Resource =====
 // GET /people/v2/lists/:id/rules
 
-export interface ListRuleAttributes extends Attributes {
+export interface ListRuleAttributes {
   group?: string;
   operator?: string;
   value?: string;
@@ -498,164 +441,131 @@ export interface ListRuleAttributes extends Attributes {
   updated_at?: string;
 }
 
-export interface ListRuleRelationships {
-  list?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use ListRuleResource for the type returned by the client */
-export interface ListRuleResourceObject
-  extends ResourceObject<
-    'Rule',
-    ListRuleAttributes,
-    ListRuleRelationships
-  > { }
-
 /** ListRule resource as returned by the client */
-export type ListRuleResource = FlattenedResource<'Rule', ListRuleAttributes, ListRuleRelationships>;
+export interface ListRuleResource extends ListRuleAttributes {
+  type: 'Rule';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ListRulesList = ListResponse<ListRuleResource>;
 export type ListRuleSingle = ListRuleResource;
 
 // ===== Note Resource =====
 
-export interface NoteAttributes extends Attributes {
+export interface NoteAttributes {
   note?: string;
-  note_category_id?: string;
+  /** API may return string or number */
+  note_category_id?: string | number;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface NoteRelationships {
-  person?: Relationship;
-  note_category?: Relationship;
-  organization?: Relationship;
-  created_by?: Relationship;
+/** Note relationship keys with resolved *Resource types */
+export interface NoteRelOutputs {
+  person?: PersonResource | null;
+  note_category?: NoteCategoryResource | null;
+  organization?: OrganizationResource | null;
+  created_by?: PersonResource | null;
 }
 
-/** Internal JSON:API resource shape; use NoteResource for the type returned by the client */
-export interface NoteResourceObject
-  extends ResourceObject<'Note', NoteAttributes, NoteRelationships> { }
-
 /** Note resource as returned by the client */
-export type NoteResource = FlattenedResource<'Note', NoteAttributes, NoteRelationships>;
+export interface NoteResource extends NoteAttributes, NoteRelOutputs {
+  type: 'Note';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type NotesList = ListResponse<NoteResource>;
 export type NoteSingle = NoteResource;
 
 // ===== Note Category Resource =====
 
-export interface NoteCategoryAttributes extends Attributes {
-  name: string;
-  locked: boolean;
-  organization_id: number;
-  created_at: string;
-  updated_at: string;
+export interface NoteCategoryAttributes {
+  /** API may return string, number, null, or boolean in some contexts */
+  name: string | number | null | boolean | undefined;
+  /** API may return boolean, number (0/1), string, or null */
+  locked?: boolean | number | string | null;
+  /** API may return number, string, or null */
+  organization_id?: number | string | null;
+  /** API may return string, number (timestamp), or null */
+  created_at?: string | number | null;
+  updated_at?: string | number | null;
 }
-
-export interface NoteCategoryRelationships {
-  organization?: Relationship;
-  shares?: Relationship;
-  subscriptions?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use NoteCategoryResource for the type returned by the client */
-export interface NoteCategoryResourceObject
-  extends ResourceObject<
-    'NoteCategory',
-    NoteCategoryAttributes,
-    NoteCategoryRelationships
-  > { }
 
 /** NoteCategory resource as returned by the client */
-export type NoteCategoryResource = FlattenedResource<'NoteCategory', NoteCategoryAttributes, NoteCategoryRelationships>;
+export interface NoteCategoryResource extends NoteCategoryAttributes {
+  type: 'NoteCategory';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type NoteCategoriesList = ListResponse<NoteCategoryResource>;
 export type NoteCategorySingle = NoteCategoryResource;
 
 // ===== Note Category Share Resource =====
 
-export interface NoteCategoryShareAttributes extends Attributes {
+export interface NoteCategoryShareAttributes {
   permission?: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface NoteCategoryShareRelationships {
-  category?: Relationship;
-  person?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use NoteCategoryShareResource for the type returned by the client */
-export interface NoteCategoryShareResourceObject
-  extends ResourceObject<
-    'NoteCategoryShare',
-    NoteCategoryShareAttributes,
-    NoteCategoryShareRelationships
-  > { }
-
 /** NoteCategoryShare resource as returned by the client */
-export type NoteCategoryShareResource = FlattenedResource<'NoteCategoryShare', NoteCategoryShareAttributes, NoteCategoryShareRelationships>;
+export interface NoteCategoryShareResource extends NoteCategoryShareAttributes {
+  type: 'NoteCategoryShare';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type NoteCategorySharesList = ListResponse<NoteCategoryShareResource>;
 export type NoteCategoryShareSingle = NoteCategoryShareResource;
 
 // ===== Note Category Subscription Resource =====
 
-export interface NoteCategorySubscriptionAttributes extends Attributes {
+export interface NoteCategorySubscriptionAttributes {
   created_at?: string;
   updated_at?: string;
 }
 
-export interface NoteCategorySubscriptionRelationships {
-  category?: Relationship;
-  person?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use NoteCategorySubscriptionResource for the type returned by the client */
-export interface NoteCategorySubscriptionResourceObject
-  extends ResourceObject<
-    'NoteCategorySubscription',
-    NoteCategorySubscriptionAttributes,
-    NoteCategorySubscriptionRelationships
-  > { }
-
 /** NoteCategorySubscription resource as returned by the client */
-export type NoteCategorySubscriptionResource = FlattenedResource<'NoteCategorySubscription', NoteCategorySubscriptionAttributes, NoteCategorySubscriptionRelationships>;
+export interface NoteCategorySubscriptionResource extends NoteCategorySubscriptionAttributes {
+  type: 'NoteCategorySubscription';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type NoteCategorySubscriptionsList = ListResponse<NoteCategorySubscriptionResource>;
 export type NoteCategorySubscriptionSingle = NoteCategorySubscriptionResource;
 
 // ===== Workflow Resource =====
 
-export interface WorkflowAttributes extends Attributes {
+export interface WorkflowAttributes {
   name?: string;
   description?: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface WorkflowRelationships {
-  workflow_category?: Relationship;
-  campus?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use WorkflowResource for the type returned by the client */
-export interface WorkflowResourceObject
-  extends ResourceObject<
-    'Workflow',
-    WorkflowAttributes,
-    WorkflowRelationships
-  > { }
-
 /** Workflow resource as returned by the client */
-export type WorkflowResource = FlattenedResource<'Workflow', WorkflowAttributes, WorkflowRelationships>;
+export interface WorkflowResource extends WorkflowAttributes {
+  type: 'Workflow';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type WorkflowsList = ListResponse<WorkflowResource>;
 export type WorkflowSingle = WorkflowResource;
 
 // ===== Workflow Card Resource =====
 
-export interface WorkflowCardAttributes extends Attributes {
+export interface WorkflowCardAttributes {
   // Common fields
   title?: string;
   description?: string;
@@ -675,14 +585,27 @@ export interface WorkflowCardAttributes extends Attributes {
   snooze_until?: string | null; // Set via snooze action
   removed_at?: string | null; // Set via remove action
 
-  // Legacy fields (may be deprecated)
   overdue_at?: string | null;
   stage_id?: string;
+
+  // Assignable/read from API (API may return null when unset)
+  sticky_assignment?: boolean | null;
+  step_title?: string;
+}
+
+/** WorkflowCard relationship keys with resolved *Resource types */
+export interface WorkflowCardRelOutputs {
+  workflow?: WorkflowResource | null;
+  person?: PersonResource | null;
+  /** API returns assignee with type "Assignee" or "Person"; same shape as Person. */
+  assignee?: (Omit<PersonResource, 'type'> & { type: 'Assignee' | 'Person' | 'person' }) | null;
+  /** Resolved when included; step shape varies by workflow */
+  current_step?: object | null;
 }
 
 // Assignable fields for workflow card updates (only these can be set via PATCH)
 export interface WorkflowCardAssignableAttributes {
-  sticky_assignment?: boolean;
+  sticky_assignment?: boolean | null;
   assignee_id?: string;
   person_id?: string;
 }
@@ -697,51 +620,39 @@ export interface WorkflowCardEmailAttributes {
   note: string;
 }
 
-export interface WorkflowCardRelationships {
-  workflow?: Relationship;
-  person?: Relationship;
-  assignee?: Relationship;
-  current_step?: Relationship;
-}
-
-/** Internal JSON:API resource shape; use WorkflowCardResource for the type returned by the client */
-export interface WorkflowCardResourceObject
-  extends ResourceObject<
-    'WorkflowCard',
-    WorkflowCardAttributes,
-    WorkflowCardRelationships
-  > { }
-
 /** WorkflowCard resource as returned by the client */
-export type WorkflowCardResource = FlattenedResource<'WorkflowCard', WorkflowCardAttributes, WorkflowCardRelationships>;
+export interface WorkflowCardResource extends WorkflowCardAttributes, WorkflowCardRelOutputs {
+  type: 'WorkflowCard';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type WorkflowCardsList = ListResponse<WorkflowCardResource>;
 export type WorkflowCardSingle = WorkflowCardResource;
 
 // ===== Workflow Card Note Resource =====
 
-export interface WorkflowCardNoteAttributes extends Attributes {
+export interface WorkflowCardNoteAttributes {
   note?: string;
 }
 
 
 
-/** Internal JSON:API resource shape; use WorkflowCardNoteResource for the type returned by the client */
-export interface WorkflowCardNoteResourceObject
-  extends ResourceObject<
-    'WorkflowCardNote',
-    WorkflowCardNoteAttributes,
-    {}> { }
-
 /** WorkflowCardNote resource as returned by the client */
-export type WorkflowCardNoteResource = FlattenedResource<'WorkflowCardNote', WorkflowCardNoteAttributes, Record<string, never>>;
+export interface WorkflowCardNoteResource extends WorkflowCardNoteAttributes {
+  type: 'WorkflowCardNote';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type WorkflowCardNotesList = ListResponse<WorkflowCardNoteResource>;
 export type WorkflowCardNoteSingle = WorkflowCardNoteResource;
 
 // ===== Organization Resource =====
 
-export interface OrganizationAttributes extends Attributes {
+export interface OrganizationAttributes {
   avatar_url?: string | null;
   church_center_subdomain?: string;
   contact_website?: string | null;
@@ -757,23 +668,20 @@ export interface OrganizationRelationships {
   statistics?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use OrganizationResource for the type returned by the client */
-export interface OrganizationResourceObject
-  extends ResourceObject<
-    'Organization',
-    OrganizationAttributes,
-    OrganizationRelationships
-  > { }
-
 /** Organization resource as returned by the client */
-export type OrganizationResource = FlattenedResource<'Organization', OrganizationAttributes, OrganizationRelationships>;
+export interface OrganizationResource extends OrganizationAttributes {
+  type: 'Organization';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type OrganizationsList = ListResponse<OrganizationResource>;
 export type OrganizationSingle = OrganizationResource;
 
 // ===== Organization Statistic Resource =====
 
-export interface OrganizationStatisticAttributes extends Attributes {
+export interface OrganizationStatisticAttributes {
   name?: string;
   value?: string;
   created_at?: string;
@@ -784,24 +692,21 @@ export interface OrganizationStatisticRelationships {
   organization?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use OrganizationStatisticResource for the type returned by the client */
-export interface OrganizationStatisticResourceObject
-  extends ResourceObject<
-    'OrganizationStatistic',
-    OrganizationStatisticAttributes,
-    OrganizationStatisticRelationships
-  > { }
-
 /** OrganizationStatistic resource as returned by the client */
-export type OrganizationStatisticResource = FlattenedResource<'OrganizationStatistic', OrganizationStatisticAttributes, OrganizationStatisticRelationships>;
+export interface OrganizationStatisticResource extends OrganizationStatisticAttributes {
+  type: 'OrganizationStatistic';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type OrganizationStatisticsList = ListResponse<OrganizationStatisticResource>;
 export type OrganizationStatisticSingle = OrganizationStatisticResource;
 
 // ===== Campus Resource =====
 
-export interface CampusAttributes extends Attributes {
-  name: string;
+export interface CampusAttributes {
+  name?: string | null;
   latitude?: string | null;
   longitude?: string | null;
   description?: string;
@@ -823,23 +728,20 @@ export interface CampusRelationships {
   organization?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use CampusResource for the type returned by the client */
-export interface CampusResourceObject
-  extends ResourceObject<
-    'Campus',
-    CampusAttributes,
-    CampusRelationships
-  > { }
-
-/** Campus resource as returned by the client */
-export type CampusResource = FlattenedResource<'Campus', CampusAttributes, CampusRelationships>;
+/** Campus resource as returned by the client. API may return "Campus", "campus", or "PrimaryCampus" (e.g. on person.primary_campus). */
+export interface CampusResource extends CampusAttributes {
+  type: 'Campus' | 'campus' | 'PrimaryCampus';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type CampusesList = ListResponse<CampusResource>;
 export type CampusSingle = CampusResource;
 
 // ===== ServiceTime Resource =====
 
-export interface ServiceTimeAttributes extends Attributes {
+export interface ServiceTimeAttributes {
   start_time?: number; // Minutes from midnight (e.g., 540 for 9:00 AM)
   day?: number | string; // Input: number (0-6), Output: string ('sunday', 'monday', etc.)
   description?: string;
@@ -852,53 +754,50 @@ export interface ServiceTimeRelationships {
   campus?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use ServiceTimeResource for the type returned by the client */
-export interface ServiceTimeResourceObject
-  extends ResourceObject<
-    'ServiceTime',
-    ServiceTimeAttributes,
-    ServiceTimeRelationships
-  > { }
-
 /** ServiceTime resource as returned by the client */
-export type ServiceTimeResource = FlattenedResource<'ServiceTime', ServiceTimeAttributes, ServiceTimeRelationships>;
+export interface ServiceTimeResource extends ServiceTimeAttributes {
+  type: 'ServiceTime';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ServiceTimesList = ListResponse<ServiceTimeResource>;
 export type ServiceTimeSingle = ServiceTimeResource;
 
 // ===== Form Resource =====
 
-export interface FormAttributes extends Attributes {
+export interface FormAttributes {
   name?: string;
-  description?: string;
+  description?: string | null;
   active?: boolean;
   archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface FormRelationships {
-  organization?: Relationship;
-  form_category?: Relationship;
+/** Form relationship keys with resolved *Resource types */
+export interface FormRelOutputs {
+  campus?: CampusResource | null;
+  category?: FormCategoryResource | null;
+  organization?: OrganizationResource | null;
+  form_category?: FormCategoryResource | null;
 }
 
-/** Internal JSON:API resource shape; use FormResource for the type returned by the client */
-export interface FormResourceObject
-  extends ResourceObject<
-    'Form',
-    FormAttributes,
-    FormRelationships
-  > { }
-
 /** Form resource as returned by the client */
-export type FormResource = FlattenedResource<'Form', FormAttributes, FormRelationships>;
+export interface FormResource extends FormAttributes, FormRelOutputs {
+  type: 'Form';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormsList = ListResponse<FormResource>;
 export type FormSingle = FormResource;
 
 // ===== FormCategory Resource =====
 
-export interface FormCategoryAttributes extends Attributes {
+export interface FormCategoryAttributes {
   name?: string;
   created_at?: string;
   updated_at?: string;
@@ -908,23 +807,20 @@ export interface FormCategoryRelationships {
   organization?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use FormCategoryResource for the type returned by the client */
-export interface FormCategoryResourceObject
-  extends ResourceObject<
-    'FormCategory',
-    FormCategoryAttributes,
-    FormCategoryRelationships
-  > { }
-
 /** FormCategory resource as returned by the client */
-export type FormCategoryResource = FlattenedResource<'FormCategory', FormCategoryAttributes, FormCategoryRelationships>;
+export interface FormCategoryResource extends FormCategoryAttributes {
+  type: 'FormCategory';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormCategoriesList = ListResponse<FormCategoryResource>;
 export type FormCategorySingle = FormCategoryResource;
 
 // ===== FormField Resource =====
 
-export interface FormFieldAttributes extends Attributes {
+export interface FormFieldAttributes {
   name?: string;
   field_type?: string;
   required?: boolean;
@@ -937,23 +833,20 @@ export interface FormFieldRelationships {
   form?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use FormFieldResource for the type returned by the client */
-export interface FormFieldResourceObject
-  extends ResourceObject<
-    'FormField',
-    FormFieldAttributes,
-    FormFieldRelationships
-  > { }
-
 /** FormField resource as returned by the client */
-export type FormFieldResource = FlattenedResource<'FormField', FormFieldAttributes, FormFieldRelationships>;
+export interface FormFieldResource extends FormFieldAttributes {
+  type: 'FormField';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormFieldsList = ListResponse<FormFieldResource>;
 export type FormFieldSingle = FormFieldResource;
 
 // ===== FormFieldOption Resource =====
 
-export interface FormFieldOptionAttributes extends Attributes {
+export interface FormFieldOptionAttributes {
   value?: string;
   sequence?: number;
   created_at?: string;
@@ -964,23 +857,20 @@ export interface FormFieldOptionRelationships {
   form_field?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use FormFieldOptionResource for the type returned by the client */
-export interface FormFieldOptionResourceObject
-  extends ResourceObject<
-    'FormFieldOption',
-    FormFieldOptionAttributes,
-    FormFieldOptionRelationships
-  > { }
-
 /** FormFieldOption resource as returned by the client */
-export type FormFieldOptionResource = FlattenedResource<'FormFieldOption', FormFieldOptionAttributes, FormFieldOptionRelationships>;
+export interface FormFieldOptionResource extends FormFieldOptionAttributes {
+  type: 'FormFieldOption';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormFieldOptionsList = ListResponse<FormFieldOptionResource>;
 export type FormFieldOptionSingle = FormFieldOptionResource;
 
 // ===== FormSubmission Resource =====
 
-export interface FormSubmissionAttributes extends Attributes {
+export interface FormSubmissionAttributes {
   submitted_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -991,23 +881,20 @@ export interface FormSubmissionRelationships {
   person?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use FormSubmissionResource for the type returned by the client */
-export interface FormSubmissionResourceObject
-  extends ResourceObject<
-    'FormSubmission',
-    FormSubmissionAttributes,
-    FormSubmissionRelationships
-  > { }
-
 /** FormSubmission resource as returned by the client */
-export type FormSubmissionResource = FlattenedResource<'FormSubmission', FormSubmissionAttributes, FormSubmissionRelationships>;
+export interface FormSubmissionResource extends FormSubmissionAttributes {
+  type: 'FormSubmission';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormSubmissionsList = ListResponse<FormSubmissionResource>;
 export type FormSubmissionSingle = FormSubmissionResource;
 
 // ===== FormSubmissionValue Resource =====
 
-export interface FormSubmissionValueAttributes extends Attributes {
+export interface FormSubmissionValueAttributes {
   value?: string;
   created_at?: string;
   updated_at?: string;
@@ -1018,45 +905,41 @@ export interface FormSubmissionValueRelationships {
   form_field?: Relationship;
 }
 
-/** Internal JSON:API resource shape; use FormSubmissionValueResource for the type returned by the client */
-export interface FormSubmissionValueResourceObject
-  extends ResourceObject<
-    'FormSubmissionValue',
-    FormSubmissionValueAttributes,
-    FormSubmissionValueRelationships
-  > { }
-
 /** FormSubmissionValue resource as returned by the client */
-export type FormSubmissionValueResource = FlattenedResource<'FormSubmissionValue', FormSubmissionValueAttributes, FormSubmissionValueRelationships>;
+export interface FormSubmissionValueResource extends FormSubmissionValueAttributes {
+  type: 'FormSubmissionValue';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type FormSubmissionValuesList = ListResponse<FormSubmissionValueResource>;
 export type FormSubmissionValueSingle = FormSubmissionValueResource;
 
 // ===== Report Resource =====
 
-export interface ReportAttributes extends Attributes {
+export interface ReportAttributes {
   name?: string;
-  body?: string;
+  /** API can return null for report body. */
+  body?: string | null;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface ReportRelationships {
-  organization?: Relationship;
-  created_by?: Relationship;
-  updated_by?: Relationship;
+/** Report relationship keys with resolved *Resource types */
+export interface ReportRelOutputs {
+  organization?: OrganizationResource | null;
+  created_by?: PersonResource | null;
+  updated_by?: PersonResource | null;
 }
 
-/** Internal JSON:API resource shape; use ReportResource for the type returned by the client */
-export interface ReportResourceObject
-  extends ResourceObject<
-    'Report',
-    ReportAttributes,
-    ReportRelationships
-  > { }
-
 /** Report resource as returned by the client */
-export type ReportResource = FlattenedResource<'Report', ReportAttributes, ReportRelationships>;
+export interface ReportResource extends ReportAttributes, ReportRelOutputs {
+  type: 'Report';
+  id: string;
+  links?: Links;
+  meta?: Meta;
+}
 
 export type ReportsList = ListResponse<ReportResource>;
 export type ReportSingle = ReportResource;

@@ -5,168 +5,85 @@
 import { BaseModule } from '@rachelallyson/planning-center-base-ts';
 import type * as Types from '../types';
 
+/** Contacts API: emails, phone numbers, addresses (getPage, getById, create, update, delete). */
 export class ContactsModule extends BaseModule {
-    /**
-     * Get all emails
-     */
     async getAllEmails() {
-        this.debugLog('contacts.getAllEmails');
-        return this.getList<Types.EmailResourceObject>('/emails');
+        return this.getList<Types.EmailResource>('/emails');
     }
 
-    /**
-     * Get a single email by ID
-     */
     async getEmailById(id: string) {
-        this.debugLog('contacts.getEmailById', { id });
-        return this.getSingle<Types.EmailResourceObject>(`/emails/${id}`);
+        return this.getSingle<Types.EmailResource>(`/emails/${id}`);
     }
 
-    /**
-     * Create an email for a person
-     * Note: Emails must be created via person-specific endpoint
-     */
     async createEmail(personId: string, data: Types.EmailAttributes) {
-        this.debugLog('contacts.createEmail', { personId, data });
-        return this.createResource<Types.EmailResourceObject>(`/people/${personId}/emails`, data);
+        return this.createResource<Types.EmailResource>(`/people/${personId}/emails`, data);
     }
 
-    /**
-     * Update an email
-     */
     async updateEmail(id: string, data: Partial<Types.EmailAttributes>) {
-        this.debugLog('contacts.updateEmail', { id, data });
-        return this.updateResource<Types.EmailResourceObject>(`/emails/${id}`, data);
+        return this.updateResource<Types.EmailResource>(`/emails/${id}`, data);
     }
 
-    /**
-     * Delete an email
-     */
     async deleteEmail(id: string) {
-        this.debugLog('contacts.deleteEmail', { id });
         return this.deleteResource(`/emails/${id}`);
     }
 
-    /**
-     * Get all phone numbers
-     */
     async getAllPhoneNumbers() {
-        this.debugLog('contacts.getAllPhoneNumbers');
-        return this.getList<Types.PhoneNumberResourceObject>('/phone_numbers');
+        return this.getList<Types.PhoneNumberResource>('/phone_numbers');
     }
 
-    /**
-     * Get a single phone number by ID
-     */
     async getPhoneNumberById(id: string) {
-        this.debugLog('contacts.getPhoneNumberById', { id });
-        return this.getSingle<Types.PhoneNumberResourceObject>(`/phone_numbers/${id}`);
+        return this.getSingle<Types.PhoneNumberResource>(`/phone_numbers/${id}`);
     }
 
-    /**
-     * Create a phone number for a person
-     * Note: Phone numbers must be created via person-specific endpoint
-     */
     async createPhoneNumber(personId: string, data: Types.PhoneNumberAttributes) {
-        this.debugLog('contacts.createPhoneNumber', { personId, data });
-        return this.createResource<Types.PhoneNumberResourceObject>(`/people/${personId}/phone_numbers`, data);
+        return this.createResource<Types.PhoneNumberResource>(`/people/${personId}/phone_numbers`, data);
     }
 
-    /**
-     * Update a phone number
-     */
     async updatePhoneNumber(id: string, data: Partial<Types.PhoneNumberAttributes>) {
-        this.debugLog('contacts.updatePhoneNumber', { id, data });
-        return this.updateResource<Types.PhoneNumberResourceObject>(`/phone_numbers/${id}`, data);
+        return this.updateResource<Types.PhoneNumberResource>(`/phone_numbers/${id}`, data);
     }
 
-    /**
-     * Delete a phone number
-     */
     async deletePhoneNumber(id: string) {
-        this.debugLog('contacts.deletePhoneNumber', { id });
         return this.deleteResource(`/phone_numbers/${id}`);
     }
 
-    /**
-     * Get all addresses
-     */
     async getAllAddresses() {
-        this.debugLog('contacts.getAllAddresses');
-        return this.getList<Types.AddressResourceObject>('/addresses');
+        return this.getList<Types.AddressResource>('/addresses');
     }
 
-    /**
-     * Get a single address by ID
-     */
     async getAddressById(id: string) {
-        this.debugLog('contacts.getAddressById', { id });
-        return this.getSingle<Types.AddressResourceObject>(`/addresses/${id}`);
+        return this.getSingle<Types.AddressResource>(`/addresses/${id}`);
     }
 
-    /**
-     * Create an address for a person
-     * Note: Addresses must be created via person-specific endpoint
-     */
     async createAddress(personId: string, data: Types.AddressAttributes) {
-        this.debugLog('contacts.createAddress', { personId, data });
-        return this.createResource<Types.AddressResourceObject>(`/people/${personId}/addresses`, data);
+        return this.createResource<Types.AddressResource>(`/people/${personId}/addresses`, data);
     }
 
-    /**
-     * Update an address
-     */
     async updateAddress(id: string, data: Partial<Types.AddressAttributes>) {
-        this.debugLog('contacts.updateAddress', { id, data });
-        return this.updateResource<Types.AddressResourceObject>(`/addresses/${id}`, data);
+        return this.updateResource<Types.AddressResource>(`/addresses/${id}`, data);
     }
 
-    /**
-     * Delete an address
-     */
     async deleteAddress(id: string) {
-        this.debugLog('contacts.deleteAddress', { id });
         return this.deleteResource(`/addresses/${id}`);
     }
 
-    /**
-     * Get all social profiles
-     */
     async getAllSocialProfiles() {
-        this.debugLog('contacts.getAllSocialProfiles');
-        return this.getList<Types.SocialProfileResourceObject>('/social_profiles');
+        return this.getList<Types.SocialProfileResource>('/social_profiles');
     }
 
-    /**
-     * Get a single social profile by ID
-     */
     async getSocialProfileById(id: string) {
-        this.debugLog('contacts.getSocialProfileById', { id });
-        return this.getSingle<Types.SocialProfileResourceObject>(`/social_profiles/${id}`);
+        return this.getSingle<Types.SocialProfileResource>(`/social_profiles/${id}`);
     }
 
-    /**
-     * Create a social profile for a person
-     * Note: Social profiles must be created via person-specific endpoint
-     */
     async createSocialProfile(personId: string, data: Types.SocialProfileAttributes) {
-        this.debugLog('contacts.createSocialProfile', { personId, data });
-        return this.createResource<Types.SocialProfileResourceObject>(`/people/${personId}/social_profiles`, data);
+        return this.createResource<Types.SocialProfileResource>(`/people/${personId}/social_profiles`, data);
     }
 
-    /**
-     * Update a social profile
-     */
     async updateSocialProfile(id: string, data: Partial<Types.SocialProfileAttributes>) {
-        this.debugLog('contacts.updateSocialProfile', { id, data });
-        return this.updateResource<Types.SocialProfileResourceObject>(`/social_profiles/${id}`, data);
+        return this.updateResource<Types.SocialProfileResource>(`/social_profiles/${id}`, data);
     }
 
-    /**
-     * Delete a social profile
-     */
     async deleteSocialProfile(id: string) {
-        this.debugLog('contacts.deleteSocialProfile', { id });
         return this.deleteResource(`/social_profiles/${id}`);
     }
 }

@@ -1,4 +1,4 @@
-// Export all JSON:API types (re-exported from base)
+// JSON:API types (from core)
 export type {
   JsonValue,
   Meta,
@@ -7,62 +7,20 @@ export type {
   Links,
   PaginationLinks,
   TopLevelLinks,
-  TopLevelJsonApi,
   ResourceIdentifier,
   Relationship,
-  ToOne,
-  ToMany,
   Attributes,
   ResourceObject,
-  JsonApiBase,
   ErrorObject,
-  ErrorDocument,
-  DataDocumentSingle,
-  DataDocumentMany,
-  JsonApiDocument,
-  Paginated,
   Response,
+  ToOne,
+  ToMany,
+  ErrorDocument,
+  Paginated,
 } from '@rachelallyson/planning-center-base-ts';
 
-// Export all People-specific types
+// All People resource types
 export * from './people';
 
-// Re-export commonly used types for convenience
-export type {
-  AddressAttributes,
-  AddressesList,
-  AddressResource,
-  AddressSingle,
-  EmailAttributes,
-  EmailResource,
-  EmailSingle,
-  EmailsList,
-  FieldDefinitionAttributes,
-  FieldDefinitionResource,
-  FieldDefinitionSingle,
-  FieldDefinitionsList,
-  FieldOptionAttributes,
-  FieldOptionResource,
-  FieldOptionSingle,
-  FieldOptionsList,
-  HouseholdAttributes,
-  HouseholdResource,
-  HouseholdSingle,
-  HouseholdsList,
-  // Document types
-  PeopleList,
-  PersonAttributes,
-  PersonRelationships,
-  PersonRelationshipMap,
-  PersonResource,
-  PersonSingle,
-  ListResponse,
-  PhoneNumberAttributes,
-  PhoneNumberResource,
-  PhoneNumberSingle,
-  PhoneNumbersList,
-  SocialProfileAttributes,
-  SocialProfileResource,
-  SocialProfileSingle,
-  SocialProfilesList,
-} from './people';
+// API option types (where, include, order, GetPage/GetAll/GetById per resource)
+export * from './api-options';

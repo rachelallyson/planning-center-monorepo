@@ -1,47 +1,24 @@
-import { createDebugLogger } from '@rachelallyson/planning-center-base-ts';
-import type { PcoDebugOptions } from '@rachelallyson/planning-center-base-ts';
 import type { PcoClient } from './client';
-
-type ConfigWithDebug = { debug?: boolean | PcoDebugOptions } | null | undefined;
-
-/** Log to debug stream when client has debug enabled; no-op otherwise */
-function debugLogIfEnabled(client: PcoClient, message: string, data?: unknown): void {
-    const config: ConfigWithDebug =
-        'getConfig' in client && typeof (client as { getConfig: () => ConfigWithDebug }).getConfig === 'function'
-            ? (client as { getConfig: () => ConfigWithDebug }).getConfig()
-            : undefined;
-    const logger = createDebugLogger(config);
-    if (logger.enabled) logger.log(message, data);
-}
-import type { ResourceObject, ResourceIdentifier } from './types/json-api';
-import { mapIncludedToRelationships as baseMapIncludedToRelationships } from '@rachelallyson/planning-center-base-ts';
-import type { PersonWhereClause } from './types/api-options';
+import {
+    mapIncludedToRelationships as coreMapIncludedToRelationships,
+    singleFromCreateResponse,
+} from '@rachelallyson/planning-center-base-ts';
+import type { PersonWhereClause, PersonInclude } from './types/api-options';
 import type {
     PersonAttributes,
-    PersonResource,
     EmailAttributes,
     PhoneNumberAttributes,
     AddressAttributes,
-    WorkflowCardNoteAttributes,
-    PeopleList,
-    ListsList,
-    ListCategoriesList,
     EmailResource,
     PhoneNumberResource,
     AddressResource,
-    FieldDatumResource,
-    WorkflowCardResource,
-    EmailsList,
-    PhoneNumbersList,
-    AddressesList,
+    WorkflowCardNoteAttributes,
     OrganizationResource,
     WorkflowCardNoteResource,
+    PersonResource,
     Meta,
     TopLevelLinks,
-    ListResource,
-    HouseholdResource,
 } from './types';
-import type { PersonCreateOptions } from './modules/people';
 
 /**
  * Calculate age from birthdate string
@@ -62,7 +39,7 @@ export function calculateAge(birthdate: string): number {
 /**
  * Calculate age from birthdate string, handling invalid dates
  */
-export function calculateAgeSafe(birthdate: string | undefined): number | null {
+export function calculateAgeSafe(birthdate: string | null | undefined): number | null {
     if (!birthdate) return null;
 
     try {
@@ -91,11 +68,44 @@ export function isChild(birthdate: string | undefined): boolean {
     return age !== null && age < 18;
 }
 
+function matchesAgeWhenUnknown(
+    criteria: { agePreference?: 'adults' | 'children' | 'any'; agePreferenceLenient?: boolean }
+): boolean {
+    if (criteria.agePreferenceLenient) return true;
+    return criteria.agePreference === 'any' || criteria.agePreference === undefined;
+}
+
+function matchesAgePreference(age: number, preference?: 'adults' | 'children' | 'any'): boolean {
+    if (preference === 'adults' && age < 18) return false;
+    if (preference === 'children' && age >= 18) return false;
+    return true;
+}
+
+function matchesAgeRange(age: number, minAge?: number, maxAge?: number): boolean {
+    if (minAge !== undefined && age < minAge) return false;
+    if (maxAge !== undefined && age > maxAge) return false;
+    return true;
+}
+
 /**
  * Check if a person's age matches the given criteria
  */
+function matchesBirthYear(birthdate: string, birthYear: number): boolean {
+    return new Date(birthdate).getFullYear() === birthYear;
+}
+
+function matchesBirthYearCriteria(birthdate: string | null | undefined, birthYear: number | undefined): boolean {
+    return birthYear === undefined || !birthdate || matchesBirthYear(birthdate, birthYear);
+}
+
+function matchesAgeCriteriaWithAge(age: number, birthdate: string | null | undefined, criteria: { agePreference?: 'adults' | 'children' | 'any'; minAge?: number; maxAge?: number; birthYear?: number }): boolean {
+    if (!matchesAgePreference(age, criteria.agePreference)) return false;
+    if (!matchesAgeRange(age, criteria.minAge, criteria.maxAge)) return false;
+    return matchesBirthYearCriteria(birthdate, criteria.birthYear);
+}
+
 export function matchesAgeCriteria(
-    birthdate: string | undefined,
+    birthdate: string | null | undefined,
     criteria: {
         agePreference?: 'adults' | 'children' | 'any';
         minAge?: number;
@@ -105,32 +115,8 @@ export function matchesAgeCriteria(
     }
 ): boolean {
     const age = calculateAgeSafe(birthdate);
-
-    // If no birthdate, match based on lenient setting
-    if (age === null) {
-        if (criteria.agePreferenceLenient) {
-            // Lenient mode: include profiles without birthdates regardless of agePreference
-            return true;
-        }
-        // Strict mode (default): only match if preference is 'any'
-        return criteria.agePreference === 'any' || criteria.agePreference === undefined;
-    }
-
-    // Check age preference
-    if (criteria.agePreference === 'adults' && age < 18) return false;
-    if (criteria.agePreference === 'children' && age >= 18) return false;
-
-    // Check age range
-    if (criteria.minAge !== undefined && age < criteria.minAge) return false;
-    if (criteria.maxAge !== undefined && age > criteria.maxAge) return false;
-
-    // Check birth year
-    if (criteria.birthYear !== undefined) {
-        const birthYear = new Date(birthdate!).getFullYear();
-        if (birthYear !== criteria.birthYear) return false;
-    }
-
-    return true;
+    if (age === null) return matchesAgeWhenUnknown(criteria);
+    return matchesAgeCriteriaWithAge(age, birthdate, criteria);
 }
 
 /**
@@ -160,8 +146,8 @@ export function normalizeEmail(email: string): string {
  * Validate phone number format (basic validation)
  */
 export function isValidPhone(phone: string): boolean {
-    const phoneRegex = /^[\+]?[1-9][\d]{6,14}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+    const phoneRegex = /^[+]?[1-9][\d]{6,14}$/;
+    return phoneRegex.test(phone.replace(/[\s\-()]/g, ''));
 }
 
 /**
@@ -179,6 +165,11 @@ export function normalizePhone(phone: string): string {
         return `+${digits}`;
     }
     return `+${digits}`;
+}
+
+/** Type guard: value has optional id (household relationship can be resource or identifier) */
+function hasOptionalId(value: object | null | undefined): value is { id?: string } {
+    return value != null && typeof value === 'object' && 'id' in value;
 }
 
 // ===== Contact Validation Helpers =====
@@ -222,28 +213,18 @@ function normalizeEmailDomain(domain: string): string {
 export function emailDomainsMatch(email1: string, email2: string): boolean {
     const domain1 = normalizeEmailDomain(extractEmailDomain(email1));
     const domain2 = normalizeEmailDomain(extractEmailDomain(email2));
-    
+
     if (!domain1 || !domain2) {
         return false;
     }
-    
-    // Exact match after normalization
-    if (domain1 === domain2) {
-        return true;
-    }
-    
-    // Check if domains share a common prefix (at least 3 characters)
-    // This helps catch typos like "gmial.com" vs "gmail.com"
-    const minPrefixLength = 3;
-    if (domain1.length >= minPrefixLength && domain2.length >= minPrefixLength) {
-        const prefix1 = domain1.substring(0, minPrefixLength);
-        const prefix2 = domain2.substring(0, minPrefixLength);
-        if (prefix1 === prefix2) {
-            return true;
-        }
-    }
-    
-    return false;
+
+    if (domain1 === domain2) return true;
+    return domainsSharePrefix(domain1, domain2, 3);
+}
+
+function domainsSharePrefix(domain1: string, domain2: string, minLen: number): boolean {
+    if (domain1.length < minLen || domain2.length < minLen) return false;
+    return domain1.substring(0, minLen) === domain2.substring(0, minLen);
 }
 
 /**
@@ -268,29 +249,19 @@ function normalizePhoneDigits(phone: string): string {
  * @param phone2 - Second phone number
  * @returns True if phone numbers are similar
  */
+function normalizedPhonesMatch(phone1: string, phone2: string): boolean {
+    const n1 = normalizePhoneDigits(phone1);
+    const n2 = normalizePhoneDigits(phone2);
+    return !!n1 && !!n2 && n1 === n2;
+}
+
+function rawDigitsMatch(phone1: string, phone2: string): boolean {
+    return phone1.replace(/\D/g, '') === phone2.replace(/\D/g, '');
+}
+
 export function phoneNumbersSimilar(phone1: string, phone2: string): boolean {
-    if (!phone1 || !phone2) {
-        return false;
-    }
-    
-    const normalized1 = normalizePhoneDigits(phone1);
-    const normalized2 = normalizePhoneDigits(phone2);
-    
-    // Empty after normalization
-    if (!normalized1 || !normalized2) {
-        return false;
-    }
-    
-    // Exact match after normalization
-    if (normalized1 === normalized2) {
-        return true;
-    }
-    
-    // Also check raw digits (handles international numbers)
-    const digits1 = phone1.replace(/\D/g, '');
-    const digits2 = phone2.replace(/\D/g, '');
-    
-    return digits1 === digits2;
+    if (!phone1 || !phone2) return false;
+    return normalizedPhonesMatch(phone1, phone2) || rawDigitsMatch(phone1, phone2);
 }
 
 /**
@@ -305,34 +276,27 @@ export function phoneNumbersSimilar(phone1: string, phone2: string): boolean {
  * @param personPhones - Array of phone numbers from the person's profile
  * @returns Object with match results and overall validity
  */
+function checkEmailMatch(searchEmail: string, personEmails: string[]): boolean {
+    return personEmails.some((personEmail) => emailDomainsMatch(searchEmail, personEmail));
+}
+
+function checkPhoneMatch(searchPhone: string, personPhones: string[]): boolean {
+    return personPhones.some((personPhone) => phoneNumbersSimilar(searchPhone, personPhone));
+}
+
+function computeContactValid(hasSearchCriteria: boolean, emailMatch: boolean, phoneMatch: boolean): boolean {
+    return !hasSearchCriteria || emailMatch || phoneMatch;
+}
+
 export function validateContactSimilarity(
     searchEmail: string | undefined,
     searchPhone: string | undefined,
     personEmails: string[],
     personPhones: string[]
 ): { emailMatch: boolean; phoneMatch: boolean; isValid: boolean } {
-    let emailMatch = false;
-    let phoneMatch = false;
-    
-    // Check email domain match
-    if (searchEmail) {
-        emailMatch = personEmails.some(personEmail => 
-            emailDomainsMatch(searchEmail, personEmail)
-        );
-    }
-    
-    // Check phone similarity
-    if (searchPhone) {
-        phoneMatch = personPhones.some(personPhone => 
-            phoneNumbersSimilar(searchPhone, personPhone)
-        );
-    }
-    
-    // Valid if either email domain matches or phone is similar
-    // (or if we didn't have search criteria to check)
-    const hasSearchCriteria = !!(searchEmail || searchPhone);
-    const isValid = !hasSearchCriteria || emailMatch || phoneMatch;
-    
+    const emailMatch = searchEmail ? checkEmailMatch(searchEmail, personEmails) : false;
+    const phoneMatch = searchPhone ? checkPhoneMatch(searchPhone, personPhones) : false;
+    const isValid = computeContactValid(!!(searchEmail || searchPhone), emailMatch, phoneMatch);
     return { emailMatch, phoneMatch, isValid };
 }
 
@@ -379,123 +343,144 @@ export interface TrustResult {
  * }
  * ```
  */
+function trustResult(shouldTrust: boolean, age: number | null, reason: string): TrustResult {
+    return { shouldTrust, age, reason };
+}
+
+function trustFreshResult(age: number, trustWindow: number): TrustResult {
+    const ageSeconds = Math.round(age / 1000);
+    const trustWindowMinutes = Math.round(trustWindow / 1000 / 60);
+    return trustResult(true, age, `Fresh personId (${ageSeconds}s old, within ${trustWindowMinutes}min trust window)`);
+}
+
+function trustStaleResult(age: number): TrustResult {
+    const ageMinutes = Math.round(age / 1000 / 60);
+    return trustResult(false, age, `Old personId (${ageMinutes}min old, needs verification)`);
+}
+
+function parseTrustAge(createdAt: string): { age: number; valid: true } | { valid: false; result: TrustResult } {
+    const createdDate = new Date(createdAt);
+    if (isNaN(createdDate.getTime())) {
+        return { valid: false, result: trustResult(false, null, 'Invalid timestamp format') };
+    }
+    const age = Date.now() - createdDate.getTime();
+    if (age < 0) return { valid: false, result: trustResult(false, age, 'Timestamp is in the future (clock skew)') };
+    return { age, valid: true };
+}
+
 export function calculateTrust(
     createdAt: string | undefined,
     trustWindow: number = DEFAULT_TRUST_WINDOW
 ): TrustResult {
-    if (!createdAt) {
-        return {
-            shouldTrust: false,
-            age: null,
-            reason: 'No timestamp (legacy data or never saved)',
-        };
-    }
-    
-    const createdDate = new Date(createdAt);
-    if (isNaN(createdDate.getTime())) {
-        return {
-            shouldTrust: false,
-            age: null,
-            reason: 'Invalid timestamp format',
-        };
-    }
-    
-    const age = Date.now() - createdDate.getTime();
-    
-    if (age < 0) {
-        return {
-            shouldTrust: false,
-            age,
-            reason: 'Timestamp is in the future (clock skew)',
-        };
-    }
-    
-    if (age < trustWindow) {
-        const ageSeconds = Math.round(age / 1000);
-        const trustWindowMinutes = Math.round(trustWindow / 1000 / 60);
-        return {
-            shouldTrust: true,
-            age,
-            reason: `Fresh personId (${ageSeconds}s old, within ${trustWindowMinutes}min trust window)`,
-        };
-    }
-    
-    const ageMinutes = Math.round(age / 1000 / 60);
-    return {
-        shouldTrust: false,
-        age,
-        reason: `Old personId (${ageMinutes}min old, needs verification)`,
-    };
+    if (!createdAt) return trustResult(false, null, 'No timestamp (legacy data or never saved)');
+    const parsed = parseTrustAge(createdAt);
+    if (parsed.valid === false) return parsed.result;
+    const { age } = parsed;
+    if (age < trustWindow) return trustFreshResult(age, trustWindow);
+    return trustStaleResult(age);
+}
+
+function joinNameParts(first: string, last: string): string {
+    if (first && last) return `${first} ${last}`;
+    if (first) return first;
+    if (last) return last;
+    return 'Unknown';
 }
 
 /**
  * Format person name from attributes
  */
 export function formatPersonName(person: { first_name?: string; last_name?: string; nickname?: string }): string {
-    const firstName = person.nickname || person.first_name || '';
-    const lastName = person.last_name || '';
-
-    if (firstName && lastName) {
-        return `${firstName} ${lastName}`;
-    } else if (firstName) {
-        return firstName;
-    } else if (lastName) {
-        return lastName;
-    }
-
-    return 'Unknown';
+    const first = person.nickname || person.first_name || '';
+    const last = person.last_name || '';
+    return joinNameParts(first, last);
 }
+
+const DATE_FORMATTERS: Record<'short' | 'long' | 'iso', (date: Date) => string> = {
+    short: (d) => d.toLocaleDateString(),
+    long: (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    iso: (d) => d.toISOString().split('T')[0],
+};
 
 /**
  * Format date string in various formats
  */
 export function formatDate(dateString: string, format: 'short' | 'long' | 'iso' = 'short'): string {
     const date = new Date(dateString);
-
-    if (isNaN(date.getTime())) {
-        return 'Invalid Date';
-    }
-
-    switch (format) {
-        case 'short':
-            return date.toLocaleDateString();
-        case 'long':
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-        case 'iso':
-            return date.toISOString().split('T')[0];
-        default:
-            return date.toLocaleDateString();
-    }
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    const formatter = DATE_FORMATTERS[format] ?? DATE_FORMATTERS.short;
+    return formatter(date);
 }
 
 /**
  * Validate person data
  */
-export function validatePersonData(data: Partial<PersonAttributes>): { isValid: boolean; errors: string[] } {
-    const errors: string[] = [];
+/** Person-like data that may include email/phone for validation (e.g. create payloads) */
+export type PersonDataForValidation = Partial<PersonAttributes> & { email?: string; phone?: string };
 
+function validateEmailField(data: PersonDataForValidation): string[] {
     if (data.email && typeof data.email === 'string' && !isValidEmail(data.email)) {
-        errors.push('Invalid email format');
+        return ['Invalid email format'];
     }
+    return [];
+}
 
+function validatePhoneField(data: PersonDataForValidation): string[] {
     if (data.phone && typeof data.phone === 'string' && !isValidPhone(data.phone)) {
-        errors.push('Invalid phone format');
+        return ['Invalid phone format'];
     }
+    return [];
+}
 
+function validateBirthdateField(data: PersonDataForValidation): string[] {
     if (data.birthdate) {
         const birthDate = new Date(data.birthdate);
-        if (isNaN(birthDate.getTime())) {
-            errors.push('Invalid birthdate format');
-        }
+        if (isNaN(birthDate.getTime())) return ['Invalid birthdate format'];
     }
+    return [];
+}
 
+export function validatePersonData(data: PersonDataForValidation): { isValid: boolean; errors: string[] } {
+    const errors = [
+        ...validateEmailField(data),
+        ...validatePhoneField(data),
+        ...validateBirthdateField(data),
+    ];
+    return { isValid: errors.length === 0, errors };
+}
+
+function primaryOrFirst<T extends { primary?: boolean }>(items: T[]): T | undefined {
+    return items.find((x) => x.primary) ?? items[0];
+}
+
+function resolveAddressString(primaryAddress: { street_line_1?: string | null } | undefined, fallbackFirst: { street_line_1?: string | null } | undefined): string | undefined {
+    const value = primaryAddress?.street_line_1 ?? fallbackFirst?.street_line_1;
+    return typeof value === 'string' ? value : undefined;
+}
+
+function pickEmail(emails: { data: Array<{ address?: string | null; primary?: boolean }> }): string | undefined {
+    const primary = primaryOrFirst(emails.data);
+    const value = primary?.address ?? emails.data[0]?.address;
+    return typeof value === 'string' ? value : undefined;
+}
+
+function pickPhone(phones: { data: Array<{ number?: string | null; primary?: boolean }> }): string | undefined {
+    const primary = primaryOrFirst(phones.data);
+    const value = primary?.number ?? phones.data[0]?.number;
+    return typeof value === 'string' ? value : undefined;
+}
+
+function buildPrimaryContactResult(
+    emails: { data: Array<{ address?: string | null; primary?: boolean }> },
+    phones: { data: Array<{ number?: string | null; primary?: boolean }> },
+    addresses: { data: Array<{ street_line_1?: string | null; primary?: boolean }> }
+) {
+    const primaryAddress = primaryOrFirst(addresses.data);
+    const addressString = resolveAddressString(primaryAddress, addresses.data[0]);
     return {
-        isValid: errors.length === 0,
-        errors
+        email: pickEmail(emails),
+        phone: pickPhone(phones),
+        address: addressString
     };
 }
 
@@ -506,25 +491,69 @@ export async function getPrimaryContact(
     client: PcoClient,
     personId: string
 ) {
-    debugLogIfEnabled(client, 'helpers  getPrimaryContact', { personId });
     const [emails, phones, addresses] = await Promise.all([
         client.people.getEmails(personId),
         client.people.getPhoneNumbers(personId),
         client.people.getAddresses(personId)
     ]);
+    return buildPrimaryContactResult(emails, phones, addresses);
+}
 
-    const primaryEmail = emails.data.find((e) => e.primary);
-    const primaryPhone = phones.data.find((p) => p.primary);
-    const primaryAddress = addresses.data.find((a) => a.primary);
+function buildCreatePersonData(personData: Partial<PersonAttributes>): Partial<PersonAttributes> {
+    const createData: Partial<PersonAttributes> = {};
+    if (personData.first_name) createData.first_name = personData.first_name;
+    if (personData.last_name) createData.last_name = personData.last_name;
+    if (personData.nickname !== null && personData.nickname !== undefined) {
+        createData.nickname = personData.nickname;
+    }
+    return createData;
+}
 
-    const addressValue = primaryAddress?.street_line_1 ?? addresses.data[0]?.street_line_1;
-    const addressString = typeof addressValue === 'string' ? addressValue : undefined;
+async function addEmailIfPresent(
+    client: PcoClient,
+    personId: string,
+    email: Partial<EmailAttributes> | undefined
+): Promise<EmailResource | undefined> {
+    if (!email?.address || !email?.location) return undefined;
+    const res = await client.people.addEmail(personId, {
+        address: email.address,
+        location: email.location,
+        primary: email.primary,
+    });
+    return singleFromCreateResponse(res);
+}
 
-    return {
-        email: primaryEmail?.address ?? emails.data[0]?.address,
-        phone: primaryPhone?.number ?? phones.data[0]?.number,
-        address: addressString
-    };
+async function addPhoneIfPresent(
+    client: PcoClient,
+    personId: string,
+    phone: Partial<PhoneNumberAttributes> | undefined
+): Promise<PhoneNumberResource | undefined> {
+    if (!phone?.number || !phone?.location) return undefined;
+    const res = await client.people.addPhoneNumber(personId, {
+        number: phone.number,
+        location: phone.location,
+        primary: phone.primary,
+    });
+    return singleFromCreateResponse(res);
+}
+
+async function addContactResults(
+    client: PcoClient,
+    personId: string,
+    contactData: {
+        email?: Partial<EmailAttributes>;
+        phone?: Partial<PhoneNumberAttributes>;
+        address?: Partial<AddressAttributes>;
+    }
+): Promise<{ email?: EmailResource; phone?: PhoneNumberResource; address?: AddressResource }> {
+    const [email, phone, address] = await Promise.all([
+        addEmailIfPresent(client, personId, contactData.email),
+        addPhoneIfPresent(client, personId, contactData.phone),
+        contactData.address
+            ? singleFromCreateResponse(await client.people.addAddress(personId, contactData.address))
+            : Promise.resolve(undefined),
+    ]);
+    return { email, phone, address };
 }
 
 /**
@@ -539,50 +568,20 @@ export async function createPersonWithContact(
         address?: Partial<AddressAttributes>;
     }
 ) {
-    debugLogIfEnabled(client, 'helpers  createPersonWithContact', { firstName: personData.first_name, lastName: personData.last_name });
-    const createData: Partial<PersonCreateOptions> = {};
-    if (personData.first_name) createData.firstName = personData.first_name;
-    if (personData.last_name) createData.lastName = personData.last_name;
-    if (personData.nickname !== null && personData.nickname !== undefined) {
-        createData.nickname = personData.nickname;
-    }
+    const createData = buildCreatePersonData(personData);
+    const createRes = await client.people.create(createData);
+    const person = singleFromCreateResponse(createRes);
+    if (!person) throw new Error('Create person did not return a resource');
+    const contact = contactData ? await addContactResults(client, person.id, contactData) : {};
+    return { person, ...contact };
+}
 
-    const person = await client.people.create(createData) as PersonResource;
-
-    const results: {
-        person: PersonResource;
-        email?: EmailResource;
-        phone?: PhoneNumberResource;
-        address?: AddressResource;
-    } = { person };
-
-    if (contactData?.email) {
-        // Ensure required fields are present
-        if (contactData.email.address && contactData.email.location) {
-            results.email = await client.people.addEmail(person.id, {
-                address: contactData.email.address,
-                location: contactData.email.location,
-                primary: contactData.email.primary,
-            });
-        }
-    }
-
-    if (contactData?.phone) {
-        // Ensure required fields are present
-        if (contactData.phone.number && contactData.phone.location) {
-            results.phone = await client.people.addPhoneNumber(person.id, {
-                number: contactData.phone.number,
-                location: contactData.phone.location,
-                primary: contactData.phone.primary,
-            });
-        }
-    }
-
-    if (contactData?.address) {
-        results.address = await client.people.addAddress(person.id, contactData.address);
-    }
-
-    return results;
+function buildSearchWhere(criteria: { status?: string; name?: string; email?: string }): PersonWhereClause {
+    const where: PersonWhereClause = {};
+    if (criteria.status) where.status = criteria.status;
+    if (criteria.email) where.search_name_or_email_or_phone_number = criteria.email;
+    else if (criteria.name) where.search_name = criteria.name;
+    return where;
 }
 
 /**
@@ -594,34 +593,16 @@ export async function searchPeople(
         status?: string;
         name?: string;
         email?: string;
-        perPage?: number;
+        per_page?: number;
         page?: number;
     }
 ) {
-    debugLogIfEnabled(client, 'helpers  searchPeople', { criteria });
-    const where: PersonWhereClause = {};
+    const where = buildSearchWhere(criteria);
+    const usePagination = criteria.per_page !== undefined || criteria.page !== undefined;
 
-    if (criteria.status) {
-        where.status = criteria.status;
+    if (usePagination) {
+        return client.people.getPage({ where, per_page: criteria.per_page, page: criteria.page });
     }
-
-    // Use flexible search when we have email, otherwise use specific name search
-    if (criteria.email) {
-        where.search_name_or_email_or_phone_number = criteria.email;
-    } else if (criteria.name) {
-        where.search_name = criteria.name;
-    }
-
-    // If pagination options are provided, use getPage instead of getAll
-    if (criteria.perPage !== undefined ||  criteria.page !== undefined) {
-        const result = await client.people.getPage({
-            where,
-            perPage: criteria.perPage,
-            page: criteria.page,
-        });
-        return result;
-    }
-
     return client.people.getAll({ where });
 }
 
@@ -632,24 +613,20 @@ export async function getPeopleByHousehold(
     client: PcoClient,
     householdId: string
 ) {
-    debugLogIfEnabled(client, 'helpers  getPeopleByHousehold', { householdId });
     const result = await client.people.getAll({
-        include: ['households']
+        include: ['household']
     });
     // Filter by household_id manually since it's not in the where clause
-    // getAll returns PaginationResult with FlattenedPersonResource[], so return the same type
+    // getAll returns PaginationResult with PersonResource[], so return the same type
     const filtered = {
         ...result,
         data: result.data.filter((p) => {
             const household = p.household;
             if (!household) return false;
-            // household can be a HouseholdResource, ResourceIdentifier, or array at runtime (types say to-one only)
             if (Array.isArray(household)) {
-                return (household as Array<{ id?: string }>).some((h) => h && 'id' in h && h.id === householdId);
+                return household.some((h) => hasOptionalId(h) && h.id === householdId);
             }
-            // Check if it has an id property (both ResourceIdentifier and HouseholdResource have it)
-            const h = household as { id?: string };
-            return 'id' in h && h.id === householdId;
+            return hasOptionalId(household) && household.id === householdId;
         })
     };
     return filtered;
@@ -662,9 +639,8 @@ export async function getCompletePersonProfile(
     client: PcoClient,
     personId: string
 ) {
-    debugLogIfEnabled(client, 'helpers  getCompletePersonProfile', { personId });
     const [person, emails, phones, addresses, fieldData, workflowCards] = await Promise.all([
-        client.people.getById(personId, ['households']),
+        client.people.getById(personId, { include: ['household'] }),
         client.people.getEmails(personId),
         client.people.getPhoneNumbers(personId),
         client.people.getAddresses(personId),
@@ -682,25 +658,31 @@ export async function getCompletePersonProfile(
     };
 }
 
+export interface GetOrganizationInfoResult {
+    organization: OrganizationResource | null;
+    stats: { totalPeople: number; totalHouseholds: number; totalLists: number };
+}
+
+function totalFromMeta(meta: { total_count?: number } | undefined): number {
+    return Number(meta?.total_count) || 0;
+}
+
 /**
  * Get organization info with statistics
  */
-export async function getOrganizationInfo(
-    client: PcoClient
-) {
-    debugLogIfEnabled(client, 'helpers  getOrganizationInfo', {});
+export async function getOrganizationInfo(client: PcoClient): Promise<GetOrganizationInfoResult> {
     const [people, households, lists] = await Promise.all([
-        client.people.getPage({ perPage: 1 }),
-        client.households.getPage({ perPage: 1 }),
-        client.lists.getPage({ perPage: 1 })
+        client.people.getPage({ per_page: 1 }),
+        client.households.getPage({ per_page: 1 }),
+        client.lists.getPage({ per_page: 1 })
     ]);
 
     return {
         organization: null,
         stats: {
-            totalPeople: Number(people.meta?.total_count) || 0,
-            totalHouseholds: Number(households.meta?.total_count) || 0,
-            totalLists: Number(lists.meta?.total_count) || 0
+            totalPeople: totalFromMeta(people.meta),
+            totalHouseholds: totalFromMeta(households.meta),
+            totalLists: totalFromMeta(lists.meta),
         }
     };
 }
@@ -711,7 +693,6 @@ export async function getOrganizationInfo(
 export async function getListsWithCategories(
     client: PcoClient
 ) {
-    debugLogIfEnabled(client, 'helpers  getListsWithCategories', {});
     const [lists, categories] = await Promise.all([
         client.lists.getAll(),
         client.lists.getListCategories()
@@ -727,7 +708,6 @@ export async function getPersonWorkflowCardsWithNotes(
     client: PcoClient,
     personId: string
 ) {
-    debugLogIfEnabled(client, 'helpers  getPersonWorkflowCardsWithNotes', { personId });
     const workflowCards = await client.people.getWorkflowCards(personId);
 
     const notes: { [cardId: string]: { data: WorkflowCardNoteResource[]; meta?: Meta; links?: TopLevelLinks } } = {};
@@ -735,7 +715,7 @@ export async function getPersonWorkflowCardsWithNotes(
     for (const card of workflowCards.data) {
         try {
             notes[card.id] = await client.workflows.getWorkflowCardNotes(personId, card.id);
-        } catch (error) {
+        } catch {
             notes[card.id] = { data: [], meta: { total_count: 0 } };
         }
     }
@@ -752,45 +732,72 @@ export async function createWorkflowCardWithNote(
     personId: string,
     noteData: Partial<WorkflowCardNoteAttributes>
 ) {
-    debugLogIfEnabled(client, 'helpers  createWorkflowCardWithNote', { workflowId, personId });
-    const workflowCard = await client.workflows.createWorkflowCard(workflowId, personId);
+    const workflowCardRes = await client.workflows.createWorkflowCard(workflowId, personId);
+    const workflowCard = singleFromCreateResponse(workflowCardRes);
+    if (!workflowCard) throw new Error('Create workflow card did not return a resource');
 
-    const note = await client.workflows.createWorkflowCardNote(
+    const noteRes = await client.workflows.createWorkflowCardNote(
         personId,
         workflowCard.id,
         noteData
     );
+    const note = singleFromCreateResponse(noteRes);
+    if (!note) throw new Error('Create workflow card note did not return a resource');
 
-    return { 
-        workflowCard,
-        note
-    };
+    return { workflowCard, note };
 }
 
 /**
  * Export all people data in a structured format
  */
+function buildExportInclude(includeFieldData: boolean): PersonInclude[] {
+    const include: PersonInclude[] = ['household'];
+    if (includeFieldData) include.push('field_data');
+    return include;
+}
+
+function buildExportWhere(includeInactive: boolean): PersonWhereClause {
+    return includeInactive ? {} : { status: 'active' };
+}
+
+async function fetchOrganizationSafe(client: PcoClient): Promise<OrganizationResource | null> {
+    try {
+        const orgInfo = await getOrganizationInfo(client);
+        return orgInfo.organization;
+    } catch {
+        return null;
+    }
+}
+
+/** Minimal shape for export payload list/household data */
+interface ExportListData {
+    data: object[];
+}
+
+function buildExportPayload(
+    people: { data: PersonResource[]; meta?: { total_count?: number } },
+    households: ExportListData,
+    lists: ExportListData,
+    organization: OrganizationResource | null
+) {
+    const totalCount = Number(people.meta?.total_count) || 0;
+    return {
+        people: people.data,
+        households: households.data,
+        lists: lists.data,
+        organization,
+        exportDate: new Date().toISOString(),
+        totalCount
+    };
+}
+
 export async function exportAllPeopleData(
     client: PcoClient,
-    options: {
-        includeInactive?: boolean;
-        includeFieldData?: boolean;
-        
-    } = {}
+    options: { includeInactive?: boolean; includeFieldData?: boolean } = {}
 ) {
-    debugLogIfEnabled(client, 'helpers  exportAllPeopleData', options);
     const { includeInactive = false, includeFieldData = false } = options;
-
-    const where: PersonWhereClause = {};
-    if (!includeInactive) {
-        where.status = 'active';
-    }
-
-    const include: ('households' | 'field_data')[] = ['households'];
-    if (includeFieldData) {
-        include.push('field_data');
-    }
-    // Note: workflow_cards is not a valid PersonInclude, so we'll fetch it separately if needed
+    const where = buildExportWhere(includeInactive);
+    const include = buildExportInclude(includeFieldData);
 
     const [people, households, lists] = await Promise.all([
         client.people.getAll({ where, include }),
@@ -798,132 +805,18 @@ export async function exportAllPeopleData(
         client.lists.getAll()
     ]);
 
-    // Try to get organization info, but it may not be available
-    let organization: OrganizationResource | null = null;
-    try {
-        const orgInfo = await getOrganizationInfo(client);
-        organization = orgInfo.organization;
-    } catch {
-        // Organization endpoint may not be available
-        organization = null;
-    }
-
-    return {
-        people: people.data,
-        households: households.data,
-        lists: lists.data,
-        organization,
-        exportDate: new Date().toISOString(),
-        totalCount: Number(people.meta?.total_count) || 0
-    };
+    const organization = await fetchOrganizationSafe(client);
+    return buildExportPayload(people, households, lists, organization);
 }
 
-// ===== JSON:API Included Resources Helpers =====
+// ===== JSON:API Included (re-export from core) =====
 
 /**
- * Find an included resource by type and id
- * 
- * In JSON:API, relationships contain resource identifiers like { type: 'Email', id: '456' }
- * This helper finds the full resource object from the included array.
- * 
- * @param included - Array of included resources from JSON:API response
- * @param type - Resource type to find
- * @param id - Resource id to find
- * @returns The matching resource object, or undefined if not found
- * 
- * @example
- * ```typescript
- * const person = await client.people.getPage({ include: ['emails'] });
- * // Data is flattened: person.data[0].emails is the resolved array
- * const email = person.data[0].emails?.[0];
- * console.log(email?.address); // 'john@gmail.com'
- * ```
- */
-export function findIncluded<T extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
-    included: ResourceObject<string, any, any>[] | undefined,
-    type: string,
-    id: string
-): T | undefined {
-    if (!included || !Array.isArray(included)) {
-        return undefined;
-    }
-    return included.find(
-        (resource) => resource.type === type && resource.id === id
-    ) as T | undefined;
-}
-
-/**
- * Resolve all resources from a relationship to their full included objects
- * 
- * Takes a relationship's data array (which contains resource identifiers)
- * and resolves them to full resource objects from the included array.
- * 
- * @param included - Array of included resources from JSON:API response
- * @param relationshipData - Relationship data array (from relationships.xxx.data)
- * @returns Array of full resource objects, or empty array if none found
- * 
- * @example
- * ```typescript
- * const person = await client.people.getPage({ include: ['emails', 'phone_numbers'] });
- * // Data is flattened: person.data[0].emails is the resolved array
- * const emails = person.data[0].emails ?? [];
- * emails.forEach(email => console.log(email.address));
- * ```
- */
-export function resolveIncluded<T extends ResourceObject<string, any, any> = ResourceObject<string, any, any>>(
-    included: ResourceObject<string, any, any>[] | undefined,
-    relationshipData: ResourceIdentifier | ResourceIdentifier[] | null | undefined
-): T[] {
-    if (!included || !Array.isArray(included) || !relationshipData) {
-        return [];
-    }
-    
-    const identifiers = Array.isArray(relationshipData) ? relationshipData : [relationshipData];
-    
-    return identifiers
-        .map((ref) => findIncluded<T>(included, ref.type, ref.id))
-        .filter((resource): resource is T => resource !== undefined);
-}
-
-/**
- * Create a lookup map for included resources by type and id
- * 
- * This is more efficient than calling findIncluded() multiple times.
- * 
- * @param included - Array of included resources from JSON:API response
- * @returns Map with key format "type:id" -> resource object
- * 
- * @gmail.com
- * ```typescript
- * const person = await client.people.getPage({ include: ['emails', 'phone_numbers'] });
- * const lookup = createIncludedLookup(person.included);
- * const email = lookup.get('Email:456'); // Fast lookup
- * ```
- */
-export function createIncludedLookup(
-    included: ResourceObject<string, any, any>[] | undefined
-): Map<string, ResourceObject<string, any, any>> {
-    const lookup = new Map<string, ResourceObject<string, any, any>>();
-    
-    if (!included || !Array.isArray(included)) {
-        return lookup;
-    }
-    
-    for (const resource of included) {
-        const key = `${resource.type}:${resource.id}`;
-        lookup.set(key, resource);
-    }
-    
-    return lookup;
-}
-
-/**
- * Automatically map included resources to their relationships
- * 
+ * Map included resources to relationships (resolve + flatten).
  * Re-exported from @rachelallyson/planning-center-base-ts for convenience.
- * The mapping is now automatically applied in getList()/getPage() methods.
+ * Applied automatically in getList()/getPage() responses.
  */
-export const mapIncludedToRelationships = baseMapIncludedToRelationships;
+export const mapIncludedToRelationships = coreMapIncludedToRelationships;
 
 // ===== File Handling Utilities =====
 
@@ -998,7 +891,7 @@ export function isFileUpload(value: string): boolean {
 /**
  * Gets MIME type from file extension
  */
-function getMimeType(extension: string): string {
+export function getMimeType(extension: string): string {
     const mimeTypes: Record<string, string> = {
         csv: 'text/csv',
         doc: 'application/msword',
