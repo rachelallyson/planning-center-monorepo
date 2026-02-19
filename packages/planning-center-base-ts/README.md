@@ -18,15 +18,13 @@ This package is primarily intended as a dependency for other PCO API packages. I
 - **Rate Limiter** (`PcoRateLimiter`) - Enforces PCO API rate limits
 - **Error Handling** - Comprehensive error types and handling utilities
 - **JSON:API Types** - TypeScript types for JSON:API 1.0 specification
-- **Event System** - Event emitter for monitoring and debugging
-- **Batch Operations** - Batch executor for performing multiple operations
+- **Debug logging** - Optional request/response logging when `config.debug` is set
 
 ## Example
 
 ```typescript
 import { 
   PcoHttpClient, 
-  PcoEventEmitter, 
   PaginationHelper,
   BaseModule,
   type PcoClientConfig 
@@ -40,11 +38,9 @@ const config: PcoClientConfig = {
   baseURL: 'https://api.planningcenteronline.com/people/v2'
 };
 
-const eventEmitter = new PcoEventEmitter();
-const httpClient = new PcoHttpClient(config, eventEmitter);
+const httpClient = new PcoHttpClient(config);
 const paginationHelper = new PaginationHelper(httpClient);
 
-// Use the HTTP client to make requests
 const response = await httpClient.request({
   method: 'GET',
   endpoint: '/people'
@@ -56,27 +52,41 @@ const response = await httpClient.request({
 To build a custom API client, extend `BaseModule`:
 
 ```typescript
-import { BaseModule, type PcoHttpClient, type PaginationHelper, type PcoEventEmitter } from '@rachelallyson/planning-center-base-ts';
+import { BaseModule, type PcoHttpClient, type PaginationHelper, type PcoClientConfig } from '@rachelallyson/planning-center-base-ts';
 
 export class MyApiModule extends BaseModule {
+  constructor(
+    httpClient: PcoHttpClient,
+    paginationHelper: PaginationHelper,
+    getConfig?: () => PcoClientConfig
+  ) {
+    super(httpClient, paginationHelper, getConfig);
+  }
+
   async getResource(id: string) {
     return this.getSingle(`/resources/${id}`);
   }
-  
+
   async listResources() {
-    return this.getList('/resources');
+    return this.getAllPages('/resources');
   }
 }
 ```
 
 ## Debug logging
 
-The base package provides a shared debug system so any PCO client (People, Check-ins, etc.) can turn logs on/off and see every event (requests, auth, rate limit, cache, errors).
+When `config.debug` is set, the HTTP client logs each request (start, complete, error). No setup is required beyond adding `debug: true` or `debug: { prefix?, includePayloads?, onLog? }` to `PcoClientConfig`. Use `createDebugLogger(config)` in your modules for one-off debug messages.
 
-- **Config**: Add `debug: true` or `debug: { prefix?, includePayloads?, onLog? }` to `PcoClientConfig`.
-- **Exports**: `attachDebugListener`, `createDebugLogger`, `formatDebugEvent`, `PcoDebugOptions`, `PcoDebugListenable`.
+## Query parameters and API alignment
 
-Client packages that use base should call `attachDebugListener(client, getConfig)` when `config.debug` is set, and support runtime toggling via `updateConfig({ debug: true })` / `updateConfig({ debug: false })`. See the People package for a full example.
+`QueryOptions` (include, order, where, per_page, page) match the Planning Center API URL parameters documented per vertex (e.g. [Person vertex](https://developer.planning.center/docs/#/apps/people/2025-11-10/vertices/person): Can Include, Order By, Query By, per_page, offset). Integration tests that verify this against the live API live in the People package: `planning-center-people-ts/tests/integration/base-query-params-api-alignment.integration.test.ts`. Run them with `npm run test:integration` from the People package (requires `.env.test` with PCO credentials).
+
+## Testing
+
+We prefer **integration tests** and avoid mocks except where necessary.
+
+- **`npm test`** – Unit tests. Uses **real** `ky` and `@badgateway/oauth2-client` (Jest transforms ESM). Only **fetch** is mocked so we can simulate responses without the network. Fast.
+- **`npm run test:integration`** – Integration test: **no mocks**. Real HTTP server, real fetch, real ky, real OAuth2 client. Exercises the full request path; prefer adding coverage here when possible.
 
 ## Monorepo
 

@@ -5,12 +5,30 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.0.0] - 2026-02-18
+
+### ⚠️ Breaking changes
+
+- **Event system removed**: `PcoEventEmitter` and event-based observability have been removed. Use **debug logging** instead: set `config.debug: true` or `config.debug: { ... }` on `PcoClientConfig`; the HTTP client and modules log request start/complete/error without an emitter.
+- **Batch operations removed**: The batch executor and related types have been removed. Perform multiple operations via separate requests or your own batching.
+- **HTTP client constructor**: `PcoHttpClient` is now `PcoHttpClient(config)` only (no event emitter argument).
+- **Legacy modules removed**: Old `errors/` (api-error, error-handling), `monitoring.ts`, and `types/` (config, events, batch, flattened-resource, json-api) have been removed or inlined; use the current exports from `index.ts`.
+- **Error type**: Use **`PcoApiError`** for non-2xx responses (replaces the previous error modules). It has `status`, `statusText`, `errors`, and optional `rateLimitHeaders`. Check `error.status` (e.g. 422, 429) for handling; use `rateLimitHeadersFromResponse(response)` when you need rate-limit info from a raw `Response`.
+
+### Changed
+
+- **BaseModule**: Constructor accepts an optional third argument `getConfig?: () => PcoClientConfig` for debug and config access.
+- **Config**: `PcoClientConfig` is the single config type: `auth`, `baseURL?`, `timeout?`, `headers?`, `debug?`. All client and module options flow from this shape.
+- **Docs and tests**: README and examples updated (no event emitter, no batch; debug-only logging). Many tests removed or rewritten; source and test layout reorganized.
+
 ## [1.1.3] - 2026-02-10
 
 ### Changed
 
 - **Published files**: `CHANGELOG.md` is now included in the npm package so release notes are available to consumers.
-- **Type parameters for API packages**: `getSingle` now accepts an optional second generic `TRelResourceMap` so packages built on base can expose accurately typed flattened resources (relationship keys map to specific resource types). `getAllPages` and `PaginationResult` already supported `TRelResourceMap` and `TResourceTypeToRelMap`; `FlattenedResource` supports a fifth type parameter `TResourceTypeToRelMap` for nested relationship typing. This release keeps backward compatibility (all new parameters are optional with defaults).
+- **Type parameters for API packages**: `getSingle` and `getList` accept optional generics `TRelResourceMap`, `TResourceTypeToRelMap`, and (optionally) a friendly `TData` type so packages can expose accurately typed flattened resources. `getAllPages` returns `PaginationResult<TData>`. `PaginationResult` is now `PaginationResult<TData>` (single type param). `TIncluded` was removed from pagination APIs (included resources are typed internally). `FlattenedResource` supports a fifth type parameter `TResourceTypeToRelMap` for nested relationship typing. Backward compatibility: all new parameters are optional with defaults.
 
 ## [1.1.2] - 2026-02-02
 

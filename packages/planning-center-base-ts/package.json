@@ -1,6 +1,6 @@
 {
     "name": "@rachelallyson/planning-center-base-ts",
-    "version": "1.1.3",
+    "version": "2.0.0",
     "description": "Base TypeScript client library for Planning Center Online APIs - shared infrastructure for building PCO API clients",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -11,8 +11,10 @@
         "prebuild": "npm run clean",
         "prepublishOnly": "npm run build",
         "test": "jest",
+        "test:integration": "jest -c jest.integration.config.js",
         "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
     },
     "keywords": [
         "planning-center",
@@ -28,8 +30,11 @@
     "author": "Rachel Allyson",
     "license": "MIT",
     "devDependencies": {
+        "@babel/core": "^7.29.0",
+        "@babel/preset-env": "^7.29.0",
         "@types/jest": "^30.0.0",
         "@types/node": "^20.0.0",
+        "babel-jest": "^30.2.0",
         "jest": "^30.2.0",
         "ts-jest": "^29.4.4",
         "typescript": "^5.9.3"
@@ -53,5 +58,9 @@
     },
     "publishConfig": {
         "access": "public"
+    },
+    "dependencies": {
+        "@badgateway/oauth2-client": "^3.3.1",
+        "ky": "^1.14.3"
     }
 }
