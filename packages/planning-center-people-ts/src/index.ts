@@ -22,3 +22,12 @@ export * from './helpers';
 // Matching (findOrCreatePerson, retry config)
 export { DEFAULT_INITIAL_RETRY_CONFIG, DEFAULT_AGGRESSIVE_RETRY_CONFIG } from './modules/people';
 export type { RetryConfig, PersonMatchOptions } from './modules/people';
+
+// Telling "PCO says this person is not there" apart from "PCO did not answer".
+// findOrCreate throws PcoSearchUnavailableError rather than creating a person off
+// a search that failed; NoMatchingPersonError is the genuine no-match it used to
+// be indistinguishable from.
+export { NoMatchingPersonError, PcoSearchUnavailableError } from './matching/errors';
+export { SearchFaultLedger, isDefinitiveAbsence, summarizeFaults } from './matching/search-outcome';
+export type { SearchFault, SearchOutcome } from './matching/search-outcome';
+export type { MatchResult, PersonSearchOutcome } from './matching/matcher';

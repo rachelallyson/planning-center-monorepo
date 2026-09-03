@@ -126,6 +126,37 @@ console.log(`Person ID: ${person.id}`);
 console.log(`Match found: ${person.match?.found}`);
 ```
 
+`findOrCreate` creates a person only when PCO answered and the person genuinely is
+not there. If the search itself failed (a 5xx, a 429, a timeout, an auth error), it
+throws `PcoSearchUnavailableError` rather than creating, because an unanswered
+search is not evidence of absence and creating off one produces duplicate profiles.
+Fail the unit of work and retry it later:
+
+```typescript
+import {
+  NoMatchingPersonError,
+  PcoSearchUnavailableError,
+} from '@rachelallyson/planning-center-people-ts';
+
+try {
+  const person = await client.people.findOrCreate({ first_name: 'John', email: 'john@example.com' });
+} catch (error) {
+  if (error instanceof PcoSearchUnavailableError) {
+    // PCO did not answer. Nothing was created on purpose. Retry this job later.
+    console.error(`PCO unreachable (${error.status}):`, error.faults);
+    throw error;
+  }
+  if (error instanceof NoMatchingPersonError) {
+    // PCO answered: this person is not there, and createIfNotFound was false.
+  }
+  throw error;
+}
+```
+
+Only a **404** counts as absence. Every other status leaves the answer unknown. To
+branch instead of catching, use `findMatchWithOutcome`, which returns
+`{ kind: 'match' | 'empty' | 'degraded' }`.
+
 ### Create a Person
 
 ```typescript
