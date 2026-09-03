@@ -61,6 +61,19 @@ export interface PersonMatchOptions {
     campusId?: string;
     /** If true, create a new person if no match is found (default: true) */
     createIfNotFound?: boolean;
+    /**
+     * If true, create a person even when the search that found no match did not
+     * actually complete. (default: false)
+     *
+     * Leave this off. It restores the pre-fix behaviour in which a PCO outage was
+     * indistinguishable from a clean no-match, so every retry during the outage
+     * created another duplicate profile. It exists only for callers who were
+     * knowingly relying on that and need a release to migrate.
+     *
+     * With the default, `findOrCreate` throws `PcoSearchUnavailableError` instead of
+     * creating, and the correct response is to fail the job and retry it later.
+     */
+    createOnDegradedSearch?: boolean;
     /** 
      * If true, automatically add missing email/phone contact information to a person's profile 
      * when a match is found. Missing contacts are added as non-primary to avoid overriding 

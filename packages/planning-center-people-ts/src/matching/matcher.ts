@@ -14,6 +14,9 @@ import {
 } from '../modules/people';
 import { MatchStrategies } from './strategies';
 import { MatchScorer } from './scoring';
+import { SearchFaultLedger } from './search-outcome';
+import type { SearchFault, SearchOutcome } from './search-outcome';
+import { NoMatchingPersonError, PcoSearchUnavailableError } from './errors';
 import {
     matchesAgeCriteria,
     normalizeEmail,
@@ -29,6 +32,16 @@ export interface MatchResult {
     reason: string;
     isVerifiedContactMatch?: boolean; // True if email/phone actually matches
 }
+
+/**
+ * What a single search attempt established: a match, a confirmed absence, or
+ * nothing at all because PCO did not answer.
+ *
+ * Only `'empty'` is a confirmed absence, and only a confirmed absence may lead to
+ * creating a person. See `./search-outcome` for why this distinction has to be
+ * carried rather than reconstructed.
+ */
+export type PersonSearchOutcome = SearchOutcome<MatchResult>;
 
 export class PersonMatcher {
     private strategies: MatchStrategies;
@@ -82,12 +95,54 @@ export class PersonMatcher {
         return hasContactInfo && !createIfNotFound && (options.retryConfig?.enabled !== false);
     }
 
-    private async performSearch(options: PersonMatchOptions): Promise<MatchResult | null> {
+    private async performSearch(
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger
+    ): Promise<MatchResult | null> {
         const { searchStrategy = 'single', matchStrategy = 'fuzzy', ...searchOptions } = options;
         if (searchStrategy === 'multi-step') {
-            return this.findMatchMultiStep(options);
+            return this.findMatchMultiStep(options, ledger);
         }
-        return this.findMatch({ ...searchOptions, matchStrategy });
+        return this.findMatch({ ...searchOptions, matchStrategy }, ledger);
+    }
+
+    /** Collapse a completed attempt and its ledger into the three-valued answer. */
+    private static toOutcome(match: MatchResult | null, ledger: SearchFaultLedger): PersonSearchOutcome {
+        if (match) return { kind: 'match', match };
+        if (ledger.degraded) return { kind: 'degraded', faults: ledger.causes };
+        return { kind: 'empty' };
+    }
+
+    /**
+     * Run one complete search and report what it established.
+     *
+     * The ledger is created here, per attempt, and never held on the instance:
+     * `PersonMatcher` is shared across concurrent `findOrCreate` calls, so an
+     * instance field would leak one caller's outage into another caller's decision.
+     *
+     * An error that escapes the search entirely is classified the same way as one
+     * that was swallowed inside it, which is what keeps a 404 (definitively absent,
+     * so `'empty'`) distinct from a 500 (`'degraded'`).
+     */
+    private async attemptSearch(options: PersonMatchOptions): Promise<PersonSearchOutcome> {
+        const ledger = new SearchFaultLedger();
+        try {
+            const match = await this.performSearch(options, ledger);
+            return PersonMatcher.toOutcome(match, ledger);
+        } catch (error) {
+            ledger.record('search', error);
+            return PersonMatcher.toOutcome(null, ledger);
+        }
+    }
+
+    /**
+     * Find the best match and say whether the answer can be trusted.
+     *
+     * The distinguishable-outcome counterpart to `findMatch`, for callers that want
+     * to tell "not there" from "could not tell" without catching an exception.
+     */
+    async findMatchWithOutcome(options: PersonMatchOptions): Promise<PersonSearchOutcome> {
+        return this.attemptSearch(options);
     }
 
     private async whenMatchFound(match: MatchResult, options: PersonMatchOptions): Promise<PersonResource> {
@@ -97,14 +152,43 @@ export class PersonMatcher {
         return match.person;
     }
 
-    private async whenCreateIfNotFound(options: PersonMatchOptions): Promise<PersonResource> {
-        const aggressiveMatch = options.retryConfigs?.aggressive
-            ? await this.findWithAggressiveRetry(options)
-            : null;
-        if (aggressiveMatch) {
-            return this.whenMatchFound(aggressiveMatch, options);
+    /**
+     * The gate between "we did not find this person" and "so make a new one".
+     *
+     * A create may only follow a search that COMPLETED and found nobody. If the
+     * governing outcome is `degraded`, the absence of a match is not evidence of
+     * anything and creating would be the duplicate-generating bug this whole change
+     * exists to close.
+     *
+     * Throwing rather than returning a sentinel is deliberate: the caller's job must
+     * fail and be retried later. A sentinel would rebuild the same bug one level up,
+     * where someone reads "no person" and creates one anyway.
+     */
+    private async whenCreateIfNotFound(
+        options: PersonMatchOptions,
+        initialOutcome: PersonSearchOutcome
+    ): Promise<PersonResource> {
+        const outcome = options.retryConfigs?.aggressive
+            ? await this.findWithAggressiveRetry(options, initialOutcome)
+            : initialOutcome;
+        if (outcome.kind === 'match') {
+            return this.whenMatchFound(outcome.match, options);
+        }
+        if (PersonMatcher.mustRefuseCreate(outcome, options)) {
+            throw new PcoSearchUnavailableError(outcome.faults);
         }
         return this.createPerson(options);
+    }
+
+    /**
+     * Whether this outcome forbids creating: PCO did not answer, and the caller has
+     * not explicitly opted back into the old create-anyway behaviour.
+     */
+    private static mustRefuseCreate(
+        outcome: PersonSearchOutcome,
+        options: PersonMatchOptions
+    ): outcome is { kind: 'degraded'; faults: SearchFault[] } {
+        return outcome.kind === 'degraded' && options.createOnDegradedSearch !== true;
     }
 
     /**
@@ -126,22 +210,28 @@ export class PersonMatcher {
         if (PersonMatcher.shouldUseRetry(options)) {
             return this.findOrCreateWithRetry(options);
         }
-        const match = await this.performSearch(options);
-        if (match) {
-            return this.whenMatchFound(match, options);
+        const outcome = await this.attemptSearch(options);
+        if (outcome.kind === 'match') {
+            return this.whenMatchFound(outcome.match, options);
         }
         if (options.createIfNotFound !== false) {
-            return this.whenCreateIfNotFound(options);
+            return this.whenCreateIfNotFound(options, outcome);
         }
-        throw new Error(`No matching person found and creation is disabled`);
+        if (outcome.kind === 'degraded') {
+            throw new PcoSearchUnavailableError(outcome.faults, 'report no match');
+        }
+        throw new NoMatchingPersonError();
     }
 
-    private async runOneAggressiveAttempt(options: PersonMatchOptions): Promise<MatchResult | null> {
+    private async runOneAggressiveAttempt(
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger
+    ): Promise<MatchResult | null> {
         const { searchStrategy = 'single', matchStrategy = 'fuzzy' } = options;
         if (searchStrategy === 'multi-step') {
-            return this.findMatchMultiStep(options);
+            return this.findMatchMultiStep(options, ledger);
         }
-        return this.findMatch({ ...options, matchStrategy });
+        return this.findMatch({ ...options, matchStrategy }, ledger);
     }
 
     private static computeAggressiveDelay(
@@ -158,23 +248,40 @@ export class PersonMatcher {
         return delay;
     }
 
+    /**
+     * The LAST attempt that ran governs, not the best one.
+     *
+     * This loop exists because an initial no-match can be stale, so the question it
+     * answers is "is this person absent right now". If the most recent attempt could
+     * not establish that, an earlier clean empty does not license a create: PCO went
+     * down between the two, and the create is exactly what must not happen next.
+     *
+     * A match on any attempt still wins immediately, since finding somebody is not
+     * ambiguous.
+     */
     private async runAggressiveRetryLoop(
         options: PersonMatchOptions,
-        aggressiveConfig: Required<Omit<RetryConfig, 'enabled'>>
-    ): Promise<MatchResult | null> {
+        aggressiveConfig: Required<Omit<RetryConfig, 'enabled'>>,
+        initialOutcome: PersonSearchOutcome
+    ): Promise<PersonSearchOutcome> {
         let totalWaitTime = 0;
+        let outcome = initialOutcome;
         for (let attempt = 1; attempt <= aggressiveConfig.maxRetries; attempt++) {
+            const ledger = new SearchFaultLedger();
             try {
-                const match = await this.runOneAggressiveAttempt(options);
-                if (match) {
+                const match = await this.runOneAggressiveAttempt(options, ledger);
+                outcome = PersonMatcher.toOutcome(match, ledger);
+                if (outcome.kind === 'match') {
                     this.debugLog(`findOrCreate  aggressive search found person (would have created duplicate)`, {
-                        personId: match.person.id,
+                        personId: outcome.match.person.id,
                         attempt,
                         totalWaitTime,
                     });
-                    return match;
+                    return outcome;
                 }
             } catch (error) {
+                ledger.record(`aggressive:${attempt}`, error);
+                outcome = PersonMatcher.toOutcome(null, ledger);
                 this.debugLog(`findOrCreate  aggressive search attempt ${attempt} failed`, { error: String(error) });
             }
             const delay = PersonMatcher.computeAggressiveDelay(attempt, totalWaitTime, aggressiveConfig);
@@ -182,11 +289,23 @@ export class PersonMatcher {
             totalWaitTime += delay;
             await new Promise(resolve => setTimeout(resolve, delay));
         }
-        this.debugLog(`findOrCreate  aggressive search completed - no match found, safe to create`, {
+        this.logAggressiveResult(outcome, totalWaitTime, aggressiveConfig.maxRetries);
+        return outcome;
+    }
+
+    private logAggressiveResult(
+        outcome: PersonSearchOutcome,
+        totalWaitTime: number,
+        maxRetries: number
+    ): void {
+        const verdict = outcome.kind === 'empty'
+            ? 'PCO answered, no match found, safe to create'
+            : 'PCO did not answer, NOT safe to create';
+        this.debugLog(`findOrCreate  aggressive search completed - ${verdict}`, {
             totalWaitTime,
-            maxRetries: aggressiveConfig.maxRetries,
+            maxRetries,
+            outcome: outcome.kind,
         });
-        return null;
     }
 
     /**
@@ -197,7 +316,10 @@ export class PersonMatcher {
      * - Multiple workers are processing the same person
      * - The fast path didn't find an existing person
      */
-    private async findWithAggressiveRetry(options: PersonMatchOptions) {
+    private async findWithAggressiveRetry(
+        options: PersonMatchOptions,
+        initialOutcome: PersonSearchOutcome
+    ): Promise<PersonSearchOutcome> {
         const aggressiveConfig = this.resolveRetryConfig(
             undefined,
             options.retryConfigs?.aggressive,
@@ -207,7 +329,7 @@ export class PersonMatcher {
             maxWaitTime: aggressiveConfig.maxWaitTime,
             maxRetries: aggressiveConfig.maxRetries,
         });
-        return this.runAggressiveRetryLoop(options, aggressiveConfig);
+        return this.runAggressiveRetryLoop(options, aggressiveConfig, initialOutcome);
     }
 
     /**
@@ -228,7 +350,8 @@ export class PersonMatcher {
         strategy: (typeof PersonMatcher.MULTI_STEP_STRATEGIES)[number],
         baseOptions: Omit<PersonMatchOptions, 'matchStrategy' | 'agePreference' | 'agePreferenceLenient'> & { agePreference?: PersonMatchOptions['agePreference']; agePreferenceLenient?: boolean },
         agePreference: PersonMatchOptions['agePreference'],
-        agePreferenceLenient: boolean | undefined
+        agePreferenceLenient: boolean | undefined,
+        ledger: SearchFaultLedger
     ): Promise<MatchResult | null> {
         const searchOptions: PersonMatchOptions = {
             ...baseOptions,
@@ -238,7 +361,7 @@ export class PersonMatcher {
             searchOptions.agePreference = agePreference;
             searchOptions.agePreferenceLenient = agePreferenceLenient ?? true;
         }
-        return this.findMatch(searchOptions);
+        return this.findMatch(searchOptions, ledger);
     }
 
     /**
@@ -252,7 +375,10 @@ export class PersonMatcher {
      *
      * This approach maximizes matching success while maintaining quality.
      */
-    async findMatchMultiStep(options: PersonMatchOptions) {
+    async findMatchMultiStep(
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger = new SearchFaultLedger()
+    ) {
         const { agePreference, agePreferenceLenient, ...baseOptions } = options;
         for (const strategy of PersonMatcher.MULTI_STEP_STRATEGIES) {
             try {
@@ -260,7 +386,8 @@ export class PersonMatcher {
                     strategy,
                     baseOptions,
                     agePreference,
-                    agePreferenceLenient
+                    agePreferenceLenient,
+                    ledger
                 );
                 if (match) {
                     this.debugLog(`findOrCreate  multi-step search found match using ${strategy.description}`, {
@@ -271,14 +398,17 @@ export class PersonMatcher {
                     return match;
                 }
             } catch (error) {
+                // Falling through to the next strategy is right, but "every strategy
+                // threw" must not read the same as "every strategy found nobody".
+                ledger.record(`multi-step:${strategy.description}`, error);
                 this.debugLog(`findOrCreate  multi-step strategy "${strategy.description}" failed`, { error: String(error) });
             }
         }
         return null;
     }
 
-    private async runOneRetryAttempt(options: PersonMatchOptions): Promise<MatchResult | null> {
-        return this.performSearch(options);
+    private async runOneRetryAttempt(options: PersonMatchOptions): Promise<PersonSearchOutcome> {
+        return this.attemptSearch(options);
     }
 
     private static computeRetryDelay(
@@ -326,21 +456,33 @@ export class PersonMatcher {
         return match.person;
     }
 
+    /**
+     * One round of the find-only retry loop.
+     *
+     * A genuine no-match and a failed lookup used to produce the same
+     * `Error('No matching person found and creation is disabled')`, so a caller
+     * could not tell an outage from an answer and the safe response to each was
+     * different. They are now separate types. The no-match message is unchanged, so
+     * callers matching on the string keep working.
+     */
     private async tryOneRetryRound(
         options: PersonMatchOptions,
         attempt: number,
         totalWaitTime: number
     ): Promise<{ success: true; person: PersonResource } | { success: false; lastError: Error }> {
         try {
-            const match = await this.runOneRetryAttempt(options);
-            if (match) {
-                const person = await this.handleRetrySuccess(match, attempt, totalWaitTime, options);
+            const outcome = await this.runOneRetryAttempt(options);
+            if (outcome.kind === 'match') {
+                const person = await this.handleRetrySuccess(outcome.match, attempt, totalWaitTime, options);
                 return { success: true, person };
             }
-            return {
-                success: false,
-                lastError: new Error(`No matching person found and creation is disabled`),
-            };
+            if (outcome.kind === 'degraded') {
+                return {
+                    success: false,
+                    lastError: new PcoSearchUnavailableError(outcome.faults, 'report no match'),
+                };
+            }
+            return { success: false, lastError: new NoMatchingPersonError() };
         } catch (error) {
             const lastError = error instanceof Error ? error : new Error(String(error));
             return { success: false, lastError };
@@ -376,7 +518,9 @@ export class PersonMatcher {
         maxRetries: number,
         totalWaitTime: number
     ): Error {
-        return lastError ?? new Error(`No matching person found after ${maxRetries} attempts (waited ${totalWaitTime}ms) and creation is disabled`);
+        return lastError ?? new NoMatchingPersonError(
+            `No matching person found after ${maxRetries} attempts (waited ${totalWaitTime}ms) and creation is disabled`
+        );
     }
 
     private async runRetryLoop(options: PersonMatchOptions): Promise<PersonResource> {
@@ -413,51 +557,72 @@ export class PersonMatcher {
         }
     }
 
-    private async searchByEmail(email: string): Promise<PersonResource[]> {
+    /**
+     * Still returns an empty array on failure, but no longer pretends the failure
+     * did not happen: the reason goes in the ledger so the create decision can see
+     * that this empty result carries no information.
+     *
+     * An invalid email is NOT a fault. Nothing was asked of PCO, and there is no
+     * person to find, so an empty result there is a real answer.
+     */
+    private async searchByEmail(email: string, ledger: SearchFaultLedger): Promise<PersonResource[]> {
         if (!isValidEmail(email)) return [];
         try {
             const normalizedEmail = normalizeEmail(email);
             const emailResults = await this.peopleModule.search({ email: normalizedEmail });
             return emailResults.data;
-        } catch {
+        } catch (error) {
+            ledger.record('search:email', error);
             return [];
         }
     }
 
-    private async searchByPhone(phone: string): Promise<PersonResource[]> {
+    private async searchByPhone(phone: string, ledger: SearchFaultLedger): Promise<PersonResource[]> {
         try {
             const normalizedPhone = normalizePhone(phone);
             const phoneResults = await this.peopleModule.search({ phone: normalizedPhone });
             return phoneResults.data;
-        } catch {
+        } catch (error) {
+            ledger.record('search:phone', error);
             return [];
         }
     }
 
-    private async gatherEmailPhoneCandidates(options: PersonMatchOptions): Promise<PersonResource[]> {
-        const emailList = options.email ? await this.searchByEmail(options.email) : [];
-        const phoneList = options.phone ? await this.searchByPhone(options.phone) : [];
+    private async gatherEmailPhoneCandidates(
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger
+    ): Promise<PersonResource[]> {
+        const emailList = options.email ? await this.searchByEmail(options.email, ledger) : [];
+        const phoneList = options.phone ? await this.searchByPhone(options.phone, ledger) : [];
         return PersonMatcher.dedupeById([...emailList, ...phoneList]);
     }
 
     private async isVerifiedContactMatch(
         candidate: PersonResource,
         email: string | undefined,
-        phone: string | undefined
+        phone: string | undefined,
+        ledger: SearchFaultLedger
     ): Promise<boolean> {
-        if (email && (await this.verifyEmailMatch(candidate, email))) return true;
-        if (phone && (await this.verifyPhoneMatch(candidate, phone))) return true;
+        if (email && (await this.verifyEmailMatch(candidate, email, ledger))) return true;
+        if (phone && (await this.verifyPhoneMatch(candidate, phone, ledger))) return true;
         return false;
     }
 
+    /**
+     * Verification is part of the search, not a detail after it. A candidate that
+     * PCO returned but whose contacts could not be read is dropped from the
+     * verified set, and dropping every candidate that way produces the same empty
+     * result as finding nobody. So these failures degrade the attempt too.
+     */
     private async verifyEmailPhoneMatches(
         candidates: PersonResource[],
         email: string | undefined,
-        phone: string | undefined
+        phone: string | undefined,
+        ledger: SearchFaultLedger
     ): Promise<PersonResource[]> {
         const verified: PersonResource[] = [];
         for (const candidate of candidates) {
-            if (await this.isVerifiedContactMatch(candidate, email, phone)) {
+            if (await this.isVerifiedContactMatch(candidate, email, phone, ledger)) {
                 verified.push(candidate);
             }
         }
@@ -471,7 +636,8 @@ export class PersonMatcher {
     private async gatherNameOnlyMatches(
         options: PersonMatchOptions,
         verifiedCount: number,
-        hasContactInfo: boolean
+        hasContactInfo: boolean,
+        ledger: SearchFaultLedger
     ): Promise<PersonResource[]> {
         if (!PersonMatcher.shouldRunNameSearch(verifiedCount, hasContactInfo)) return [];
         if (!options.first_name || !options.last_name) return [];
@@ -481,6 +647,7 @@ export class PersonMatcher {
             });
             return nameResults.data;
         } catch (error) {
+            ledger.record('search:name', error);
             this.debugLog('findMatch  name search failed', { error: String(error) });
             return [];
         }
@@ -531,7 +698,10 @@ export class PersonMatcher {
         );
     }
 
-    private async maybeFallbackNameSearch(options: PersonMatchOptions): Promise<MatchResult | null> {
+    private async maybeFallbackNameSearch(
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger
+    ): Promise<MatchResult | null> {
         if (!PersonMatcher.shouldFallbackToNameSearch(options)) return null;
         const first = options.first_name ?? '';
         const last = options.last_name ?? '';
@@ -542,21 +712,31 @@ export class PersonMatcher {
             options.email,
             options.phone,
             validation,
-            options
+            options,
+            ledger
         );
     }
 
     /**
      * Find the best match for a person
+     *
+     * Returns `null` both when nobody matched and when the lookups failed, exactly
+     * as before, so read-only callers are unaffected. Pass a `SearchFaultLedger`
+     * (or call `findMatchWithOutcome`) to tell those two cases apart.
      */
-    async findMatch(options: PersonMatchOptions) {
+    async findMatch(options: PersonMatchOptions, ledger?: SearchFaultLedger) {
+        return this.findMatchWithLedger(options, ledger ?? new SearchFaultLedger());
+    }
+
+    private async findMatchWithLedger(options: PersonMatchOptions, ledger: SearchFaultLedger) {
         const { matchStrategy = 'fuzzy', email, phone } = options;
-        const emailPhoneCandidates = await this.gatherEmailPhoneCandidates(options);
-        const verifiedMatches = await this.verifyEmailPhoneMatches(emailPhoneCandidates, email, phone);
+        const emailPhoneCandidates = await this.gatherEmailPhoneCandidates(options, ledger);
+        const verifiedMatches = await this.verifyEmailPhoneMatches(emailPhoneCandidates, email, phone, ledger);
         const nameOnlyMatches = await this.gatherNameOnlyMatches(
             options,
             verifiedMatches.length,
-            !!(email || phone)
+            !!(email || phone),
+            ledger
         );
         const uniqueCandidates = PersonMatcher.dedupeById([...verifiedMatches, ...nameOnlyMatches]);
         const ageFilteredCandidates = this.filterByAgePreferences(uniqueCandidates, options);
@@ -568,7 +748,7 @@ export class PersonMatcher {
         );
         const best = this.selectBestFromScored(scoredCandidates, matchStrategy);
         if (best) return best;
-        return this.maybeFallbackNameSearch(options);
+        return this.maybeFallbackNameSearch(options, ledger);
     }
 
     /**
@@ -584,7 +764,8 @@ export class PersonMatcher {
         searchEmail: string | undefined,
         searchPhone: string | undefined,
         validationStrategy: 'strict' | 'domain' | 'similarity',
-        options: PersonMatchOptions
+        options: PersonMatchOptions,
+        ledger: SearchFaultLedger
     ) {
         try {
             const nameResults = await this.peopleModule.search({
@@ -601,7 +782,8 @@ export class PersonMatcher {
                     candidate,
                     searchEmail,
                     searchPhone,
-                    validationStrategy
+                    validationStrategy,
+                    ledger
                 );
 
                 if (isValid) {
@@ -618,7 +800,8 @@ export class PersonMatcher {
             }
 
             return null;
-        } catch {
+        } catch (error) {
+            ledger.record('search:name-fallback', error);
             return null;
         }
     }
@@ -670,16 +853,23 @@ export class PersonMatcher {
         candidate: PersonResource,
         searchEmail: string | undefined,
         searchPhone: string | undefined,
-        validationStrategy: 'strict' | 'domain' | 'similarity'
+        validationStrategy: 'strict' | 'domain' | 'similarity',
+        ledger: SearchFaultLedger = new SearchFaultLedger()
     ) {
         try {
             const [personEmails, personPhones] = await Promise.all([
                 this.peopleModule.getEmails(candidate.id).then(r =>
                     r.data?.map(e => e.address || '').filter(Boolean) || []
-                ).catch(() => []),
+                ).catch((error) => {
+                    ledger.record(`validate:emails:${candidate.id}`, error);
+                    return [];
+                }),
                 this.peopleModule.getPhoneNumbers(candidate.id).then(r =>
                     r.data?.map(p => p.number || '').filter(Boolean) || []
-                ).catch(() => []),
+                ).catch((error) => {
+                    ledger.record(`validate:phones:${candidate.id}`, error);
+                    return [];
+                }),
             ]);
             if (validationStrategy === 'strict') {
                 return PersonMatcher.validateStrict(searchEmail, searchPhone, personEmails, personPhones);
@@ -689,6 +879,7 @@ export class PersonMatcher {
             }
             return PersonMatcher.validateSimilarity(searchEmail, searchPhone, personEmails, personPhones);
         } catch (error) {
+            ledger.record(`validate:${candidate.id}`, error);
             this.debugLog(`findMatch  contact validation failed for person ${candidate.id}`, { error: String(error) });
             return false;
         }
@@ -698,7 +889,11 @@ export class PersonMatcher {
     /**
      * Verify if a person's email actually matches the search email
      */
-    private async verifyEmailMatch(person: PersonResource, email: string) {
+    private async verifyEmailMatch(
+        person: PersonResource,
+        email: string,
+        ledger: SearchFaultLedger = new SearchFaultLedger()
+    ) {
         try {
             const personEmails = await this.peopleModule.getEmails(person.id);
             const normalizedSearchEmail = normalizeEmail(email);
@@ -706,7 +901,8 @@ export class PersonMatcher {
                 normalizeEmail(e.address || '')
             ).filter(Boolean) || [];
             return emails.includes(normalizedSearchEmail);
-        } catch {
+        } catch (error) {
+            ledger.record(`verify:emails:${person.id}`, error);
             return false;
         }
     }
@@ -714,7 +910,11 @@ export class PersonMatcher {
     /**
      * Verify if a person's phone actually matches the search phone
      */
-    private async verifyPhoneMatch(person: PersonResource, phone: string) {
+    private async verifyPhoneMatch(
+        person: PersonResource,
+        phone: string,
+        ledger: SearchFaultLedger = new SearchFaultLedger()
+    ) {
         try {
             const personPhones = await this.peopleModule.getPhoneNumbers(person.id);
             const normalizedSearchPhone = normalizePhone(phone);
@@ -722,7 +922,8 @@ export class PersonMatcher {
                 normalizePhone(p.number || '')
             ).filter(Boolean) || [];
             return phones.includes(normalizedSearchPhone);
-        } catch {
+        } catch (error) {
+            ledger.record(`verify:phones:${person.id}`, error);
             return false;
         }
     }
@@ -844,17 +1045,19 @@ export class PersonMatcher {
     /**
      * Get all potential matches with detailed scoring
      */
-    async getAllMatches(options: PersonMatchOptions) {
-        const emailPhoneCandidates = await this.gatherEmailPhoneCandidates(options);
+    async getAllMatches(options: PersonMatchOptions, ledger: SearchFaultLedger = new SearchFaultLedger()) {
+        const emailPhoneCandidates = await this.gatherEmailPhoneCandidates(options, ledger);
         const verifiedMatches = await this.verifyEmailPhoneMatches(
             emailPhoneCandidates,
             options.email,
-            options.phone
+            options.phone,
+            ledger
         );
         const nameOnlyMatches = await this.gatherNameOnlyMatches(
             options,
             verifiedMatches.length,
-            !!(options.email || options.phone)
+            !!(options.email || options.phone),
+            ledger
         );
         const uniqueCandidates = PersonMatcher.dedupeById([...verifiedMatches, ...nameOnlyMatches]);
         const ageFilteredCandidates = this.filterByAgePreferences(uniqueCandidates, options);

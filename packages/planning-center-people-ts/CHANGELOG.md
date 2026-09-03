@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-03
+
+### ⚠️ Breaking changes
+
+- **`findOrCreate` no longer creates a person off a search that failed.** The matcher could not tell "PCO says this person is not there" from "PCO did not answer", because `searchByEmail` and `searchByPhone` both ended in `catch { return [] }` and every layer above read the empty array as a clean no-match. During a PCO outage the create path therefore did not fail; it succeeded, repeatedly, at making duplicates. `findOrCreate` now throws **`PcoSearchUnavailableError`** when the search that found no match did not complete. Callers should fail the unit of work and retry it later.
+- **A genuine no-match and a failed search are now distinguishable.** With `createIfNotFound: false`, a real no-match throws **`NoMatchingPersonError`** and a failed search throws **`PcoSearchUnavailableError`**. Both extend `Error`, and `NoMatchingPersonError`'s message is unchanged (`No matching person found and creation is disabled`), so callers matching on the string keep working. Callers matching on the type get the distinction the old code could not express.
+
+### Added
+
+- **`PcoSearchUnavailableError`**: carries `faults` (every lookup in the final attempt that did not complete, each with `operation`, `status`, `message`, `cause`), `status`, and `primaryCause`. Its message deliberately avoids PCO's not-found wording so a downstream not-found check cannot match it.
+- **`NoMatchingPersonError`**: PCO answered, and the person genuinely is not there.
+- **`PersonMatcher.findMatchWithOutcome(options)`**: returns a `PersonSearchOutcome` of `{ kind: 'match' }`, `{ kind: 'empty' }`, or `{ kind: 'degraded', faults }`, for callers that would rather branch than catch. `findMatch` is unchanged and still returns `null` in both of the latter cases.
+- **`PersonMatchOptions.createOnDegradedSearch`** (default `false`): restores the old create-anyway behaviour for callers who were knowingly relying on it and need a release to migrate.
+- **`SearchFaultLedger`, `SearchFault`, `SearchOutcome`, `isDefinitiveAbsence`, `summarizeFaults`**: the classification primitives, exported so consumers can apply the same 404-vs-everything-else rule to their own PCO calls.
+
+### Changed
+
+- **Only a 404 counts as absence.** A 401, 403, 408, 422, 429, 5xx, socket error, or unrecognised error means the lookup did not complete and cannot be read as "this person is not there". Unrecognised errors degrade by default, which is what keeps the base client's plain `Error('Rate limit exceeded after retries')` and bare `fetch` `TypeError`s out of the create path.
+- **Contact verification failures degrade the search too.** A candidate PCO returned but whose emails or phone numbers could not be read is dropped from the verified set, and dropping every candidate produces the same empty result as finding nobody.
+- **The aggressive pre-create search is governed by its last completed attempt.** That loop exists because an earlier no-match may be stale, so if the most recent attempt could not confirm the absence, an older clean empty no longer licenses a create.
+- **Read-only surfaces are unchanged.** `findMatch`, `findMatchMultiStep`, and `getAllMatches` still return `null` / `[]` on failure and never throw for it. They cannot create anything, so the invariant does not require it, and changing them would break callers for no safety gain.
+
+
 ## [4.0.0] - 2026-02-18
 
 ### ⚠️ Breaking changes
