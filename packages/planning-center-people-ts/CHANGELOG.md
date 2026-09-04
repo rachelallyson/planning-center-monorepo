@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PersonMatchOptions.createOnDegradedSearch`** (default `false`): restores the old create-anyway behaviour for callers who were knowingly relying on it and need a release to migrate.
 - **`SearchFaultLedger`, `SearchFault`, `SearchOutcome`, `isDefinitiveAbsence`, `summarizeFaults`**: the classification primitives, exported so consumers can apply the same 404-vs-everything-else rule to their own PCO calls.
 
+### Migrating from 3.x
+
+Two breaking changes shipped in 4.0.0 without a changelog entry. They are recorded
+here because anyone coming from 3.x crosses both, and neither fails at runtime in
+an obvious way:
+
+- **`PersonMatchOptions` renamed `firstName`/`lastName` to `first_name`/`last_name`.** A 3.x caller passing the camelCase keys gets a type error under 4.x and later. Rename the keys on the options object only; leave your own surrounding objects alone.
+- **Create methods return the JSON:API envelope, not the flattened resource.** `addAddress`, `addEmail`, `addPhoneNumber` and friends return `CreateResponse<T>` (`{ data: T | T[] }`), while update methods still return `T`. Unwrap a create with the exported `singleFromCreateResponse(res)`, which also handles the array form, and handle the `undefined` it returns when PCO sends nothing back.
+
 ### Changed
 
 - **Only a 404 counts as absence.** A 401, 403, 408, 422, 429, 5xx, socket error, or unrecognised error means the lookup did not complete and cannot be read as "this person is not there". Unrecognised errors degrade by default, which is what keeps the base client's plain `Error('Rate limit exceeded after retries')` and bare `fetch` `TypeError`s out of the create path.
